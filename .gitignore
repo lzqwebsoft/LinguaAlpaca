@@ -1,0 +1,43 @@
+# Build directories
+/build/
+/bin/
+/CMakeFiles/
+/CMakeCache.txt
+/*.vcxproj*
+/*.sln
+/*.user
+/*.ipch
+/*.pdb
+/*.obj
+/*.exe
+/*.dll
+/*.lib
+/*.app
+/*.o
+/*.so
+/*.a
+/*.dylib
+
+# CMake generated files
+/CMakeLists.txt.user
+/cmake_install.cmake
+/Makefile
+
+# Visual Studio folders
+/.vs/
+
+# Generated compile commands
+/compile_commands.json
+
+# Editor files
+*.swp
+*.swo
+*.idea/
+*.vscode/
+
+# Logs
+*.log
+
+# Ignore build output and temporary files from wxWidgets and llama.cpp
+third_party/wxWidgets/build/
+third_party/llama.cpp/build/

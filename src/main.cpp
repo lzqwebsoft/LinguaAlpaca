@@ -1,74 +1,53 @@
 #include <wx/wx.h>
+#include <memory>
+#include "domain/model/AppConfig.hpp"
+#include "infrastructure/engine/LlamaCppTranslationEngine.hpp"
+#include "infrastructure/repository/InMemoryHistoryRepository.hpp"
+#include "infrastructure/repository/IniConfigRepository.hpp"
+#include "application/service/ConfigurationService.hpp"
+#include "application/service/TranslationService.hpp"
+#include "presentation/views/MainFrame.hpp"
+#include "presentation/components/WelcomeModelDialog.hpp"
 
-class MyApp : public wxApp
-{
+using namespace LinguaAlpaca;
+
+class LinguaAlpacaApp : public wxApp {
 public:
-	bool OnInit() override;
+    bool OnInit() override {
+        wxInitAllImageHandlers();
+
+        // 1. 初始化 ConfigurationService (读取 config.ini 持久化文件)
+        auto configRepo = std::make_shared<Infrastructure::Repository::IniConfigRepository>();
+        auto configService = std::make_shared<Application::Service::ConfigurationService>(configRepo);
+        auto currentConfig = configService->GetConfig();
+
+        // 2. 初始化 LlamaCpp 离线大模型原生引擎与 Services
+        auto llamaEngine = std::make_shared<Infrastructure::Engine::LlamaCppTranslationEngine>();
+        auto historyRepo = std::make_shared<Infrastructure::Repository::InMemoryHistoryRepository>();
+        auto translationService = std::make_shared<Application::Service::TranslationService>(llamaEngine, historyRepo, configService);
+
+        // 3. 自动恢复上次存盘的模型配置
+        if (!currentConfig.modelPath.empty()) {
+            translationService->LoadModel(currentConfig.modelPath);
+        }
+
+        // 4. 创建与居中显示 Presentation 主界面
+        Presentation::Views::MainFrame* mainFrame = new Presentation::Views::MainFrame(translationService);
+        mainFrame->Centre();
+        mainFrame->Show(true);
+
+        // 5. 启动检查：若量化模型未成功加载，弹出原生模态对话弹框提示用户
+        if (!translationService->IsModelLoaded()) {
+            Presentation::Components::WelcomeModelDialog dialog(mainFrame);
+            int res = dialog.ShowModal();
+
+            if (res == wxID_OK && dialog.ShouldNavigateToSettings()) {
+                mainFrame->NavigateToSettings();
+            }
+        }
+
+        return true;
+    }
 };
 
-wxIMPLEMENT_APP(MyApp);
-
-class MyFrame : public wxFrame
-{
-public:
-	MyFrame();
-
-private:
-	void OnHello(wxCommandEvent &event);
-	void OnExit(wxCommandEvent &event);
-	void OnAbout(wxCommandEvent &event);
-};
-
-bool
-MyApp::OnInit()
-{
-	MyFrame *frame = new MyFrame();
-	frame->Show(true);
-	return true;
-}
-
-enum
-{
-	ID_Hello = 1
-};
-
-MyFrame::MyFrame() : wxFrame(nullptr, wxID_ANY, "Hello World")
-{
-	wxMenu *menuFile = new wxMenu;
-	menuFile->Append(ID_Hello, "&Hello...\tCtrl-H", "Help string shown in status bar for this menu item");
-
-	menuFile->AppendSeparator();
-	menuFile->Append(wxID_EXIT);
-
-	wxMenu *menuHelp = new wxMenu;
-	menuHelp->Append(wxID_ABOUT);
-
-	wxMenuBar *menuBar = new wxMenuBar;
-	menuBar->Append(menuFile, "&File");
-	menuBar->Append(menuHelp, "&Help");
-
-	SetMenuBar(menuBar);
-
-	CreateStatusBar();
-	SetStatusText("Welcome to wxWidgets!");
-
-	Bind(wxEVT_MENU, &MyFrame::OnHello, this, ID_Hello);
-	Bind(wxEVT_MENU, &MyFrame::OnExit, this, wxID_EXIT);
-	Bind(wxEVT_MENU, &MyFrame::OnAbout, this, wxID_ABOUT);
-}
-
-void MyFrame::OnExit(wxCommandEvent &event)
-{
-	Close(true);
-}
-
-void MyFrame::OnAbout(wxCommandEvent &event)
-{
-	wxMessageBox("This is a wxWidgets Hello World example",
-		"About Hello World", wxOK | wxICON_INFORMATION);
-}
-
-void MyFrame::OnHello(wxCommandEvent &event)
-{
-	wxLogMessage("Hello world from wxWidgets!");
-}
+wxIMPLEMENT_APP(LinguaAlpacaApp);

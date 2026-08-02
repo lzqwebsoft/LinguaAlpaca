@@ -1,0 +1,52 @@
+#pragma once
+#include <wx/wx.h>
+#include <memory>
+#include "../../application/service/TranslationService.hpp"
+#include "../components/SidebarNav.hpp"
+#include "TextTranslationView.hpp"
+#include "SettingsView.hpp"
+#include "PlaceholderView.hpp"
+
+namespace LinguaAlpaca::Presentation::Views {
+
+class MainFrame : public wxFrame {
+public:
+    MainFrame(std::shared_ptr<Application::Service::TranslationService> translationService);
+
+    void NavigateToSettings();
+
+private:
+    void InitUI();
+    void OnThemeToggle(wxCommandEvent& event);
+    void OnNavChanged(wxCommandEvent& event);
+
+    // 拖动与窗口控制
+    void OnHeaderLeftDown(wxMouseEvent& event);
+    void OnHeaderLeftUp(wxMouseEvent& event);
+    void OnHeaderMouseMove(wxMouseEvent& event);
+    void OnHeaderDoubleClick(wxMouseEvent& event);
+
+    std::shared_ptr<Application::Service::TranslationService> m_translationService;
+
+    // UI Elements
+    wxPanel* m_topHeaderPanel{nullptr};
+    Components::SidebarNav* m_sidebar{nullptr};
+    wxPanel* m_contentContainer{nullptr};
+    wxBoxSizer* m_contentSizer{nullptr};
+
+    TextTranslationView* m_selectionView{nullptr};
+    PlaceholderView* m_textView{nullptr};
+    PlaceholderView* m_ocrView{nullptr};
+    PlaceholderView* m_historyView{nullptr};
+    SettingsView* m_settingsView{nullptr};
+
+    wxButton* m_themeBtn{nullptr};
+    wxButton* m_minBtn{nullptr};
+    wxButton* m_maxBtn{nullptr};
+    wxButton* m_closeBtn{nullptr};
+
+    bool m_isDragging{false};
+    wxPoint m_dragStartPos;
+};
+
+} // namespace LinguaAlpaca::Presentation::Views

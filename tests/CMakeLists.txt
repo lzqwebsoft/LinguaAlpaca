@@ -23,3 +23,9 @@ target_link_libraries(unit_tests PRIVATE
 )
 
 add_test(NAME DomainAndAppTests COMMAND unit_tests)
+
+add_custom_command(TARGET unit_tests POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_BINARY_DIR}/third_party/wxWidgets/lib/vc_x64_dll"
+        "$<TARGET_FILE_DIR:unit_tests>"
+)

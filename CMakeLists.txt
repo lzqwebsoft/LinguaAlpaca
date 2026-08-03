@@ -21,6 +21,32 @@ set(wxBUILD_TESTS OFF CACHE BOOL "" FORCE)
 
 # 引入第三方依赖
 add_subdirectory(third_party/wxWidgets)
+
+# 自动为 third_party/llama.cpp 应用本地补丁 (PR #19357)
+find_package(Git QUIET)
+set(LLAMA_PATCH_FILE "${CMAKE_CURRENT_SOURCE_DIR}/patches/llama-pr-19357.patch")
+
+if(GIT_FOUND AND EXISTS "${LLAMA_PATCH_FILE}")
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} apply --check "${LLAMA_PATCH_FILE}"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/third_party/llama.cpp"
+        RESULT_VARIABLE PATCH_CHECK_RES
+        OUTPUT_QUIET ERROR_QUIET
+    )
+
+    if(PATCH_CHECK_RES EQUAL 0)
+        message(STATUS "[LinguaAlpaca] Applying llama.cpp PR #19357 patch...")
+        execute_process(
+            COMMAND ${GIT_EXECUTABLE} apply "${LLAMA_PATCH_FILE}"
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/third_party/llama.cpp"
+            RESULT_VARIABLE PATCH_APPLY_RES
+        )
+        if(NOT PATCH_APPLY_RES EQUAL 0)
+            message(WARNING "[LinguaAlpaca] Failed to apply llama.cpp patch!")
+        endif()
+    endif()
+endif()
+
 add_subdirectory(third_party/llama.cpp)
 
 # 收集项目源代码按层组织

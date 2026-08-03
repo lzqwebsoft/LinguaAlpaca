@@ -19,17 +19,17 @@ void LanguageSelectorBar::InitUI() {
 
     // 源语言标签与下拉框
     m_srcLabel = new wxStaticText(this, wxID_ANY, L"源语言");
-    m_srcLabel->SetFont(wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
+    m_srcLabel->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
     m_srcLabel->SetForegroundColour(palette.textSecondary);
 
-    m_sourceChoice = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxSize(200, 36));
+    m_sourceChoice = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxDefaultSize);
     
     // 目标语言标签与下拉框
     m_targetLabel = new wxStaticText(this, wxID_ANY, L"目标语言");
-    m_targetLabel->SetFont(wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
+    m_targetLabel->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
     m_targetLabel->SetForegroundColour(palette.textSecondary);
 
-    m_targetChoice = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxSize(200, 36));
+    m_targetChoice = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxDefaultSize);
 
     // 填充语言列表
     const auto& languages = Domain::Model::LanguageHelper::GetSupportedLanguages();
@@ -51,14 +51,15 @@ void LanguageSelectorBar::InitUI() {
 
     // 交换按钮 (SVG Swap)
     wxBitmapBundle swapBundle = Theme::IconManager::GetIconBundle(Theme::SVG::SWAP, wxSize(16, 16), palette.textPrimary);
-    m_swapBtn = new wxBitmapButton(this, wxID_ANY, swapBundle, wxDefaultPosition, wxSize(42, 36), wxBORDER_NONE);
+    m_swapBtn = new wxBitmapButton(this, wxID_ANY, swapBundle, wxDefaultPosition, wxSize(36, 30), wxBORDER_NONE);
     m_swapBtn->SetBackgroundColour(palette.windowBg);
+    m_swapBtn->SetToolTip(L"互换源语言与目标语言");
 
-    mainSizer->Add(m_srcLabel, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
+    mainSizer->Add(m_srcLabel, 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, 10);
     mainSizer->Add(m_sourceChoice, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, 16);
     mainSizer->Add(m_swapBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 16);
-    mainSizer->Add(m_targetLabel, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
-    mainSizer->Add(m_targetChoice, 1, wxALIGN_CENTER_VERTICAL);
+    mainSizer->Add(m_targetLabel, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
+    mainSizer->Add(m_targetChoice, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
 
     SetSizer(mainSizer);
 

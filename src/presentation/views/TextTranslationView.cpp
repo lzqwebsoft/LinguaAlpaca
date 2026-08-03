@@ -85,7 +85,7 @@ void TextTranslationView::InitUI() {
 
     wxBoxSizer* langSizer = new wxBoxSizer(wxHORIZONTAL);
     m_langSelector = new Components::LanguageSelectorBar(m_langPanel);
-    langSizer->Add(m_langSelector, 1, wxEXPAND | wxALL, 6);
+    langSizer->Add(m_langSelector, 1, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, 12);
     m_langPanel->SetSizer(langSizer);
 
     mainSizer->Add(m_langPanel, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 20);

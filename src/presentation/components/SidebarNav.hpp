@@ -10,7 +10,7 @@ wxDECLARE_EVENT(EVT_SIDEBAR_NAV_CHANGED, wxCommandEvent);
 struct SidebarNavItem {
     int id;
     wxString label;
-    wxString iconStr;
+    const char* svgContent;
 };
 
 class SidebarNav : public wxPanel {

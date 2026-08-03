@@ -1,4 +1,5 @@
 #include "SidebarNav.hpp"
+#include "../theme/IconManager.hpp"
 #include <wx/graphics.h>
 #include <wx/dcbuffer.h>
 
@@ -12,12 +13,10 @@ SidebarNav::SidebarNav(wxWindow* parent, wxWindowID id)
     SetBackgroundStyle(wxBG_STYLE_PAINT);
 
     m_items = {
-        { 0, L"划词", L"📐" },
-        { 1, L"文本", L"✍" },
-        { 2, L"OCR",  L"🖼" },
-        { 3, L"历史", L"🕒" }
+        { 0, L"文本", Theme::SVG::TEXT },
+        { 1, L"历史", Theme::SVG::HISTORY }
     };
-    m_bottomItem = { 4, L"设置", L"⚙" };
+    m_bottomItem = { 2, L"设置", Theme::SVG::SETTINGS };
 
     Bind(wxEVT_PAINT, &SidebarNav::OnPaint, this);
     Bind(wxEVT_LEFT_DOWN, &SidebarNav::OnLeftDown, this);
@@ -63,12 +62,12 @@ void SidebarNav::OnPaint(wxPaintEvent& WXUNUSED(event)) {
 
         wxColour iconTextColour = isSelected ? *wxWHITE : (isHovered ? palette.textPrimary : palette.textSecondary);
 
-        // Icon
-        wxFont iconFont(13, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Segoe UI Emoji");
-        gc->SetFont(iconFont, iconTextColour);
-        double iw, ih;
-        gc->GetTextExtent(item.iconStr, &iw, &ih);
-        gc->DrawText(item.iconStr, (size.x - iw) / 2.0, yPos + 8);
+        // SVG Vector Icon
+        wxBitmapBundle bundle = Theme::IconManager::GetIconBundle(item.svgContent, wxSize(20, 20), iconTextColour);
+        wxBitmap bmp = bundle.GetBitmap(wxSize(20, 20));
+        if (bmp.IsOk()) {
+            gc->DrawBitmap(bmp, (size.x - 20) / 2.0, yPos + 8, 20, 20);
+        }
 
         // Label
         wxFont labelFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, isSelected ? wxFONTWEIGHT_BOLD : wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei");
@@ -83,14 +82,14 @@ void SidebarNav::OnPaint(wxPaintEvent& WXUNUSED(event)) {
         drawItem(m_items[i], y, m_selectedIndex == (int)i, m_hoverIndex == (int)i);
     }
 
-    // 绘制横向细分割线
-    int dividerY = topOffset + m_items.size() * itemHeight + 8;
-    gc->SetPen(gc->CreatePen(wxPen(palette.cardBorder, 1)));
-    gc->StrokeLine(16, dividerY, size.x - 16, dividerY);
+    // 绘制横向细分割线 (保持在“历史”按钮的上方，位于“文本”与“历史”之间)
+    // int dividerY = topOffset + 1 * itemHeight - 4;
+    // gc->SetPen(gc->CreatePen(wxPen(palette.cardBorder, 1)));
+    // gc->StrokeLine(16, dividerY, size.x - 16, dividerY);
 
     // 底部设置按钮
     int bottomY = size.y - 74;
-    drawItem(m_bottomItem, bottomY, m_selectedIndex == 4, m_hoverIndex == 4);
+    drawItem(m_bottomItem, bottomY, m_selectedIndex == 2, m_hoverIndex == 2);
 }
 
 void SidebarNav::OnLeftDown(wxMouseEvent& event) {
@@ -103,13 +102,13 @@ void SidebarNav::OnLeftDown(wxMouseEvent& event) {
     for (size_t i = 0; i < m_items.size(); ++i) {
         int itemY = topOffset + i * itemHeight;
         if (y >= itemY && y <= itemY + 58) {
-            newIndex = i;
+            newIndex = (int)i;
             break;
         }
     }
 
     if (y >= sizeY - 74 && y <= sizeY - 16) {
-        newIndex = 4;
+        newIndex = 2;
     }
 
     if (newIndex != -1) {
@@ -133,13 +132,13 @@ void SidebarNav::OnMouseMove(wxMouseEvent& event) {
     for (size_t i = 0; i < m_items.size(); ++i) {
         int itemY = topOffset + i * itemHeight;
         if (y >= itemY && y <= itemY + 58) {
-            m_hoverIndex = i;
+            m_hoverIndex = (int)i;
             break;
         }
     }
 
     if (y >= sizeY - 74 && y <= sizeY - 16) {
-        m_hoverIndex = 4;
+        m_hoverIndex = 2;
     }
 
     if (oldHover != m_hoverIndex) {

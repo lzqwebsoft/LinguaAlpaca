@@ -8,7 +8,7 @@ namespace LinguaAlpaca::Presentation::Components {
 
 struct CardToolIcon {
     int id;
-    wxString iconStr;
+    const char* svgContent;
     wxString tooltip;
     std::function<void()> onClick;
 };
@@ -17,7 +17,7 @@ class CardPanel : public wxPanel {
 public:
     CardPanel(wxWindow* parent, const wxString& title, bool isActiveBorder = false, wxWindowID id = wxID_ANY);
 
-    void AddToolIcon(int id, const wxString& iconStr, const wxString& tooltip, std::function<void()> onClick);
+    void AddToolIcon(int id, const char* svgContent, const wxString& tooltip, std::function<void()> onClick);
     void SetCharacterCount(size_t count);
     void UpdateTheme();
     wxTextCtrl* GetTextCtrl() const { return m_textCtrl; }

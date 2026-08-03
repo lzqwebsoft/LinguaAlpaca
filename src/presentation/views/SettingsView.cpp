@@ -1,5 +1,6 @@
 #include "SettingsView.hpp"
 #include "../theme/ThemeColors.hpp"
+#include "../theme/IconManager.hpp"
 #include <wx/filedlg.h>
 #include <wx/filename.h>
 #include <wx/utils.h>
@@ -31,21 +32,29 @@ void SettingsView::InitUI() {
 
     wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
 
-    // 1. 顶栏：标题 (⚙ 设置) + 偏好标签
+    // 1. 顶栏：SVG 图标 + 标题 (设置) + 偏好标签
     wxBoxSizer* headerSizer = new wxBoxSizer(wxHORIZONTAL);
-    m_titleText = new wxStaticText(this, wxID_ANY, L"⚙  设置");
+    
+    wxBitmapBundle titleBundle = Theme::IconManager::GetIconBundle(Theme::SVG::SETTINGS, wxSize(22, 22), palette.accentPrimary);
+    wxStaticBitmap* titleIcon = new wxStaticBitmap(this, wxID_ANY, titleBundle);
+
+    m_titleText = new wxStaticText(this, wxID_ANY, L"设置");
     m_titleText->SetFont(wxFont(18, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
     m_titleText->SetForegroundColour(palette.textPrimary);
 
-    wxPanel* prefBadge = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxSize(68, 28), wxBORDER_NONE);
+    wxPanel* prefBadge = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxSize(78, 28), wxBORDER_NONE);
     prefBadge->SetBackgroundColour(palette.bannerBg);
     wxBoxSizer* prefBadgeSizer = new wxBoxSizer(wxHORIZONTAL);
-    wxStaticText* prefBadgeText = new wxStaticText(prefBadge, wxID_ANY, L"⚙ 偏好");
+    wxBitmapBundle prefIconBundle = Theme::IconManager::GetIconBundle(Theme::SVG::SETTINGS, wxSize(14, 14), palette.bannerText);
+    wxStaticBitmap* prefIcon = new wxStaticBitmap(prefBadge, wxID_ANY, prefIconBundle);
+    wxStaticText* prefBadgeText = new wxStaticText(prefBadge, wxID_ANY, L"偏好");
     prefBadgeText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
     prefBadgeText->SetForegroundColour(palette.bannerText);
-    prefBadgeSizer->Add(prefBadgeText, 0, wxALIGN_CENTER);
+    prefBadgeSizer->Add(prefIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
+    prefBadgeSizer->Add(prefBadgeText, 0, wxALIGN_CENTER_VERTICAL);
     prefBadge->SetSizer(prefBadgeSizer);
 
+    headerSizer->Add(titleIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
     headerSizer->Add(m_titleText, 0, wxALIGN_CENTER_VERTICAL);
     headerSizer->AddStretchSpacer(1);
     headerSizer->Add(prefBadge, 0, wxALIGN_CENTER_VERTICAL);
@@ -60,38 +69,37 @@ void SettingsView::InitUI() {
 
     // 卡片标题 + 状态指示
     wxBoxSizer* cardTitleSizer = new wxBoxSizer(wxHORIZONTAL);
-    wxStaticText* cardTitle = new wxStaticText(m_modelCard, wxID_ANY, L"⚙  离线模型配置 (llama.cpp)");
+
+    wxBitmapBundle cardTitleBundle = Theme::IconManager::GetIconBundle(Theme::SVG::MODEL_LOAD, wxSize(18, 18), palette.textPrimary);
+    wxStaticBitmap* cardTitleIcon = new wxStaticBitmap(m_modelCard, wxID_ANY, cardTitleBundle);
+
+    wxStaticText* cardTitle = new wxStaticText(m_modelCard, wxID_ANY, L"离线模型配置 (llama.cpp)");
     cardTitle->SetFont(wxFont(12, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
     cardTitle->SetForegroundColour(palette.textPrimary);
 
     m_statusBadge = new wxPanel(m_modelCard, wxID_ANY, wxDefaultPosition, wxSize(-1, 28), wxBORDER_NONE);
     m_statusBadge->SetBackgroundColour(wxColour(254, 242, 242));
     wxBoxSizer* statusSizer = new wxBoxSizer(wxHORIZONTAL);
-    m_statusText = new wxStaticText(m_statusBadge, wxID_ANY, L"🔴 未配置模型");
+    m_statusText = new wxStaticText(m_statusBadge, wxID_ANY, L"● 未配置模型");
     m_statusText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
     m_statusText->SetForegroundColour(wxColour(220, 38, 38));
     statusSizer->Add(m_statusText, 0, wxALIGN_CENTER | wxLEFT | wxRIGHT, 10);
     m_statusBadge->SetSizer(statusSizer);
 
+    cardTitleSizer->Add(cardTitleIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
     cardTitleSizer->Add(cardTitle, 0, wxALIGN_CENTER_VERTICAL);
     cardTitleSizer->AddStretchSpacer(1);
     cardTitleSizer->Add(m_statusBadge, 0, wxALIGN_CENTER_VERTICAL);
 
     modelCardSizer->Add(cardTitleSizer, 0, wxEXPAND | wxALL, 16);
 
-    // 选项卡切换按钮 (`[📂 本地文件]` | `[⭐ 推荐模型]`)
+    // 选项卡切换按钮 (`[本地文件]` | `[推荐模型]`)
     wxBoxSizer* tabSizer = new wxBoxSizer(wxHORIZONTAL);
-    m_localTabBtn = new wxButton(m_modelCard, wxID_ANY, L"📂 本地文件", wxDefaultPosition, wxSize(200, 36), wxBORDER_NONE);
-    m_recommendTabBtn = new wxButton(m_modelCard, wxID_ANY, L"⭐ 推荐模型", wxDefaultPosition, wxSize(200, 36), wxBORDER_NONE);
+    m_localTabBtn = new Components::CustomButton(m_modelCard, wxID_ANY, L"本地文件", Components::ButtonStyle::Primary, wxDefaultPosition, wxSize(200, 36));
+    m_localTabBtn->SetIcon(Theme::SVG::FOLDER, wxSize(16, 16), *wxWHITE);
 
-    m_localTabBtn->SetFont(wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
-    m_recommendTabBtn->SetFont(wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
-
-    m_localTabBtn->SetBackgroundColour(palette.accentPrimary);
-    m_localTabBtn->SetForegroundColour(*wxWHITE);
-
-    m_recommendTabBtn->SetBackgroundColour(palette.windowBg);
-    m_recommendTabBtn->SetForegroundColour(palette.textPrimary);
+    m_recommendTabBtn = new Components::CustomButton(m_modelCard, wxID_ANY, L"推荐模型", Components::ButtonStyle::Secondary, wxDefaultPosition, wxSize(200, 36));
+    m_recommendTabBtn->SetIcon(Theme::SVG::MODEL_LOAD, wxSize(16, 16), palette.textPrimary);
 
     tabSizer->Add(m_localTabBtn, 1, wxRIGHT, 8);
     tabSizer->Add(m_recommendTabBtn, 1);
@@ -109,15 +117,18 @@ void SettingsView::InitUI() {
     m_modelPathCtrl->SetBackgroundColour(palette.windowBg);
     m_modelPathCtrl->SetForegroundColour(palette.textPrimary);
 
-    m_browseBtn = new Components::CustomButton(m_localPanel, wxID_ANY, L"📂 浏览", Components::ButtonStyle::Secondary, wxDefaultPosition, wxSize(90, 38));
-    m_openDirBtn = new Components::CustomButton(m_localPanel, wxID_ANY, L"📂 打开模型目录", Components::ButtonStyle::Secondary, wxDefaultPosition, wxSize(145, 38));
+    m_browseBtn = new Components::CustomButton(m_localPanel, wxID_ANY, L"浏览", Components::ButtonStyle::Secondary, wxDefaultPosition, wxSize(90, 38));
+    m_browseBtn->SetIcon(Theme::SVG::BROWSE, wxSize(16, 16));
+
+    m_openDirBtn = new Components::CustomButton(m_localPanel, wxID_ANY, L"打开模型目录", Components::ButtonStyle::Secondary, wxDefaultPosition, wxSize(145, 38));
+    m_openDirBtn->SetIcon(Theme::SVG::FOLDER_OPEN, wxSize(16, 16));
 
     pathSizer->Add(m_modelPathCtrl, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
     pathSizer->Add(m_browseBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
     pathSizer->Add(m_openDirBtn, 0, wxALIGN_CENTER_VERTICAL);
     localSizer->Add(pathSizer, 0, wxEXPAND | wxBOTTOM, 10);
 
-    wxStaticText* pathNote = new wxStaticText(m_localPanel, wxID_ANY, L"ℹ 支持 .gguf 格式的 llama.cpp 兼容模型。");
+    wxStaticText* pathNote = new wxStaticText(m_localPanel, wxID_ANY, L"支持 .gguf 格式的 llama.cpp 兼容模型。");
     pathNote->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
     pathNote->SetForegroundColour(palette.textSecondary);
     localSizer->Add(pathNote, 0, wxBOTTOM, 12);
@@ -156,7 +167,8 @@ void SettingsView::InitUI() {
     stSizer->Add(stText, 0, wxALIGN_CENTER);
     sizeTag->SetSizer(stSizer);
 
-    m_downloadBtn = new Components::CustomButton(itemPanel, wxID_ANY, L"⬇ 自动下载模型", Components::ButtonStyle::Primary, wxDefaultPosition, wxSize(145, 34));
+    m_downloadBtn = new Components::CustomButton(itemPanel, wxID_ANY, L"自动下载模型", Components::ButtonStyle::Primary, wxDefaultPosition, wxSize(145, 34));
+    m_downloadBtn->SetIcon(Theme::SVG::DOWNLOAD, wxSize(16, 16), *wxWHITE);
 
     itemSizer->Add(infoSizer, 1, wxALIGN_CENTER_VERTICAL | wxLEFT, 12);
     itemSizer->Add(sizeTag, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 12);
@@ -187,17 +199,20 @@ void SettingsView::InitUI() {
     m_recommendPanel->Hide();
     modelCardSizer->Add(m_recommendPanel, 0, wxEXPAND | wxLEFT | wxRIGHT, 16);
 
-    // 保存与测试操作按钮 (`💾 保存配置` & `▶ 测试模型`)
+    // 保存与测试操作按钮 (`保存配置` & `测试模型`)
     wxBoxSizer* actionSizer = new wxBoxSizer(wxHORIZONTAL);
-    m_saveBtn = new Components::CustomButton(m_modelCard, wxID_ANY, L"💾  保存配置", Components::ButtonStyle::Primary, wxDefaultPosition, wxSize(145, 40));
-    m_testBtn = new Components::CustomButton(m_modelCard, wxID_ANY, L"▶  测试模型", Components::ButtonStyle::Secondary, wxDefaultPosition, wxSize(130, 40));
+    m_saveBtn = new Components::CustomButton(m_modelCard, wxID_ANY, L"保存配置", Components::ButtonStyle::Primary, wxDefaultPosition, wxSize(145, 40));
+    m_saveBtn->SetIcon(Theme::SVG::COPY, wxSize(16, 16), *wxWHITE);
+
+    m_testBtn = new Components::CustomButton(m_modelCard, wxID_ANY, L"测试模型", Components::ButtonStyle::Secondary, wxDefaultPosition, wxSize(130, 40));
+    m_testBtn->SetIcon(Theme::SVG::TRANSLATE, wxSize(16, 16));
 
     actionSizer->Add(m_saveBtn, 0, wxRIGHT, 12);
     actionSizer->Add(m_testBtn, 0);
     modelCardSizer->Add(actionSizer, 0, wxALL, 16);
 
     // 底部提示说明
-    wxStaticText* noteText = new wxStaticText(m_modelCard, wxID_ANY, L"ℹ 模型保存于系统的用户标准数据目录 config.ini 配置文件，软件升级后绝不会丢失。");
+    wxStaticText* noteText = new wxStaticText(m_modelCard, wxID_ANY, L"模型保存于系统的用户标准数据目录 config.ini 配置文件，软件升级后绝不会丢失。");
     noteText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
     noteText->SetForegroundColour(palette.textSecondary);
     modelCardSizer->Add(noteText, 0, wxLEFT | wxRIGHT | wxBOTTOM, 16);
@@ -210,10 +225,17 @@ void SettingsView::InitUI() {
     m_prefCard->SetBackgroundColour(palette.cardBg);
     wxBoxSizer* prefSizer = new wxBoxSizer(wxVERTICAL);
 
-    m_prefTitle = new wxStaticText(m_prefCard, wxID_ANY, L"🌙 深色主题与偏好");
+    wxBoxSizer* prefTitleSizer = new wxBoxSizer(wxHORIZONTAL);
+    wxBitmapBundle moonBundle = Theme::IconManager::GetIconBundle(Theme::SVG::MOON, wxSize(18, 18), palette.textPrimary);
+    wxStaticBitmap* moonIcon = new wxStaticBitmap(m_prefCard, wxID_ANY, moonBundle);
+
+    m_prefTitle = new wxStaticText(m_prefCard, wxID_ANY, L"深色主题与偏好");
     m_prefTitle->SetFont(wxFont(12, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
     m_prefTitle->SetForegroundColour(palette.textPrimary);
-    prefSizer->Add(m_prefTitle, 0, wxALL, 16);
+
+    prefTitleSizer->Add(moonIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
+    prefTitleSizer->Add(m_prefTitle, 0, wxALIGN_CENTER_VERTICAL);
+    prefSizer->Add(prefTitleSizer, 0, wxALL, 16);
 
     m_prefCard->SetSizer(prefSizer);
     mainSizer->Add(m_prefCard, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 20);
@@ -236,18 +258,20 @@ void SettingsView::OnTabChanged(int tabIndex) {
     auto palette = Theme::ThemeColors::GetCurrentPalette();
 
     if (tabIndex == 0) {
-        m_localTabBtn->SetBackgroundColour(palette.accentPrimary);
-        m_localTabBtn->SetForegroundColour(*wxWHITE);
-        m_recommendTabBtn->SetBackgroundColour(palette.windowBg);
-        m_recommendTabBtn->SetForegroundColour(palette.textPrimary);
+        m_localTabBtn->SetButtonStyle(Components::ButtonStyle::Primary);
+        m_localTabBtn->SetIcon(Theme::SVG::FOLDER, wxSize(16, 16), *wxWHITE);
+
+        m_recommendTabBtn->SetButtonStyle(Components::ButtonStyle::Secondary);
+        m_recommendTabBtn->SetIcon(Theme::SVG::MODEL_LOAD, wxSize(16, 16), palette.textPrimary);
 
         m_localPanel->Show();
         m_recommendPanel->Hide();
     } else {
-        m_recommendTabBtn->SetBackgroundColour(palette.accentPrimary);
-        m_recommendTabBtn->SetForegroundColour(*wxWHITE);
-        m_localTabBtn->SetBackgroundColour(palette.windowBg);
-        m_localTabBtn->SetForegroundColour(palette.textPrimary);
+        m_recommendTabBtn->SetButtonStyle(Components::ButtonStyle::Primary);
+        m_recommendTabBtn->SetIcon(Theme::SVG::MODEL_LOAD, wxSize(16, 16), *wxWHITE);
+
+        m_localTabBtn->SetButtonStyle(Components::ButtonStyle::Secondary);
+        m_localTabBtn->SetIcon(Theme::SVG::FOLDER, wxSize(16, 16), palette.textPrimary);
 
         m_localPanel->Hide();
         m_recommendPanel->Show();
@@ -271,11 +295,11 @@ void SettingsView::SetModelPath(const wxString& path) {
     if (loaded || (!path.IsEmpty() && wxFileExists(path))) {
         m_statusBadge->SetBackgroundColour(wxColour(240, 253, 244));
         m_statusText->SetForegroundColour(wxColour(22, 101, 52));
-        m_statusText->SetLabel(L"🟢 已加载模型: " + wxFileName(path).GetFullName());
+        m_statusText->SetLabel(L"● 已加载模型: " + wxFileName(path).GetFullName());
     } else {
         m_statusBadge->SetBackgroundColour(wxColour(254, 242, 242));
         m_statusText->SetForegroundColour(wxColour(220, 38, 38));
-        m_statusText->SetLabel(L"🔴 未配置模型");
+        m_statusText->SetLabel(L"● 未配置模型");
     }
     m_statusBadge->Layout();
 }

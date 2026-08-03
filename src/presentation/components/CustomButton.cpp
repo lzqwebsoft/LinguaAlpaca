@@ -1,4 +1,5 @@
 #include "CustomButton.hpp"
+#include "../theme/IconManager.hpp"
 #include <wx/graphics.h>
 #include <wx/dcbuffer.h>
 #include <algorithm>
@@ -22,6 +23,11 @@ CustomButton::CustomButton(wxWindow* parent, wxWindowID id, const wxString& labe
 
 void CustomButton::SetLabel(const wxString& label) {
     m_label = label;
+    Refresh();
+}
+
+void CustomButton::SetIcon(const char* svgContent, const wxSize& iconSize, const wxColour& tintColor) {
+    m_iconBundle = Theme::IconManager::GetIconBundle(svgContent, iconSize, tintColor);
     Refresh();
 }
 
@@ -77,20 +83,44 @@ void CustomButton::OnPaint(wxPaintEvent& WXUNUSED(event)) {
     } else {
         gc->SetPen(*wxTRANSPARENT_PEN);
     }
-    
+
     gc->DrawRoundedRectangle(1, 1, size.x - 2, size.y - 2, radius);
 
-    // 绘制文字
+    // 绘制 SVG 图标与文字
     wxFont font = wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei");
     gc->SetFont(font, textColour);
 
-    double tw, th;
-    gc->GetTextExtent(m_label, &tw, &th);
-    double x = (size.x - tw) / 2.0;
-    if (x < 6.0) x = 6.0;
-    double y = (size.y - th) / 2.0;
-    if (y < 1.0) y = 1.0;
-    gc->DrawText(m_label, x, y);
+    double tw = 0, th = 0;
+    if (!m_label.IsEmpty()) {
+        gc->GetTextExtent(m_label, &tw, &th);
+    }
+
+    double iconW = 0, iconH = 0;
+    wxBitmap bmp;
+    if (m_iconBundle.IsOk()) {
+        bmp = m_iconBundle.GetBitmap(wxSize(16, 16));
+        if (bmp.IsOk()) {
+            iconW = bmp.GetWidth();
+            iconH = bmp.GetHeight();
+        }
+    }
+
+    double spacing = (iconW > 0 && tw > 0) ? 6.0 : 0.0;
+    double totalW = iconW + spacing + tw;
+    double startX = (size.x - totalW) / 2.0;
+    if (startX < 6.0) startX = 6.0;
+
+    if (bmp.IsOk()) {
+        double iconY = (size.y - iconH) / 2.0;
+        gc->DrawBitmap(bmp, startX, iconY, iconW, iconH);
+        startX += iconW + spacing;
+    }
+
+    if (!m_label.IsEmpty()) {
+        double textY = (size.y - th) / 2.0;
+        if (textY < 1.0) textY = 1.0;
+        gc->DrawText(m_label, startX, textY);
+    }
 }
 
 void CustomButton::OnMouseEnter(wxMouseEvent& WXUNUSED(event)) {

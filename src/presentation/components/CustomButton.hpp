@@ -20,6 +20,8 @@ public:
 
     void SetLabel(const wxString& label) override;
     void SetButtonStyle(ButtonStyle style) { m_buttonStyle = style; Refresh(); }
+    void SetIcon(const char* svgContent, const wxSize& iconSize = wxSize(16, 16), const wxColour& tintColor = wxNullColour);
+    void SetIconBundle(const wxBitmapBundle& bundle) { m_iconBundle = bundle; Refresh(); }
 
 protected:
     wxSize DoGetBestSize() const override;
@@ -33,6 +35,7 @@ private:
 
     wxString m_label;
     ButtonStyle m_buttonStyle;
+    wxBitmapBundle m_iconBundle;
     bool m_isHovered{false};
     bool m_isPressed{false};
 };

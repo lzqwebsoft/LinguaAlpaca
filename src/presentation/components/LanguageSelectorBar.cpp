@@ -1,5 +1,6 @@
 #include "LanguageSelectorBar.hpp"
 #include "../theme/ThemeColors.hpp"
+#include "../theme/IconManager.hpp"
 
 namespace LinguaAlpaca::Presentation::Components {
 
@@ -17,14 +18,14 @@ void LanguageSelectorBar::InitUI() {
     SetBackgroundColour(palette.cardBg);
 
     // 源语言标签与下拉框
-    m_srcLabel = new wxStaticText(this, wxID_ANY, L"➔ 源语言");
+    m_srcLabel = new wxStaticText(this, wxID_ANY, L"源语言");
     m_srcLabel->SetFont(wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
     m_srcLabel->SetForegroundColour(palette.textSecondary);
 
     m_sourceChoice = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxSize(200, 36));
     
     // 目标语言标签与下拉框
-    m_targetLabel = new wxStaticText(this, wxID_ANY, L"⬅ 目标语言");
+    m_targetLabel = new wxStaticText(this, wxID_ANY, L"目标语言");
     m_targetLabel->SetFont(wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
     m_targetLabel->SetForegroundColour(palette.textSecondary);
 
@@ -48,11 +49,10 @@ void LanguageSelectorBar::InitUI() {
     m_targetChoice->SetBackgroundColour(palette.cardBg);
     m_targetChoice->SetForegroundColour(palette.textPrimary);
 
-    // 交换按钮 (⇄)
-    m_swapBtn = new wxButton(this, wxID_ANY, L"⇄", wxDefaultPosition, wxSize(42, 36), wxBORDER_NONE);
-    m_swapBtn->SetFont(wxFont(14, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Segoe UI Emoji"));
+    // 交换按钮 (SVG Swap)
+    wxBitmapBundle swapBundle = Theme::IconManager::GetIconBundle(Theme::SVG::SWAP, wxSize(16, 16), palette.textPrimary);
+    m_swapBtn = new wxBitmapButton(this, wxID_ANY, swapBundle, wxDefaultPosition, wxSize(42, 36), wxBORDER_NONE);
     m_swapBtn->SetBackgroundColour(palette.windowBg);
-    m_swapBtn->SetForegroundColour(palette.textPrimary);
 
     mainSizer->Add(m_srcLabel, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
     mainSizer->Add(m_sourceChoice, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, 16);
@@ -63,6 +63,7 @@ void LanguageSelectorBar::InitUI() {
     SetSizer(mainSizer);
 
     m_swapBtn->Bind(wxEVT_BUTTON, &LanguageSelectorBar::OnSwapClicked, this);
+
     m_sourceChoice->Bind(wxEVT_CHOICE, &LanguageSelectorBar::OnChoiceSelected, this);
     m_targetChoice->Bind(wxEVT_CHOICE, &LanguageSelectorBar::OnChoiceSelected, this);
 }
@@ -87,8 +88,9 @@ void LanguageSelectorBar::UpdateTheme() {
     }
 
     if (m_swapBtn) {
+        wxBitmapBundle swapBundle = Theme::IconManager::GetIconBundle(Theme::SVG::SWAP, wxSize(16, 16), palette.textPrimary);
+        m_swapBtn->SetBitmap(swapBundle);
         m_swapBtn->SetBackgroundColour(palette.windowBg);
-        m_swapBtn->SetForegroundColour(palette.textPrimary);
         m_swapBtn->Refresh();
     }
 

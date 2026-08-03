@@ -1,5 +1,6 @@
 #include "TextTranslationView.hpp"
 #include "../theme/ThemeColors.hpp"
+#include "../theme/IconManager.hpp"
 #include <wx/clipbrd.h>
 
 namespace LinguaAlpaca::Presentation::Views {
@@ -19,33 +20,42 @@ void TextTranslationView::InitUI() {
 
     wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
 
-    // 1. 顶栏：标题 (📐 划词翻译) + 状态标签 (🟢 监听中)
+    // 1. 顶栏：SVG 图标 + 标题 (文本翻译) + 状态标签 (● 监听中)
     wxBoxSizer* headerSizer = new wxBoxSizer(wxHORIZONTAL);
-    m_titleText = new wxStaticText(this, wxID_ANY, L"📐  划词翻译");
+
+    wxBitmapBundle titleBundle = Theme::IconManager::GetIconBundle(Theme::SVG::TEXT, wxSize(22, 22), palette.accentPrimary);
+    wxStaticBitmap* titleIcon = new wxStaticBitmap(this, wxID_ANY, titleBundle);
+
+    m_titleText = new wxStaticText(this, wxID_ANY, L"文本翻译");
     m_titleText->SetFont(wxFont(18, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
     m_titleText->SetForegroundColour(palette.textPrimary);
 
     m_statusBadge = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxSize(78, 28), wxBORDER_NONE);
     m_statusBadge->SetBackgroundColour(palette.badgeBg);
     wxBoxSizer* badgeSizer = new wxBoxSizer(wxHORIZONTAL);
-    m_badgeText = new wxStaticText(m_statusBadge, wxID_ANY, L"🟢 监听中");
+    m_badgeText = new wxStaticText(m_statusBadge, wxID_ANY, L"●  监听中");
     m_badgeText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
     m_badgeText->SetForegroundColour(palette.badgeText);
     badgeSizer->Add(m_badgeText, 0, wxALIGN_CENTER);
     m_statusBadge->SetSizer(badgeSizer);
 
+    headerSizer->Add(titleIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
     headerSizer->Add(m_titleText, 0, wxALIGN_CENTER_VERTICAL);
     headerSizer->AddStretchSpacer(1);
     headerSizer->Add(m_statusBadge, 0, wxALIGN_CENTER_VERTICAL);
 
     mainSizer->Add(headerSizer, 0, wxEXPAND | wxALL, 20);
 
-    // 2. 划词状态提示 Banner
+    // 2. 划词状态提示 Banner (SVG Info Icon)
     m_bannerPanel = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxSize(-1, 44), wxBORDER_NONE);
     m_bannerPanel->SetBackgroundColour(palette.bannerBg);
 
     wxBoxSizer* bannerSizer = new wxBoxSizer(wxHORIZONTAL);
-    m_bannerText = new wxStaticText(m_bannerPanel, wxID_ANY, L"ℹ  选中任意文本 · 自动翻译 · 当前选中：");
+
+    wxBitmapBundle infoBundle = Theme::IconManager::GetIconBundle(Theme::SVG::INFO, wxSize(16, 16), palette.textSecondary);
+    wxStaticBitmap* infoIcon = new wxStaticBitmap(m_bannerPanel, wxID_ANY, infoBundle);
+
+    m_bannerText = new wxStaticText(m_bannerPanel, wxID_ANY, L"选中任意文本 · 自动翻译 · 当前选中：");
     m_bannerText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
     m_bannerText->SetForegroundColour(palette.bannerText);
 
@@ -58,9 +68,10 @@ void TextTranslationView::InitUI() {
     tagSizer->Add(m_tagText, 0, wxALIGN_CENTER);
     m_selectedTagPanel->SetSizer(tagSizer);
 
-    m_instantTransBtn = new Components::CustomButton(m_bannerPanel, wxID_ANY, L"力即翻译", Components::ButtonStyle::Primary, wxDefaultPosition, wxSize(96, 32));
+    m_instantTransBtn = new Components::CustomButton(m_bannerPanel, wxID_ANY, L"立即翻译", Components::ButtonStyle::Primary, wxDefaultPosition, wxSize(96, 32));
 
-    bannerSizer->Add(m_bannerText, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 16);
+    bannerSizer->Add(infoIcon, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 16);
+    bannerSizer->Add(m_bannerText, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 6);
     bannerSizer->Add(m_selectedTagPanel, 0, wxALIGN_CENTER_VERTICAL);
     bannerSizer->AddStretchSpacer(1);
     bannerSizer->Add(m_instantTransBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 12);
@@ -81,8 +92,8 @@ void TextTranslationView::InitUI() {
 
     // 4. 原文与译文卡片区
     wxBoxSizer* cardsSizer = new wxBoxSizer(wxHORIZONTAL);
-    m_sourceCard = new Components::CardPanel(this, L"🔤 原文", false);
-    m_sourceCard->AddToolIcon(1, L"📋", L"粘贴文本", [this]() {
+    m_sourceCard = new Components::CardPanel(this, L"原文", false);
+    m_sourceCard->AddToolIcon(1, Theme::SVG::PASTE, L"粘贴文本", [this]() {
         if (wxTheClipboard->Open()) {
             if (wxTheClipboard->IsSupported(wxDF_TEXT)) {
                 wxTextDataObject data;
@@ -92,7 +103,7 @@ void TextTranslationView::InitUI() {
             wxTheClipboard->Close();
         }
     });
-    m_sourceCard->AddToolIcon(2, L"🧹", L"清空原文", [this]() {
+    m_sourceCard->AddToolIcon(2, Theme::SVG::CLEAR, L"清空原文", [this]() {
         m_sourceCard->GetTextCtrl()->Clear();
         m_sourceCard->SetCharacterCount(0);
     });
@@ -100,15 +111,15 @@ void TextTranslationView::InitUI() {
     m_sourceCard->GetTextCtrl()->SetValue(L"Hello, welcome to Lingo Translator!");
     m_sourceCard->SetCharacterCount(35);
 
-    m_targetCard = new Components::CardPanel(this, L"🈳 译文", true);
-    m_targetCard->AddToolIcon(1, L"📄", L"复制译文", [this]() {
+    m_targetCard = new Components::CardPanel(this, L"译文", true);
+    m_targetCard->AddToolIcon(1, Theme::SVG::COPY, L"复制译文", [this]() {
         wxString text = m_targetCard->GetTextCtrl()->GetValue();
         if (!text.IsEmpty() && wxTheClipboard->Open()) {
             wxTheClipboard->SetData(new wxTextDataObject(text));
             wxTheClipboard->Close();
         }
     });
-    m_targetCard->AddToolIcon(2, L"🔊", L"朗读", []() {});
+    m_targetCard->AddToolIcon(2, Theme::SVG::SPEAKER, L"朗读", []() {});
 
     m_targetCard->GetTextCtrl()->SetValue(L"你好，欢迎使用轻译翻译器！");
     m_targetCard->SetCharacterCount(13);
@@ -121,11 +132,20 @@ void TextTranslationView::InitUI() {
     // 5. 底部操作按钮栏
     wxBoxSizer* bottomSizer = new wxBoxSizer(wxHORIZONTAL);
 
-    m_translateBtn = new Components::CustomButton(this, wxID_ANY, L"▶  翻译", Components::ButtonStyle::Primary, wxDefaultPosition, wxSize(110, 42));
-    m_stopBtn      = new Components::CustomButton(this, wxID_ANY, L"⏹  中断翻译", Components::ButtonStyle::Danger, wxDefaultPosition, wxSize(130, 42));
-    m_clearBtn     = new Components::CustomButton(this, wxID_ANY, L"↺  清空", Components::ButtonStyle::Secondary, wxDefaultPosition, wxSize(100, 42));
-    m_swapBtn      = new Components::CustomButton(this, wxID_ANY, L"⇄  交换", Components::ButtonStyle::Secondary, wxDefaultPosition, wxSize(100, 42));
-    m_copyBtn      = new Components::CustomButton(this, wxID_ANY, L"✔  复制译文", Components::ButtonStyle::Green, wxDefaultPosition, wxSize(120, 42));
+    m_translateBtn = new Components::CustomButton(this, wxID_ANY, L"翻译", Components::ButtonStyle::Primary, wxDefaultPosition, wxSize(110, 42));
+    m_translateBtn->SetIcon(Theme::SVG::TRANSLATE, wxSize(16, 16), *wxWHITE);
+
+    m_stopBtn      = new Components::CustomButton(this, wxID_ANY, L"中断翻译", Components::ButtonStyle::Danger, wxDefaultPosition, wxSize(130, 42));
+    m_stopBtn->SetIcon(Theme::SVG::STOP, wxSize(16, 16), *wxWHITE);
+
+    m_clearBtn     = new Components::CustomButton(this, wxID_ANY, L"清空", Components::ButtonStyle::Secondary, wxDefaultPosition, wxSize(100, 42));
+    m_clearBtn->SetIcon(Theme::SVG::CLEAR, wxSize(16, 16));
+
+    m_swapBtn      = new Components::CustomButton(this, wxID_ANY, L"交换", Components::ButtonStyle::Secondary, wxDefaultPosition, wxSize(100, 42));
+    m_swapBtn->SetIcon(Theme::SVG::SWAP, wxSize(16, 16));
+
+    m_copyBtn      = new Components::CustomButton(this, wxID_ANY, L"复制译文", Components::ButtonStyle::Green, wxDefaultPosition, wxSize(120, 42));
+    m_copyBtn->SetIcon(Theme::SVG::COPY, wxSize(16, 16), *wxWHITE);
 
     m_stopBtn->Hide();
 

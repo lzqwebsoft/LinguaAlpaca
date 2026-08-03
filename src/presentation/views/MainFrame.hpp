@@ -34,12 +34,12 @@ private:
     wxPanel* m_contentContainer{nullptr};
     wxBoxSizer* m_contentSizer{nullptr};
 
-    TextTranslationView* m_selectionView{nullptr};
-    PlaceholderView* m_textView{nullptr};
+    TextTranslationView* m_textView{nullptr};
     PlaceholderView* m_ocrView{nullptr};
     PlaceholderView* m_historyView{nullptr};
     SettingsView* m_settingsView{nullptr};
 
+    wxStaticText* m_appNameText{nullptr};
     wxButton* m_themeBtn{nullptr};
     wxButton* m_minBtn{nullptr};
     wxButton* m_maxBtn{nullptr};

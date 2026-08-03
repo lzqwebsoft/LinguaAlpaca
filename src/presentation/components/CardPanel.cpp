@@ -1,4 +1,5 @@
 #include "CardPanel.hpp"
+#include "../theme/IconManager.hpp"
 #include <wx/graphics.h>
 #include <wx/dcbuffer.h>
 
@@ -48,8 +49,8 @@ void CardPanel::UpdateTheme() {
     Refresh();
 }
 
-void CardPanel::AddToolIcon(int id, const wxString& iconStr, const wxString& tooltip, std::function<void()> onClick) {
-    m_tools.push_back({ id, iconStr, tooltip, onClick });
+void CardPanel::AddToolIcon(int id, const char* svgContent, const wxString& tooltip, std::function<void()> onClick) {
+    m_tools.push_back({ id, svgContent, tooltip, onClick });
     Refresh();
 }
 
@@ -86,20 +87,18 @@ void CardPanel::OnPaint(wxPaintEvent& WXUNUSED(event)) {
     gc->SetFont(titleFont, m_isActiveBorder ? palette.accentPrimary : palette.textPrimary);
     gc->DrawText(m_title, 16, 12);
 
-    // 3. 绘制右侧工具图标 (📄, 🧹, 🔊 等)
+    // 3. 绘制右侧 SVG 工具图标
     int toolX = size.x - 24;
-    wxFont toolFont(11, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Segoe UI Emoji");
 
     for (int i = (int)m_tools.size() - 1; i >= 0; --i) {
-        double tw, th;
-        gc->GetTextExtent(m_tools[i].iconStr, &tw, &th);
-        toolX -= tw;
-
+        toolX -= 16;
         wxColour toolColor = (m_hoverToolIndex == i) ? palette.accentPrimary : palette.textSecondary;
-        gc->SetFont(toolFont, toolColor);
-        gc->DrawText(m_tools[i].iconStr, toolX, 12);
-
-        toolX -= 14;
+        wxBitmapBundle bundle = Theme::IconManager::GetIconBundle(m_tools[i].svgContent, wxSize(16, 16), toolColor);
+        wxBitmap bmp = bundle.GetBitmap(wxSize(16, 16));
+        if (bmp.IsOk()) {
+            gc->DrawBitmap(bmp, toolX, 12, 16, 16);
+        }
+        toolX -= 12;
     }
 
     // 4. 绘制 Footer 字符数
@@ -122,18 +121,13 @@ void CardPanel::OnMouseMove(wxMouseEvent& event) {
 
     if (y >= 8 && y <= 32) {
         int toolX = sizeX - 24;
-        wxClientDC dc(this);
-        dc.SetFont(wxFont(11, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Segoe UI Emoji"));
-
         for (int i = (int)m_tools.size() - 1; i >= 0; --i) {
-            wxSize extent = dc.GetTextExtent(m_tools[i].iconStr);
-            toolX -= extent.x;
-
-            if (x >= toolX - 4 && x <= toolX + extent.x + 4) {
+            toolX -= 16;
+            if (x >= toolX - 4 && x <= toolX + 20) {
                 m_hoverToolIndex = i;
                 break;
             }
-            toolX -= 14;
+            toolX -= 12;
         }
     }
 

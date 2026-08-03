@@ -36,8 +36,8 @@ private:
     wxPanel* m_statusBadge{nullptr};
     wxStaticText* m_statusText{nullptr};
 
-    wxButton* m_localTabBtn{nullptr};
-    wxButton* m_recommendTabBtn{nullptr};
+    Components::CustomButton* m_localTabBtn{nullptr};
+    Components::CustomButton* m_recommendTabBtn{nullptr};
 
     wxPanel* m_localPanel{nullptr};
     wxPanel* m_recommendPanel{nullptr};

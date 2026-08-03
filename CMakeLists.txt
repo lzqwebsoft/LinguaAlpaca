@@ -84,6 +84,9 @@ set(INFRA_SOURCES
 
 set(UI_SOURCES
     src/presentation/theme/ThemeColors.hpp
+    src/presentation/theme/AppIcons.hpp
+    src/presentation/theme/IconManager.hpp
+    src/presentation/theme/IconManager.cpp
     src/presentation/components/CustomButton.hpp
     src/presentation/components/CustomButton.cpp
     src/presentation/components/SidebarNav.hpp

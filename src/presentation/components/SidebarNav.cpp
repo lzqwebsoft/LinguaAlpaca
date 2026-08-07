@@ -14,9 +14,10 @@ SidebarNav::SidebarNav(wxWindow* parent, wxWindowID id)
 
     m_items = {
         { 0, L"文本", Theme::SVG::TEXT },
-        { 1, L"历史", Theme::SVG::HISTORY }
+        { 1, L"OCR", Theme::SVG::OCR },
+        { 2, L"历史", Theme::SVG::HISTORY }
     };
-    m_bottomItem = { 2, L"设置", Theme::SVG::SETTINGS };
+    m_bottomItem = { 3, L"设置", Theme::SVG::SETTINGS };
 
     Bind(wxEVT_PAINT, &SidebarNav::OnPaint, this);
     Bind(wxEVT_LEFT_DOWN, &SidebarNav::OnLeftDown, this);
@@ -77,19 +78,24 @@ void SidebarNav::OnPaint(wxPaintEvent& WXUNUSED(event)) {
         gc->DrawText(item.label, (size.x - lw) / 2.0, yPos + 34);
     };
 
+    auto getItemY = [topOffset, itemHeight](size_t i) -> int {
+        return (i <= 1) ? (topOffset + (int)i * itemHeight) : (topOffset + 2 * itemHeight + 20);
+    };
+
     for (size_t i = 0; i < m_items.size(); ++i) {
-        int y = topOffset + i * itemHeight;
+        int y = getItemY(i);
         drawItem(m_items[i], y, m_selectedIndex == (int)i, m_hoverIndex == (int)i);
     }
 
-    // 绘制横向细分割线 (保持在“历史”按钮的上方，位于“文本”与“历史”之间)
-    // int dividerY = topOffset + 1 * itemHeight - 4;
-    // gc->SetPen(gc->CreatePen(wxPen(palette.cardBorder, 1)));
-    // gc->StrokeLine(16, dividerY, size.x - 16, dividerY);
+    // 绘制居中的横向短分割线 (位于“OCR”与“历史”按钮之间)
+    double dividerY = topOffset + 2 * itemHeight + 4.0;
+    double lineLen = 28.0;
+    gc->SetPen(gc->CreatePen(wxPen(palette.cardBorder, 1)));
+    gc->StrokeLine((size.x - lineLen) / 2.0, dividerY, (size.x + lineLen) / 2.0, dividerY);
 
     // 底部设置按钮
     int bottomY = size.y - 74;
-    drawItem(m_bottomItem, bottomY, m_selectedIndex == 2, m_hoverIndex == 2);
+    drawItem(m_bottomItem, bottomY, m_selectedIndex == 3, m_hoverIndex == 3);
 }
 
 void SidebarNav::OnLeftDown(wxMouseEvent& event) {
@@ -100,7 +106,7 @@ void SidebarNav::OnLeftDown(wxMouseEvent& event) {
 
     int newIndex = -1;
     for (size_t i = 0; i < m_items.size(); ++i) {
-        int itemY = topOffset + i * itemHeight;
+        int itemY = (i <= 1) ? (topOffset + (int)i * itemHeight) : (topOffset + 2 * itemHeight + 20);
         if (y >= itemY && y <= itemY + 58) {
             newIndex = (int)i;
             break;
@@ -108,7 +114,7 @@ void SidebarNav::OnLeftDown(wxMouseEvent& event) {
     }
 
     if (y >= sizeY - 74 && y <= sizeY - 16) {
-        newIndex = 2;
+        newIndex = 3;
     }
 
     if (newIndex != -1) {
@@ -130,7 +136,7 @@ void SidebarNav::OnMouseMove(wxMouseEvent& event) {
     m_hoverIndex = -1;
 
     for (size_t i = 0; i < m_items.size(); ++i) {
-        int itemY = topOffset + i * itemHeight;
+        int itemY = (i <= 1) ? (topOffset + (int)i * itemHeight) : (topOffset + 2 * itemHeight + 20);
         if (y >= itemY && y <= itemY + 58) {
             m_hoverIndex = (int)i;
             break;
@@ -138,7 +144,7 @@ void SidebarNav::OnMouseMove(wxMouseEvent& event) {
     }
 
     if (y >= sizeY - 74 && y <= sizeY - 16) {
-        m_hoverIndex = 2;
+        m_hoverIndex = 3;
     }
 
     if (oldHover != m_hoverIndex) {

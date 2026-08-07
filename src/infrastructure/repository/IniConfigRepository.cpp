@@ -24,6 +24,8 @@ Domain::Model::AppConfig IniConfigRepository::LoadConfig() {
     wxFileConfig fileConfig("LinguaAlpaca", "", path);
 
     cfg.modelPath = fileConfig.Read("/Model/Path", "").ToUTF8().data();
+    cfg.ocrModelPath = fileConfig.Read("/OCRModel/Path", "models/PaddleOCR-VL-1.6.gguf").ToUTF8().data();
+    cfg.ocrMmprojPath = fileConfig.Read("/OCRModel/MmprojPath", "models/PaddleOCR-VL-1.6-mmproj.gguf").ToUTF8().data();
     cfg.themeMode = fileConfig.Read("/UI/Theme", "Light").ToUTF8().data();
     cfg.autoRead = fileConfig.ReadBool("/UI/AutoRead", false);
     cfg.selectionAutoTranslate = fileConfig.ReadBool("/UI/SelectionAutoTranslate", true);
@@ -38,6 +40,8 @@ bool IniConfigRepository::SaveConfig(const Domain::Model::AppConfig& config) {
     wxFileConfig fileConfig("LinguaAlpaca", "", path);
 
     fileConfig.Write("/Model/Path", wxString::FromUTF8(config.modelPath));
+    fileConfig.Write("/OCRModel/Path", wxString::FromUTF8(config.ocrModelPath));
+    fileConfig.Write("/OCRModel/MmprojPath", wxString::FromUTF8(config.ocrMmprojPath));
     fileConfig.Write("/UI/Theme", wxString::FromUTF8(config.themeMode));
     fileConfig.Write("/UI/AutoRead", config.autoRead);
     fileConfig.Write("/UI/SelectionAutoTranslate", config.selectionAutoTranslate);

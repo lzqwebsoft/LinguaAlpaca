@@ -2,8 +2,10 @@
 #include <wx/wx.h>
 #include <memory>
 #include "../../application/service/TranslationService.hpp"
+#include "../../application/service/OcrService.hpp"
 #include "../components/SidebarNav.hpp"
 #include "TextTranslationView.hpp"
+#include "OcrTranslationView.hpp"
 #include "SettingsView.hpp"
 #include "PlaceholderView.hpp"
 
@@ -11,7 +13,8 @@ namespace LinguaAlpaca::Presentation::Views {
 
 class MainFrame : public wxFrame {
 public:
-    MainFrame(std::shared_ptr<Application::Service::TranslationService> translationService);
+    MainFrame(std::shared_ptr<Application::Service::TranslationService> translationService,
+              std::shared_ptr<Application::Service::OcrService> ocrService = nullptr);
 
     void NavigateToSettings();
 
@@ -27,6 +30,7 @@ private:
     void OnHeaderDoubleClick(wxMouseEvent& event);
 
     std::shared_ptr<Application::Service::TranslationService> m_translationService;
+    std::shared_ptr<Application::Service::OcrService> m_ocrService;
 
     // UI Elements
     wxPanel* m_topHeaderPanel{nullptr};
@@ -35,7 +39,7 @@ private:
     wxBoxSizer* m_contentSizer{nullptr};
 
     TextTranslationView* m_textView{nullptr};
-    PlaceholderView* m_ocrView{nullptr};
+    OcrTranslationView* m_ocrView{nullptr};
     PlaceholderView* m_historyView{nullptr};
     SettingsView* m_settingsView{nullptr};
 

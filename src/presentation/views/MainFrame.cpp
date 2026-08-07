@@ -1,4 +1,5 @@
 #include "MainFrame.hpp"
+#include "../../infrastructure/engine/LlamaCppOcrEngine.hpp"
 #include "../theme/ThemeColors.hpp"
 #include "../theme/IconManager.hpp"
 #include "../../application/service/ThemeManager.hpp"
@@ -11,9 +12,12 @@
 
 namespace LinguaAlpaca::Presentation::Views {
 
-MainFrame::MainFrame(std::shared_ptr<Application::Service::TranslationService> translationService)
+MainFrame::MainFrame(
+    std::shared_ptr<Application::Service::TranslationService> translationService,
+    std::shared_ptr<Application::Service::OcrService> ocrService)
     : wxFrame(nullptr, wxID_ANY, L"灵驼译 · LinguaAlpaca", wxDefaultPosition, wxSize(1080, 780), wxBORDER_NONE)
-    , m_translationService(std::move(translationService)) {
+    , m_translationService(std::move(translationService))
+    , m_ocrService(std::move(ocrService)) {
     InitUI();
     Centre();
 }
@@ -106,9 +110,9 @@ void MainFrame::InitUI() {
 
     // 实例化各子视图
     m_textView = new TextTranslationView(m_contentContainer, m_translationService);
-    m_ocrView = new PlaceholderView(m_contentContainer, L"OCR 截图识图");
+    m_ocrView = new OcrTranslationView(m_contentContainer, m_translationService, m_ocrService);
     m_historyView = new PlaceholderView(m_contentContainer, L"翻译历史记录");
-    m_settingsView = new SettingsView(m_contentContainer, m_translationService);
+    m_settingsView = new SettingsView(m_contentContainer, m_translationService, m_ocrService);
 
     m_ocrView->Hide();
     m_historyView->Hide();
@@ -171,9 +175,9 @@ void MainFrame::InitUI() {
 
 void MainFrame::NavigateToSettings() {
     if (m_sidebar) {
-        m_sidebar->SetActiveItem(2);
+        m_sidebar->SetActiveItem(3);
         wxCommandEvent evt(Components::EVT_SIDEBAR_NAV_CHANGED, m_sidebar->GetId());
-        evt.SetInt(2);
+        evt.SetInt(3);
         m_sidebar->ProcessWindowEvent(evt);
     }
 }
@@ -248,6 +252,7 @@ void MainFrame::OnThemeToggle(wxCommandEvent& WXUNUSED(event)) {
     m_sidebar->Refresh();
 
     if (m_textView) m_textView->UpdateTheme();
+    if (m_ocrView) m_ocrView->UpdateTheme();
     if (m_settingsView) m_settingsView->UpdateTheme();
 
     Refresh();
@@ -264,8 +269,9 @@ void MainFrame::OnNavChanged(wxCommandEvent& event) {
 
     switch (index) {
     case 0: m_textView->Show(); break;
-    case 1: m_historyView->Show(); break;
-    case 2: m_settingsView->Show(); break;
+    case 1: m_ocrView->Show(); break;
+    case 2: m_historyView->Show(); break;
+    case 3: m_settingsView->Show(); break;
     default: m_textView->Show(); break;
     }
 

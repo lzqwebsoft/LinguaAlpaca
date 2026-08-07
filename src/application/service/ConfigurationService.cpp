@@ -23,6 +23,14 @@ void ConfigurationService::SaveModelPath(const std::string& path) {
     }
 }
 
+void ConfigurationService::SaveOcrConfig(const std::string& ocrModelPath, const std::string& ocrMmprojPath) {
+    m_config.ocrModelPath = ocrModelPath;
+    m_config.ocrMmprojPath = ocrMmprojPath;
+    if (m_repo) {
+        m_repo->SaveConfig(m_config);
+    }
+}
+
 void ConfigurationService::SaveThemeMode(const std::string& themeMode) {
     m_config.themeMode = themeMode;
     if (m_repo) {

@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 if(MSVC)
-    add_compile_options(/utf-8)
+    add_compile_options(/utf-8 /FS)
 endif()
 
 # 统一二进制与库输出目录
@@ -47,6 +47,8 @@ if(GIT_FOUND AND EXISTS "${LLAMA_PATCH_FILE}")
     endif()
 endif()
 
+set(LLAMA_BUILD_COMMON ON CACHE BOOL "" FORCE)
+set(LLAMA_BUILD_TOOLS ON CACHE BOOL "" FORCE)
 add_subdirectory(third_party/llama.cpp)
 
 # 收集项目源代码按层组织
@@ -57,6 +59,7 @@ set(DOMAIN_SOURCES
     src/domain/model/AppTheme.hpp
     src/domain/model/AppConfig.hpp
     src/domain/repository/ITranslationEngine.hpp
+    src/domain/repository/IOcrEngine.hpp
     src/domain/repository/IHistoryRepository.hpp
 )
 
@@ -64,6 +67,8 @@ set(APP_SOURCES
     src/application/dto/TranslationDto.hpp
     src/application/service/TranslationService.hpp
     src/application/service/TranslationService.cpp
+    src/application/service/OcrService.hpp
+    src/application/service/OcrService.cpp
     src/application/service/ConfigurationService.hpp
     src/application/service/ConfigurationService.cpp
     src/application/service/ThemeManager.hpp
@@ -74,6 +79,8 @@ set(INFRA_SOURCES
     src/infrastructure/engine/MockTranslationEngine.cpp
     src/infrastructure/engine/LlamaCppTranslationEngine.hpp
     src/infrastructure/engine/LlamaCppTranslationEngine.cpp
+    src/infrastructure/engine/LlamaCppOcrEngine.hpp
+    src/infrastructure/engine/LlamaCppOcrEngine.cpp
     src/infrastructure/downloader/ModelDownloader.hpp
     src/infrastructure/downloader/ModelDownloader.cpp
     src/infrastructure/repository/InMemoryHistoryRepository.hpp
@@ -99,6 +106,8 @@ set(UI_SOURCES
     src/presentation/components/WelcomeModelDialog.cpp
     src/presentation/views/TextTranslationView.hpp
     src/presentation/views/TextTranslationView.cpp
+    src/presentation/views/OcrTranslationView.hpp
+    src/presentation/views/OcrTranslationView.cpp
     src/presentation/views/SettingsView.hpp
     src/presentation/views/SettingsView.cpp
     src/presentation/views/PlaceholderView.hpp
@@ -118,6 +127,9 @@ add_executable(${PROJECT_NAME} WIN32
 # 包含头文件路径
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/llama.cpp/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/llama.cpp/common
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/llama.cpp/tools/mtmd
 )
 
 # 链接 wxWidgets 与核心库
@@ -125,6 +137,8 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     wx::core
     wx::base
     llama
+    llama-common
+    mtmd
 )
 
 # 自动将第三方 DLL 复制到 output 目录

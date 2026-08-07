@@ -12,6 +12,7 @@ public:
     Domain::Model::AppConfig GetConfig() const { return m_config; }
     void UpdateConfig(const Domain::Model::AppConfig& newConfig);
     void SaveModelPath(const std::string& path);
+    void SaveOcrConfig(const std::string& ocrModelPath, const std::string& ocrMmprojPath);
     void SaveThemeMode(const std::string& themeMode);
 
 private:

@@ -7,6 +7,7 @@
 #include <mtmd.h>
 #include <mtmd-helper.h>
 #include <common.h>
+#include <chat.h>
 #include <sampling.h>
 #include <climits>
 #include <chrono>
@@ -187,11 +188,24 @@ void LlamaCppOcrEngine::RecognizeStream(
             return;
         }
 
-        // 5. 构造 ChatML 提示词并 Token 化 (完全参照 mtmd-cli.cpp eval_message 流程)
+        // 5. 提取 GGUF 元数据中的 chat_template 构建 Prompt 并 Token 化
         const char* marker = mtmd_get_marker(m_mtmdCtx);
         std::string markerStr = (marker && strlen(marker) > 0) ? marker : mtmd_default_marker();
-        std::string promptPrefix = GetOcrPromptPrefix(taskType);
-        std::string promptStr = std::string("<|im_start|>user\n") + markerStr + "\n" + promptPrefix + "<|im_end|>\n<|im_start|>assistant\n";
+        std::string userContent = markerStr + "\n" + GetOcrPromptPrefix(taskType);
+
+        std::string promptStr;
+        auto chat_templates = common_chat_templates_init(m_model, "");
+        if (chat_templates) {
+            common_chat_templates_inputs inputs;
+            inputs.messages = { { "user", userContent } };
+            inputs.add_generation_prompt = true;
+            inputs.use_jinja = true;
+            promptStr = common_chat_templates_apply(chat_templates.get(), inputs).prompt;
+        }
+
+        if (promptStr.empty()) {
+            promptStr = std::string("<|im_start|>user\n") + userContent + "<|im_end|>\n<|im_start|>assistant\n";
+        }
 
         mtmd_input_chunks* chunks = mtmd_input_chunks_init();
         mtmd_input_text txt_input;

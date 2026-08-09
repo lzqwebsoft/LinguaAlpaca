@@ -1,6 +1,6 @@
-# LinguaAlpaca · 灵驼译
+# LinguaAlpaca · 译灵
 
-**LinguaAlpaca (灵驼译)** 是一款使用 C++17 与 wxWidgets 打造的现代化、高颜值的跨平台桌面离线 AI 翻译软件。项目基于 **llama.cpp** 原生 C API 驱动本地 GGUF 大模型（默认推荐腾讯 **Hy-MT2-1.8B-GGUF** 中英日韩高性能离线翻译模型），严格遵循 **领域驱动设计 (DDD)** 与 **干净架构 (Clean Architecture)** 思想构建，具备高扩展性、模块化解耦及完整的单元测试支持。
+**LinguaAlpaca (译灵)** 是一款使用 C++17 与 wxWidgets 打造的现代化、高颜值的跨平台桌面离线 AI 翻译软件。项目基于 **llama.cpp** 原生 C API 驱动本地 GGUF 大模型（默认推荐腾讯 **Hy-MT2-1.8B-GGUF** 中英日韩高性能离线翻译模型），严格遵循 **领域驱动设计 (DDD)** 与 **干净架构 (Clean Architecture)** 思想构建，具备高扩展性、模块化解耦及完整的单元测试支持。
 
 ---
 

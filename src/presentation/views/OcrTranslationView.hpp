@@ -9,6 +9,7 @@
 #include "../components/LanguageSelectorBar.hpp"
 #include "../components/CustomButton.hpp"
 #include "../components/CardPanel.hpp"
+#include "../components/ImagePreviewDialog.hpp"
 
 namespace LinguaAlpaca::Presentation::Views {
 
@@ -34,7 +35,10 @@ private:
     void InitUI();
     void OpenImageDialog();
     void OnSelectImageClicked(wxMouseEvent& event);
-    void OnUploadClicked(wxCommandEvent& event);
+    void OnPreviewClicked(wxCommandEvent& event);
+    void OnReplaceClicked(wxCommandEvent& event);
+    void OnDropzoneMouseEnter(wxMouseEvent& event);
+    void OnDropzoneMouseLeave(wxMouseEvent& event);
     void OnRecognizeClicked(wxCommandEvent& event);
     void OnStopClicked(wxCommandEvent& event);
     void OnClearClicked(wxCommandEvent& event);
@@ -43,6 +47,7 @@ private:
     void SetState(OcrTaskState state);
     void LoadImageFile(const wxString& filePath);
     void UpdateStatusBadge();
+    void UpdateDropzoneUI();
     std::string GetSelectedTaskType() const;
 
     std::shared_ptr<Application::Service::TranslationService> m_translationService;
@@ -52,6 +57,7 @@ private:
 
     wxString m_loadedImagePath;
     wxString m_imageFileName;
+    wxImage m_loadedImage;
 
     // Header Controls
     wxStaticText* m_titleText{nullptr};
@@ -62,9 +68,12 @@ private:
     wxPanel* m_leftControlPanel{nullptr};
     wxStaticText* m_typeLabel{nullptr};
     wxChoice* m_typeChoice{nullptr};
-    Components::CustomButton* m_uploadBtn{nullptr};
 
     wxPanel* m_dropzonePanel{nullptr};
+    wxPanel* m_topOverlayBar{nullptr};
+    Components::CustomButton* m_previewBtn{nullptr};
+    Components::CustomButton* m_replaceBtn{nullptr};
+    Components::CustomButton* m_centerUploadBtn{nullptr};
     wxStaticBitmap* m_uploadIconBmp{nullptr};
     wxStaticText* m_dropTextPrimary{nullptr};
     wxStaticText* m_dropTextSecondary{nullptr};

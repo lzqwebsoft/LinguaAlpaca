@@ -49,6 +49,7 @@ endif()
 
 set(LLAMA_BUILD_COMMON ON CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_TOOLS ON CACHE BOOL "" FORCE)
+set(LLAMA_BUILD_SERVER ON CACHE BOOL "" FORCE)
 add_subdirectory(third_party/llama.cpp)
 
 # 收集项目源代码按层组织
@@ -104,6 +105,8 @@ set(UI_SOURCES
     src/presentation/components/LanguageSelectorBar.cpp
     src/presentation/components/WelcomeModelDialog.hpp
     src/presentation/components/WelcomeModelDialog.cpp
+    src/presentation/components/ImagePreviewDialog.hpp
+    src/presentation/components/ImagePreviewDialog.cpp
     src/presentation/views/TextTranslationView.hpp
     src/presentation/views/TextTranslationView.cpp
     src/presentation/views/OcrTranslationView.hpp

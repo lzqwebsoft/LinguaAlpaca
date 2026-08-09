@@ -50,6 +50,8 @@ endif()
 set(LLAMA_BUILD_COMMON ON CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_TOOLS ON CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_SERVER ON CACHE BOOL "" FORCE)
+set(LLAMA_BUILD_UI OFF CACHE BOOL "" FORCE)
+set(LLAMA_USE_PREBUILT_UI OFF CACHE BOOL "" FORCE)
 add_subdirectory(third_party/llama.cpp)
 
 # 收集项目源代码按层组织
@@ -82,6 +84,10 @@ set(INFRA_SOURCES
     src/infrastructure/engine/LlamaCppTranslationEngine.cpp
     src/infrastructure/engine/LlamaCppOcrEngine.hpp
     src/infrastructure/engine/LlamaCppOcrEngine.cpp
+    src/infrastructure/engine/SseLlamaEngine.hpp
+    src/infrastructure/engine/SseLlamaEngine.cpp
+    src/infrastructure/server/EmbeddedLlamaServer.hpp
+    src/infrastructure/server/EmbeddedLlamaServer.cpp
     src/infrastructure/downloader/ModelDownloader.hpp
     src/infrastructure/downloader/ModelDownloader.cpp
     src/infrastructure/repository/InMemoryHistoryRepository.hpp
@@ -132,6 +138,8 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/llama.cpp/include
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/llama.cpp/common
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/llama.cpp/tools/server
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/llama.cpp/tools/cli
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/llama.cpp/tools/mtmd
 )
 
@@ -141,6 +149,8 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     wx::base
     llama
     llama-common
+    llama-server-impl
+    llama-cli-impl
     mtmd
 )
 

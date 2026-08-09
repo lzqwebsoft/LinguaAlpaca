@@ -2,8 +2,11 @@
 add_executable(unit_tests
     TranslationServiceTest.cpp
     LlamaCppEngineTest.cpp
+    SseLlamaEngineTest.cpp
     ${CMAKE_SOURCE_DIR}/src/infrastructure/engine/MockTranslationEngine.cpp
     ${CMAKE_SOURCE_DIR}/src/infrastructure/engine/LlamaCppTranslationEngine.cpp
+    ${CMAKE_SOURCE_DIR}/src/infrastructure/engine/SseLlamaEngine.cpp
+    ${CMAKE_SOURCE_DIR}/src/infrastructure/server/EmbeddedLlamaServer.cpp
     ${CMAKE_SOURCE_DIR}/src/infrastructure/repository/InMemoryHistoryRepository.cpp
     ${CMAKE_SOURCE_DIR}/src/infrastructure/repository/IniConfigRepository.cpp
     ${CMAKE_SOURCE_DIR}/src/application/service/TranslationService.cpp
@@ -13,6 +16,9 @@ add_executable(unit_tests
 target_include_directories(unit_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/third_party/llama.cpp/include
+    ${CMAKE_SOURCE_DIR}/third_party/llama.cpp/common
+    ${CMAKE_SOURCE_DIR}/third_party/llama.cpp/tools/server
+    ${CMAKE_SOURCE_DIR}/third_party/llama.cpp/tools/cli
     ${CMAKE_SOURCE_DIR}/third_party/wxWidgets/3rdparty/catch/single_include
 )
 
@@ -20,6 +26,9 @@ target_link_libraries(unit_tests PRIVATE
     wx::core
     wx::base
     llama
+    llama-common
+    llama-server-impl
+    llama-cli-impl
 )
 
 add_test(NAME DomainAndAppTests COMMAND unit_tests)

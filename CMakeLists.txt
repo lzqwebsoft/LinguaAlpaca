@@ -49,7 +49,8 @@ endif()
 
 set(LLAMA_BUILD_COMMON ON CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_TOOLS ON CACHE BOOL "" FORCE)
-set(LLAMA_BUILD_SERVER ON CACHE BOOL "" FORCE)
+# set(LLAMA_BUILD_SERVER ON CACHE BOOL "" FORCE)
+set(GGML_VULKAN ON CACHE BOOL "" FORCE)
 add_subdirectory(third_party/llama.cpp)
 
 # 收集项目源代码按层组织

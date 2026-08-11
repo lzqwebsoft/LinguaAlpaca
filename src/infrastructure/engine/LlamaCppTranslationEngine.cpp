@@ -110,6 +110,7 @@ bool LlamaCppTranslationEngine::LoadModel(const std::string& modelPath) {
 
     // 调用 llama.cpp 原生 C API 从本地 GGUF 文件真正加载大模型权重
     llama_model_params model_params = llama_model_default_params();
+    model_params.n_gpu_layers = 99;
     m_model = llama_model_load_from_file(modelPath.c_str(), model_params);
 
     if (m_model) {

@@ -1,5 +1,6 @@
 #include "TranslationService.hpp"
 #include "../../domain/model/TranslationTask.hpp"
+#include <chrono>
 
 namespace LinguaAlpaca::Application::Service {
 
@@ -11,59 +12,11 @@ TranslationService::TranslationService(
     , m_historyRepo(std::move(historyRepo))
     , m_configService(std::move(configService)) {}
 
-bool TranslationService::LoadModel(const std::string& modelPath) {
-    if (m_engine) {
-        bool ok = m_engine->LoadModel(modelPath);
-        if (ok && m_configService) {
-            m_configService->SaveModelPath(modelPath);
-        }
-        return ok;
-    }
-    return false;
-}
-
 bool TranslationService::IsModelLoaded() const {
     if (m_engine) {
         return m_engine->IsModelLoaded();
     }
     return false;
-}
-
-DTO::TranslationResponseDto TranslationService::ExecuteTranslation(const DTO::TranslationRequestDto& request) {
-    DTO::TranslationResponseDto response;
-    response.originalText = request.text;
-    response.sourceCharCount = request.text.length();
-
-    if (request.text.empty()) {
-        response.success = true;
-        response.translatedText = "";
-        response.targetCharCount = 0;
-        return response;
-    }
-
-    Domain::Model::TranslationTask task(request.text, request.sourceLanguage, request.targetLanguage);
-    auto resultTask = m_engine->Translate(task);
-
-    if (resultTask.GetStatus() == Domain::Model::TaskStatus::Completed) {
-        response.success = true;
-        response.translatedText = resultTask.GetTranslatedText();
-        response.targetCharCount = response.translatedText.length();
-
-        if (m_historyRepo) {
-            Domain::Model::HistoryRecord record;
-            record.sourceText = request.text;
-            record.translatedText = response.translatedText;
-            record.sourceLang = request.sourceLanguage;
-            record.targetLang = request.targetLanguage;
-            record.timestamp = std::chrono::system_clock::now();
-            m_historyRepo->AddRecord(record);
-        }
-    } else {
-        response.success = false;
-        response.errorMessage = resultTask.GetErrorMessage();
-    }
-
-    return response;
 }
 
 void TranslationService::ExecuteStreamTranslation(
@@ -100,11 +53,6 @@ void TranslationService::CancelTranslation() {
     if (m_engine) {
         m_engine->CancelCurrentTask();
     }
-}
-
-std::string TranslationService::QuickPreview(const std::string& text, Domain::Model::LanguageCode src, Domain::Model::LanguageCode target) {
-    if (text.empty()) return "";
-    return m_engine->QuickTranslate(text, src, target);
 }
 
 } // namespace LinguaAlpaca::Application::Service

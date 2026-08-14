@@ -11,7 +11,6 @@ class IOcrEngine {
 public:
     virtual ~IOcrEngine() = default;
 
-    virtual bool LoadModel(const std::string& modelPath, const std::string& mmprojPath) = 0;
     virtual bool IsModelLoaded() const = 0;
     virtual std::string GetModelPath() const = 0;
     virtual std::string GetMmprojPath() const = 0;

@@ -15,11 +15,8 @@ public:
     LlamaCppTranslationEngine(const std::string& modelPath = "");
     ~LlamaCppTranslationEngine() override;
 
-    bool LoadModel(const std::string& modelPath) override;
+    bool LoadModel(const std::string& modelPath);
     bool IsModelLoaded() const override { return m_isLoaded; }
-
-    Domain::Model::TranslationTask Translate(const Domain::Model::TranslationTask& task) override;
-    std::string QuickTranslate(const std::string& text, Domain::Model::LanguageCode sourceLang, Domain::Model::LanguageCode targetLang) override;
 
     void TranslateStreamAsync(
         const Domain::Model::TranslationTask& task,

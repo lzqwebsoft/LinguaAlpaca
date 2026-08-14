@@ -32,16 +32,15 @@ public:
     void SetOcrModelName(const std::string& modelName);
     std::string GetOcrModelName() const;
 
+    void SetOcrMmprojPath(const std::string& mmprojPath);
+    std::string GetOcrMmprojPath() const;
+
+    // --- Health & Readiness Check ---
+    bool CheckHealth() const;
+    bool WaitReady(std::function<bool()> shouldStop = nullptr, int timeoutSec = 30);
+
     // --- ITranslationEngine implementation ---
-    bool LoadModel(const std::string& modelPath) override;
     bool IsModelLoaded() const override;
-
-    Domain::Model::TranslationTask Translate(const Domain::Model::TranslationTask& task) override;
-
-    std::string QuickTranslate(
-        const std::string& text,
-        Domain::Model::LanguageCode sourceLang,
-        Domain::Model::LanguageCode targetLang) override;
 
     void TranslateStreamAsync(
         const Domain::Model::TranslationTask& task,
@@ -51,7 +50,6 @@ public:
     void CancelCurrentTask() override;
 
     // --- IOcrEngine implementation ---
-    bool LoadModel(const std::string& modelPath, const std::string& mmprojPath) override;
     std::string GetModelPath() const override;
     std::string GetMmprojPath() const override;
 
@@ -71,8 +69,6 @@ private:
         const std::string& srcText,
         Domain::Model::LanguageCode srcLang,
         Domain::Model::LanguageCode tgtLang);
-
-    static std::string CleanTextTokens(const std::string& rawText);
 
 private:
     std::shared_ptr<Server::EmbeddedLlamaServer> m_server;

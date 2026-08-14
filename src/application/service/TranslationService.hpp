@@ -15,13 +15,10 @@ public:
         std::shared_ptr<ConfigurationService> configService = nullptr
     );
 
-    bool LoadModel(const std::string& modelPath);
     bool IsModelLoaded() const;
 
     std::shared_ptr<ConfigurationService> GetConfigService() const { return m_configService; }
 
-    DTO::TranslationResponseDto ExecuteTranslation(const DTO::TranslationRequestDto& request);
-    
     void ExecuteStreamTranslation(
         const DTO::TranslationRequestDto& request,
         Domain::Repository::StreamTokenCallback onToken,
@@ -29,8 +26,6 @@ public:
     );
 
     void CancelTranslation();
-
-    std::string QuickPreview(const std::string& text, Domain::Model::LanguageCode src, Domain::Model::LanguageCode target);
 
 private:
     std::shared_ptr<Domain::Repository::ITranslationEngine> m_engine;

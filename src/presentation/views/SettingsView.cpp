@@ -502,10 +502,7 @@ void SettingsView::SetModelPath(const wxString &path) {
     m_modelPathCtrl->SetValue(path);
   }
 
-  bool loaded = false;
-  if (!path.IsEmpty() && m_translationService) {
-    loaded = m_translationService->LoadModel(path.ToUTF8().data());
-  }
+  bool loaded = m_translationService ? m_translationService->IsModelLoaded() : false;
 
   if (loaded || (!path.IsEmpty() && wxFileExists(path))) {
     m_statusBadge->SetBackgroundColour(wxColour(240, 253, 244));
@@ -525,11 +522,6 @@ void SettingsView::SetOcrModelPath(const wxString &mainPath,
     m_ocrModelPathCtrl->SetValue(mainPath);
   if (m_ocrMmprojPathCtrl)
     m_ocrMmprojPathCtrl->SetValue(mmprojPath);
-
-  if (!mainPath.IsEmpty() && !mmprojPath.IsEmpty() && m_ocrService) {
-    m_ocrService->LoadModel(mainPath.ToUTF8().data(),
-                            mmprojPath.ToUTF8().data());
-  }
 
   UpdateOcrStatus();
 }

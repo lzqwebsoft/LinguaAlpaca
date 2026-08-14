@@ -17,7 +17,7 @@ public:
     LlamaCppOcrEngine();
     ~LlamaCppOcrEngine() override;
 
-    bool LoadModel(const std::string& modelPath, const std::string& mmprojPath) override;
+    bool LoadModel(const std::string& modelPath, const std::string& mmprojPath);
     bool IsModelLoaded() const override { return m_isLoaded; }
     std::string GetModelPath() const override { return m_modelPath; }
     std::string GetMmprojPath() const override { return m_mmprojPath; }

@@ -125,22 +125,6 @@ bool LlamaCppTranslationEngine::LoadModel(const std::string& modelPath) {
     return m_isLoaded;
 }
 
-Domain::Model::TranslationTask LlamaCppTranslationEngine::Translate(const Domain::Model::TranslationTask& task) {
-    Domain::Model::TranslationTask result = task;
-    if (!m_isLoaded || !m_model || !m_ctx) {
-        result.SetErrorMessage("Llama.cpp 模型未加载，请在设置中配置 GGUF 路径。");
-        return result;
-    }
-
-    result.SetTranslatedText("[Llama.cpp 原生模型推理]");
-    return result;
-}
-
-std::string LlamaCppTranslationEngine::QuickTranslate(const std::string& text, Domain::Model::LanguageCode sourceLang, Domain::Model::LanguageCode targetLang) {
-    if (text.empty()) return "";
-    return "即时译文 (Llama.cpp): " + text;
-}
-
 void LlamaCppTranslationEngine::TranslateStreamAsync(
     const Domain::Model::TranslationTask& task,
     Domain::Repository::StreamTokenCallback onToken,

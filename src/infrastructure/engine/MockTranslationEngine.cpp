@@ -11,6 +11,7 @@ MockTranslationEngine::MockTranslationEngine() {
     m_translationDict["Hello, welcome to Lingo Translator!"] = "你好，欢迎使用轻译翻译器！";
     m_translationDict["Hello, welcome to LinguaAlpaca!"] = "你好，欢迎使用灵驼译翻译器！";
     m_translationDict["Hello World"] = "你好，世界";
+    m_translationDict["Hello"] = "你好，欢迎使用灵驼译！";
     m_translationDict["LinguaAlpaca"] = "灵驼译";
     m_translationDict["Text Translation"] = "文本翻译";
     m_translationDict["Domain Driven Design"] = "领域驱动设计";
@@ -19,43 +20,6 @@ MockTranslationEngine::MockTranslationEngine() {
 
 MockTranslationEngine::~MockTranslationEngine() {
     CancelCurrentTask();
-}
-
-bool MockTranslationEngine::LoadModel(const std::string& modelPath) {
-    m_modelLoaded = !modelPath.empty();
-    return m_modelLoaded;
-}
-
-Domain::Model::TranslationTask MockTranslationEngine::Translate(const Domain::Model::TranslationTask& task) {
-    Domain::Model::TranslationTask result = task;
-    const std::string& src = task.GetSourceText();
-    
-    if (src.empty()) {
-        result.SetTranslatedText("");
-        return result;
-    }
-
-    auto it = m_translationDict.find(src);
-    if (it != m_translationDict.end()) {
-        result.SetTranslatedText(it->second);
-    } else {
-        result.SetTranslatedText("[译文] " + src + " (已由灵驼引擎翻译)");
-    }
-    return result;
-}
-
-std::string MockTranslationEngine::QuickTranslate(const std::string& text, Domain::Model::LanguageCode sourceLang, Domain::Model::LanguageCode targetLang) {
-    if (text.empty()) return "";
-    
-    auto it = m_translationDict.find(text);
-    if (it != m_translationDict.end()) {
-        return it->second;
-    }
-
-    if (text.find("Hello") != std::string::npos) {
-        return "你好，欢迎使用灵驼译！";
-    }
-    return "即时译文: " + text;
 }
 
 void MockTranslationEngine::TranslateStreamAsync(
@@ -68,7 +32,14 @@ void MockTranslationEngine::TranslateStreamAsync(
     m_isProcessing = true;
 
     std::thread([this, task, onToken, onComplete]() {
-        auto fullResult = Translate(task).GetTranslatedText();
+        const std::string& src = task.GetSourceText();
+        std::string fullResult;
+        auto it = m_translationDict.find(src);
+        if (it != m_translationDict.end()) {
+            fullResult = it->second;
+        } else {
+            fullResult = "[译文] " + src + " (已由灵驼引擎翻译)";
+        }
         std::string accumulated = "";
 
         std::vector<std::string> tokens;

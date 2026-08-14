@@ -1,6 +1,10 @@
 #include <wx/wx.h>
 #include <memory>
 #include <iostream>
+#include <cstdlib>
+#include "common.h"
+#include "arg.h"
+#include "cli-server.h"
 #include "domain/model/AppConfig.hpp"
 #include "infrastructure/server/EmbeddedLlamaServer.hpp"
 #include "infrastructure/engine/SseLlamaEngine.hpp"
@@ -27,28 +31,25 @@ public:
         auto configService = std::make_shared<Application::Service::ConfigurationService>(configRepo);
         auto currentConfig = configService->GetConfig();
 
-        // 2. 动态生成 models_preset.ini 映射配置文件并启动后台嵌入式 llama-server (Router Mode)
-        std::string presetPath = Infrastructure::Server::GenerateModelsPresetFile(currentConfig, "models_preset.ini");
+        // 2. 启动后台嵌入式 llama-server 单模型模式 (默认装载翻译模型)
+        std::string transName = !currentConfig.translationModelName.empty() ? currentConfig.translationModelName : currentConfig.modelPath;
+        std::string ocrName = !currentConfig.ocrModelName.empty() ? currentConfig.ocrModelName : currentConfig.ocrModelPath;
 
         m_llamaServer = std::make_shared<Infrastructure::Server::EmbeddedLlamaServer>();
         Infrastructure::Server::ServerConfig serverConfig;
-        serverConfig.modelsDir = currentConfig.modelsDir.empty() ? "./models" : currentConfig.modelsDir;
-        serverConfig.modelsPreset = presetPath;
-        serverConfig.maxLoadedModels = 1;
+        serverConfig.modelPath = currentConfig.modelPath;
         m_llamaServer->Start(serverConfig);
 
         // 3. 初始化基于 HTTP SSE 的通用推理引擎 SseLlamaEngine
         auto sseEngine = std::make_shared<Infrastructure::Engine::SseLlamaEngine>(m_llamaServer);
-        if (!currentConfig.translationModelName.empty()) {
-            sseEngine->SetTranslationModelName(currentConfig.translationModelName);
-        } else if (!currentConfig.modelPath.empty()) {
-            sseEngine->SetTranslationModelName(currentConfig.modelPath);
+        if (!transName.empty()) {
+            sseEngine->SetTranslationModelName(transName);
         }
-
-        if (!currentConfig.ocrModelName.empty()) {
-            sseEngine->SetOcrModelName(currentConfig.ocrModelName);
-        } else if (!currentConfig.ocrModelPath.empty()) {
-            sseEngine->SetOcrModelName(currentConfig.ocrModelPath);
+        if (!ocrName.empty()) {
+            sseEngine->SetOcrModelName(ocrName);
+        }
+        if (!currentConfig.ocrMmprojPath.empty()) {
+            sseEngine->SetOcrMmprojPath(currentConfig.ocrMmprojPath);
         }
 
         // 4. 初始化历史服务与依赖注入 Services

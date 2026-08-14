@@ -8,7 +8,6 @@ class OcrService {
 public:
     OcrService(std::shared_ptr<Domain::Repository::IOcrEngine> ocrEngine);
 
-    bool LoadModel(const std::string& modelPath, const std::string& mmprojPath);
     bool IsModelLoaded() const;
     std::string GetModelPath() const;
     std::string GetMmprojPath() const;

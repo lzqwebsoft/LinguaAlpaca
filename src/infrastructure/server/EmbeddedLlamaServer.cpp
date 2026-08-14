@@ -9,7 +9,35 @@
 #include "http.h"
 #include "cli-server.h"
 
+#include "llama.h"
+#include "log.h"
+
 namespace LinguaAlpaca::Infrastructure::Server {
+
+static void AppendServerLog(const std::string& msg) {
+    static std::mutex logMutex;
+    std::lock_guard<std::mutex> lock(logMutex);
+    std::ofstream logFile("llama_server.log", std::ios::app);
+    if (logFile.is_open()) {
+        logFile << msg;
+        if (msg.empty() || msg.back() != '\n') {
+            logFile << "\n";
+        }
+        logFile.flush();
+    }
+}
+
+static void InitLlamaLogger() {
+    static std::once_flag initFlag;
+    std::call_once(initFlag, []() {
+        common_log_set_file(common_log_main(), "llama_server.log");
+        llama_log_set([](ggml_log_level level, const char* text, void* /*user_data*/) {
+            if (!text) return;
+            AppendServerLog(text);
+            std::cerr << text;
+        }, nullptr);
+    });
+}
 
 static std::string GetFilenameBasename(const std::string& path) {
     if (path.empty()) return "";
@@ -98,6 +126,8 @@ bool EmbeddedLlamaServer::Start(const ServerConfig& config) {
         m_port = m_config.port;
     }
 
+    InitLlamaLogger();
+
     m_baseUrl = "http://" + m_config.host + ":" + std::to_string(m_port);
     m_isStopping.store(false, std::memory_order_release);
     m_isAlive.store(true, std::memory_order_release);
@@ -105,57 +135,44 @@ bool EmbeddedLlamaServer::Start(const ServerConfig& config) {
     common_params server_params;
     server_params.hostname = m_config.host;
     server_params.port = m_port;
+    server_params.n_gpu_layers = m_config.ngl;
     if (!m_config.modelPath.empty()) {
         server_params.model.path = m_config.modelPath;
     }
     if (!m_config.mmprojPath.empty()) {
         server_params.mmproj.path = m_config.mmprojPath;
     }
-    server_params.n_gpu_layers = m_config.ngl;
-    server_params.models_dir = m_config.modelsDir;
-    if (!m_config.modelsPreset.empty()) {
-        server_params.models_preset = m_config.modelsPreset;
-    }
-    server_params.models_max = m_config.maxLoadedModels;
-    server_params.models_autoload = true;
-    server_params.public_path = ""; // 禁用静态 Web UI 挂载，仅作为纯 Headless API 服务运行
+    server_params.models_preset = "";
+    server_params.models_autoload = false;
+    server_params.ui = false;       // 禁用 UI
 
     m_thread = std::thread([this, server_params]() mutable {
-        std::cout << "[EmbeddedLlamaServer] Starting server thread at " << m_baseUrl
-                  << " with model.path=" << server_params.model.path
-                  << ", mmproj=" << server_params.mmproj.path << std::endl;
+        std::string startMsg = "[EmbeddedLlamaServer] Starting single-model server thread at " + m_baseUrl +
+                               " with model=" + server_params.model.path +
+                               ", mmproj=" + server_params.mmproj.path + "\n";
+        std::cout << startMsg;
+        AppendServerLog(startMsg);
 
-        int res = llama_server(server_params, 0, nullptr);
-        if (res != 0) {
-            std::cerr << "[EmbeddedLlamaServer] llama_server exited with status code " << res << std::endl;
+        try {
+            int res = llama_server(server_params, 0, nullptr);
+            if (res != 0) {
+                std::string errStr = "[EmbeddedLlamaServer] ERROR: llama_server exited with status code " + std::to_string(res) + "\n";
+                std::cerr << errStr;
+                AppendServerLog(errStr);
+            }
+        } catch (const std::exception& e) {
+            std::string excStr = std::string("[EmbeddedLlamaServer] EXCEPTION: llama_server failed: ") + e.what() + "\n";
+            std::cerr << excStr;
+            AppendServerLog(excStr);
+        } catch (...) {
+            std::string excStr = "[EmbeddedLlamaServer] EXCEPTION: llama_server unknown exception.\n";
+            std::cerr << excStr;
+            AppendServerLog(excStr);
         }
         m_isAlive.store(false, std::memory_order_release);
     });
 
     return true;
-}
-
-bool EmbeddedLlamaServer::SwitchModel(const std::string& modelPath, const std::string& mmprojPath) {
-    if (modelPath.empty()) return false;
-
-    if (m_config.modelPath == modelPath && m_config.mmprojPath == mmprojPath && IsAlive()) {
-        return true; // Model is already running
-    }
-
-    std::cout << "[EmbeddedLlamaServer] Switching model to: " << modelPath << " (mmproj: " << mmprojPath << ")" << std::endl;
-
-    Stop();
-
-    ServerConfig newConfig = m_config;
-    newConfig.modelPath = modelPath;
-    newConfig.mmprojPath = mmprojPath;
-    newConfig.port = 0; // Request new free port
-
-    if (!Start(newConfig)) {
-        return false;
-    }
-
-    return WaitUntilReady(60);
 }
 
 void EmbeddedLlamaServer::Stop() {
@@ -177,6 +194,34 @@ void EmbeddedLlamaServer::Stop() {
 
 bool EmbeddedLlamaServer::IsAlive() const {
     return m_isAlive.load(std::memory_order_acquire);
+}
+
+bool EmbeddedLlamaServer::EnsureModelRunning(const ServerConfig& config, const std::function<void(const std::string& status)>& onStatus) {
+    if (IsAlive() && m_config.modelPath == config.modelPath && m_config.mmprojPath == config.mmprojPath) {
+        if (WaitUntilReady(2, nullptr)) {
+            if (onStatus) onStatus("就绪");
+            return true;
+        }
+    }
+
+    if (onStatus) {
+        onStatus("模型加载中...");
+    }
+
+    Stop();
+
+    if (!Start(config)) {
+        if (onStatus) onStatus("服务启动失败");
+        return false;
+    }
+
+    bool ready = WaitUntilReady(45, nullptr);
+    if (ready) {
+        if (onStatus) onStatus("就绪");
+    } else {
+        if (onStatus) onStatus("模型加载超时或失败");
+    }
+    return ready;
 }
 
 bool EmbeddedLlamaServer::WaitUntilReady(int timeoutSec, const std::function<bool()>& shouldAbort) {

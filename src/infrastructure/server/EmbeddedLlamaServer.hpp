@@ -36,9 +36,6 @@ public:
     // Start background thread running llama_server API
     bool Start(const ServerConfig& config = ServerConfig());
 
-    // Switch model dynamically (stops previous thread and starts new model thread)
-    bool SwitchModel(const std::string& modelPath, const std::string& mmprojPath = "");
-
     // Stop background server thread
     void Stop();
 
@@ -53,6 +50,10 @@ public:
 
     int GetPort() const { return m_port; }
     std::string GetCurrentModelPath() const { return m_config.modelPath; }
+    std::string GetCurrentMmprojPath() const { return m_config.mmprojPath; }
+
+    // Ensure the server is running the specified model; stops and restarts if model config differs
+    bool EnsureModelRunning(const ServerConfig& config, const std::function<void(const std::string& status)>& onStatus = nullptr);
 
 private:
     std::thread m_thread;

@@ -13,15 +13,8 @@ class ITranslationEngine {
 public:
     virtual ~ITranslationEngine() = default;
 
-    // 模型加载与状态检查
-    virtual bool LoadModel(const std::string& modelPath) = 0;
+    // 状态检查
     virtual bool IsModelLoaded() const = 0;
-
-    // 同步翻译
-    virtual Model::TranslationTask Translate(const Model::TranslationTask& task) = 0;
-
-    // 快速/即时预览翻译
-    virtual std::string QuickTranslate(const std::string& text, Model::LanguageCode sourceLang, Model::LanguageCode targetLang) = 0;
 
     // 流式异步翻译 (Token 逐字打字效果)
     virtual void TranslateStreamAsync(

@@ -5,10 +5,6 @@ namespace LinguaAlpaca::Application::Service {
 OcrService::OcrService(std::shared_ptr<Domain::Repository::IOcrEngine> ocrEngine)
     : m_ocrEngine(std::move(ocrEngine)) {}
 
-bool OcrService::LoadModel(const std::string& modelPath, const std::string& mmprojPath) {
-    return m_ocrEngine ? m_ocrEngine->LoadModel(modelPath, mmprojPath) : false;
-}
-
 bool OcrService::IsModelLoaded() const {
     return m_ocrEngine ? m_ocrEngine->IsModelLoaded() : false;
 }

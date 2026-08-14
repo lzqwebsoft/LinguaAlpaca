@@ -14,7 +14,6 @@
 #include <wx/filename.h>
 #include <wx/wx.h>
 
-
 namespace LinguaAlpaca::Infrastructure::Engine {
 
 static void CleanOcrTextArtifacts(std::string &str) {
@@ -110,12 +109,12 @@ bool LlamaCppOcrEngine::LoadModel(const std::string &modelPath,
     return false;
   }
 
-  // 2. 初始化 mtmd 视觉多模态 Context (对齐 mtmd-cli.cpp
-  // init_vision_context，开启 GPU 与 Flash Attention 加速)
+  // 2. 初始化 mtmd 视觉多模态 Context (使用 AUTO 模式自动协商 Flash
+  // Attention，防止在 Vulkan 上生成 NaN)
   mtmd_context_params mtmd_params = mtmd_context_params_default();
   mtmd_params.use_gpu = true;
   mtmd_params.warmup = true;
-  mtmd_params.flash_attn_type = LLAMA_FLASH_ATTN_TYPE_ENABLED;
+  mtmd_params.flash_attn_type = LLAMA_FLASH_ATTN_TYPE_AUTO;
 
   m_mtmdCtx =
       mtmd_init_from_file(actualMmprojPath.c_str(), m_model, mtmd_params);
@@ -173,18 +172,18 @@ void LlamaCppOcrEngine::RecognizeStream(
     if (n_threads <= 0)
       n_threads = 4;
 
-    // 2. 创建临时 Context (提升物理 micro-batch n_ubatch 至 2048，开启 Flash
-    // Attention 提速)
+    // 2. 创建临时 Context (设置 AUTO 模式使 Vulkan 安全适配 Attention
+    // 算法，物理微批次设为 512)
     llama_context_params cparams = llama_context_default_params();
     cparams.n_ctx = 8192;
     cparams.n_batch = 2048;
-    cparams.n_ubatch = 2048;
+    cparams.n_ubatch = 512;
     cparams.n_threads = n_threads;
     cparams.n_threads_batch = n_threads;
     cparams.offload_kqv = true;
     cparams.op_offload = true;
     cparams.kv_unified = true;
-    cparams.flash_attn_type = LLAMA_FLASH_ATTN_TYPE_ENABLED;
+    cparams.flash_attn_type = LLAMA_FLASH_ATTN_TYPE_AUTO;
 
     llama_context *ctx = llama_new_context_with_model(m_model, cparams);
     if (!ctx) {

@@ -1,30 +1,31 @@
 #include <catch2/catch.hpp>
+#include <wx/wx.h>
 #include <thread>
 #include <chrono>
-#include "infrastructure/engine/LlamaCppTranslationEngine.hpp"
-#include "domain/model/TranslationTask.hpp"
+#include "engine/LlamaCppTranslationEngine.hpp"
+#include "core/Types.hpp"
 
 using namespace LinguaAlpaca;
 
-TEST_CASE("LlamaCppTranslationEngine - Initialization & Invalid Path Test", "[infrastructure][engine]") {
+TEST_CASE("LlamaCppTranslationEngine - Initialization & Invalid Path Test", "[engine]") {
     SECTION("Constructing with empty model path does not crash") {
-        Infrastructure::Engine::LlamaCppTranslationEngine engine("");
+        Engine::LlamaCppTranslationEngine engine("");
         REQUIRE(engine.IsModelLoaded() == false);
     }
 
     SECTION("Loading non-existent GGUF file handles cleanly and returns false") {
-        Infrastructure::Engine::LlamaCppTranslationEngine engine("");
+        Engine::LlamaCppTranslationEngine engine("");
         bool success = engine.LoadModel("non_existent_model_path.gguf");
         REQUIRE(success == false);
         REQUIRE(engine.IsModelLoaded() == false);
     }
 }
 
-TEST_CASE("LlamaCppTranslationEngine - Stream Callback Error Handling", "[infrastructure][engine]") {
+TEST_CASE("LlamaCppTranslationEngine - Stream Callback Error Handling", "[engine]") {
     SECTION("Stream translation without loaded model triggers error callback") {
-        Infrastructure::Engine::LlamaCppTranslationEngine engine("");
+        Engine::LlamaCppTranslationEngine engine("");
         
-        Domain::Model::TranslationTask task("Hello world", Domain::Model::LanguageCode::English, Domain::Model::LanguageCode::Chinese);
+        TranslationTask task("Hello world", LanguageCode::English, LanguageCode::Chinese);
         
         bool finished = false;
         bool resultSuccess = true;
@@ -42,17 +43,14 @@ TEST_CASE("LlamaCppTranslationEngine - Stream Callback Error Handling", "[infras
 
         int timeout = 50;
         while (!finished && timeout-- > 0) {
+            if (wxTheApp) {
+                wxTheApp->ProcessPendingEvents();
+            }
             std::this_thread::sleep_for(std::chrono::milliseconds(20));
         }
 
         REQUIRE(finished == true);
         REQUIRE(resultSuccess == false);
         REQUIRE(resultError.find("模型未加载") != std::string::npos);
-    }
-
-    SECTION("QuickTranslate returns formatting preview") {
-        Infrastructure::Engine::LlamaCppTranslationEngine engine("");
-        std::string preview = engine.QuickTranslate("Test text", Domain::Model::LanguageCode::English, Domain::Model::LanguageCode::Chinese);
-        REQUIRE(preview.find("Llama.cpp") != std::string::npos);
     }
 }

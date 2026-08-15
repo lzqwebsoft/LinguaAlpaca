@@ -1,16 +1,14 @@
 # 单元测试 CMake 配置
 add_executable(unit_tests
-    TranslationServiceTest.cpp
+    ModelManagerTest.cpp
     LlamaCppEngineTest.cpp
-    SseLlamaEngineTest.cpp
-    ${CMAKE_SOURCE_DIR}/src/infrastructure/engine/MockTranslationEngine.cpp
-    ${CMAKE_SOURCE_DIR}/src/infrastructure/engine/LlamaCppTranslationEngine.cpp
-    ${CMAKE_SOURCE_DIR}/src/infrastructure/engine/SseLlamaEngine.cpp
-    ${CMAKE_SOURCE_DIR}/src/infrastructure/server/EmbeddedLlamaServer.cpp
-    ${CMAKE_SOURCE_DIR}/src/infrastructure/repository/InMemoryHistoryRepository.cpp
-    ${CMAKE_SOURCE_DIR}/src/infrastructure/repository/IniConfigRepository.cpp
-    ${CMAKE_SOURCE_DIR}/src/application/service/TranslationService.cpp
-    ${CMAKE_SOURCE_DIR}/src/application/service/ConfigurationService.cpp
+    LlamaSseClientTest.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/Config.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/LlamaClient.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/LlamaServer.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/ModelManager.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/Downloader.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/LlamaCppTranslationEngine.cpp
 )
 
 target_include_directories(unit_tests PRIVATE
@@ -31,7 +29,7 @@ target_link_libraries(unit_tests PRIVATE
     llama-cli-impl
 )
 
-add_test(NAME DomainAndAppTests COMMAND unit_tests)
+add_test(NAME CoreAndEngineTests COMMAND unit_tests)
 
 add_custom_command(TARGET unit_tests POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory

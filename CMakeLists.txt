@@ -52,84 +52,65 @@ set(LLAMA_BUILD_TOOLS ON CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_SERVER ON CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_UI OFF CACHE BOOL "" FORCE)
 set(LLAMA_USE_PREBUILT_UI OFF CACHE BOOL "" FORCE)
+set(GGML_VULKAN ON CACHE BOOL "" FORCE)  # 默认开始Vulkan SDK加速
 add_subdirectory(third_party/llama.cpp)
 
-# 收集项目源代码按层组织
-set(DOMAIN_SOURCES
-    src/domain/model/Language.hpp
-    src/domain/model/TranslationTask.hpp
-    src/domain/model/HistoryRecord.hpp
-    src/domain/model/AppTheme.hpp
-    src/domain/model/AppConfig.hpp
-    src/domain/repository/ITranslationEngine.hpp
-    src/domain/repository/IOcrEngine.hpp
-    src/domain/repository/IHistoryRepository.hpp
+# 模块化源码组织
+set(CORE_SOURCES
+    src/core/Types.hpp
+    src/core/Config.hpp
+    src/core/Config.cpp
+    src/core/LlamaServer.hpp
+    src/core/LlamaServer.cpp
+    src/core/LlamaClient.hpp
+    src/core/LlamaClient.cpp
+    src/core/ModelManager.hpp
+    src/core/ModelManager.cpp
+    src/core/Downloader.hpp
+    src/core/Downloader.cpp
 )
 
-set(APP_SOURCES
-    src/application/dto/TranslationDto.hpp
-    src/application/service/TranslationService.hpp
-    src/application/service/TranslationService.cpp
-    src/application/service/OcrService.hpp
-    src/application/service/OcrService.cpp
-    src/application/service/ConfigurationService.hpp
-    src/application/service/ConfigurationService.cpp
-    src/application/service/ThemeManager.hpp
-)
-
-set(INFRA_SOURCES
-    src/infrastructure/engine/MockTranslationEngine.hpp
-    src/infrastructure/engine/MockTranslationEngine.cpp
-    src/infrastructure/engine/LlamaCppTranslationEngine.hpp
-    src/infrastructure/engine/LlamaCppTranslationEngine.cpp
-    src/infrastructure/engine/LlamaCppOcrEngine.hpp
-    src/infrastructure/engine/LlamaCppOcrEngine.cpp
-    src/infrastructure/engine/SseLlamaEngine.hpp
-    src/infrastructure/engine/SseLlamaEngine.cpp
-    src/infrastructure/server/EmbeddedLlamaServer.hpp
-    src/infrastructure/server/EmbeddedLlamaServer.cpp
-    src/infrastructure/downloader/ModelDownloader.hpp
-    src/infrastructure/downloader/ModelDownloader.cpp
-    src/infrastructure/repository/InMemoryHistoryRepository.hpp
-    src/infrastructure/repository/InMemoryHistoryRepository.cpp
-    src/infrastructure/repository/IniConfigRepository.hpp
-    src/infrastructure/repository/IniConfigRepository.cpp
+set(ENGINE_SOURCES
+    src/engine/IEngine.hpp
+    src/engine/LlamaCppTranslationEngine.hpp
+    src/engine/LlamaCppTranslationEngine.cpp
+    src/engine/LlamaCppOcrEngine.hpp
+    src/engine/LlamaCppOcrEngine.cpp
 )
 
 set(UI_SOURCES
-    src/presentation/theme/ThemeColors.hpp
-    src/presentation/theme/AppIcons.hpp
-    src/presentation/theme/IconManager.hpp
-    src/presentation/theme/IconManager.cpp
-    src/presentation/components/CustomButton.hpp
-    src/presentation/components/CustomButton.cpp
-    src/presentation/components/SidebarNav.hpp
-    src/presentation/components/SidebarNav.cpp
-    src/presentation/components/CardPanel.hpp
-    src/presentation/components/CardPanel.cpp
-    src/presentation/components/LanguageSelectorBar.hpp
-    src/presentation/components/LanguageSelectorBar.cpp
-    src/presentation/components/WelcomeModelDialog.hpp
-    src/presentation/components/WelcomeModelDialog.cpp
-    src/presentation/components/ImagePreviewDialog.hpp
-    src/presentation/components/ImagePreviewDialog.cpp
-    src/presentation/views/TextTranslationView.hpp
-    src/presentation/views/TextTranslationView.cpp
-    src/presentation/views/OcrTranslationView.hpp
-    src/presentation/views/OcrTranslationView.cpp
-    src/presentation/views/SettingsView.hpp
-    src/presentation/views/SettingsView.cpp
-    src/presentation/views/PlaceholderView.hpp
-    src/presentation/views/MainFrame.hpp
-    src/presentation/views/MainFrame.cpp
+    src/ui/theme/Theme.hpp
+    src/ui/theme/AppIcons.hpp
+    src/ui/theme/IconManager.hpp
+    src/ui/theme/IconManager.cpp
+    src/ui/widgets/CustomButton.hpp
+    src/ui/widgets/CustomButton.cpp
+    src/ui/widgets/SidebarNav.hpp
+    src/ui/widgets/SidebarNav.cpp
+    src/ui/widgets/CardPanel.hpp
+    src/ui/widgets/CardPanel.cpp
+    src/ui/widgets/LanguageBar.hpp
+    src/ui/widgets/LanguageBar.cpp
+    src/ui/widgets/WelcomeModelDialog.hpp
+    src/ui/widgets/WelcomeModelDialog.cpp
+    src/ui/widgets/ImagePreviewDialog.hpp
+    src/ui/widgets/ImagePreviewDialog.cpp
+    src/ui/TextView.hpp
+    src/ui/TextView.cpp
+    src/ui/OcrView.hpp
+    src/ui/OcrView.cpp
+    src/ui/SettingsView.hpp
+    src/ui/SettingsView.cpp
+    src/ui/PlaceholderView.hpp
+    src/ui/MainFrame.hpp
+    src/ui/MainFrame.cpp
 )
 
 # 创建主可执行程序 (Windows GUI)
 add_executable(${PROJECT_NAME} WIN32
     src/main.cpp
-    ${DOMAIN_SOURCES}
-    ${APP_SOURCES}
-    ${INFRA_SOURCES}
+    ${CORE_SOURCES}
+    ${ENGINE_SOURCES}
     ${UI_SOURCES}
 )
 

@@ -38,7 +38,7 @@ void OcrView::InitUI() {
   wxBoxSizer *headerSizer = new wxBoxSizer(wxHORIZONTAL);
 
   wxBitmapBundle titleBundle = IconManager::GetIconBundle(
-      SVG::OCR, wxSize(24, 24), palette.accentPrimary);
+      SVG::OCR, dip(24, 24), palette.accentPrimary);
   wxStaticBitmap *titleIcon = new wxStaticBitmap(this, wxID_ANY, titleBundle);
 
   m_titleText = new wxStaticText(this, wxID_ANY, L"图片 OCR 识别");
@@ -46,21 +46,21 @@ void OcrView::InitUI() {
                               wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
   m_titleText->SetForegroundColour(palette.textPrimary);
 
-  m_statusBadge = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxSize(-1, 28),
+  m_statusBadge = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxSize(-1, 28_dip),
                               wxBORDER_NONE);
   wxBoxSizer *badgeSizer = new wxBoxSizer(wxHORIZONTAL);
   m_badgeText = new wxStaticText(m_statusBadge, wxID_ANY, L"●  OCR模型未配置");
   m_badgeText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL,
                               wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
-  badgeSizer->Add(m_badgeText, 0, wxALIGN_CENTER | wxLEFT | wxRIGHT, 10);
+  badgeSizer->Add(m_badgeText, 0, wxALIGN_CENTER | wxLEFT | wxRIGHT, 10_dip);
   m_statusBadge->SetSizer(badgeSizer);
 
-  headerSizer->Add(titleIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
+  headerSizer->Add(titleIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10_dip);
   headerSizer->Add(m_titleText, 0, wxALIGN_CENTER_VERTICAL);
   headerSizer->AddStretchSpacer(1);
   headerSizer->Add(m_statusBadge, 0, wxALIGN_CENTER_VERTICAL);
 
-  mainSizer->Add(headerSizer, 0, wxEXPAND | wxALL, 20);
+  mainSizer->Add(headerSizer, 0, wxEXPAND | wxALL, 20_dip);
 
   // 2. Middle Content Area (Left: Upload Card, Right: Recognized Text Card)
   wxBoxSizer *contentSizer = new wxBoxSizer(wxHORIZONTAL);
@@ -69,7 +69,7 @@ void OcrView::InitUI() {
   wxBoxSizer *leftColSizer = new wxBoxSizer(wxVERTICAL);
 
   m_leftControlPanel = new wxPanel(this, wxID_ANY, wxDefaultPosition,
-                                   wxSize(-1, 48), wxBORDER_NONE);
+                                   wxSize(-1, 48_dip), wxBORDER_NONE);
   m_leftControlPanel->SetBackgroundColour(palette.cardBg);
 
   wxBoxSizer *leftControlSizer = new wxBoxSizer(wxHORIZONTAL);
@@ -79,7 +79,7 @@ void OcrView::InitUI() {
   m_typeLabel->SetForegroundColour(palette.textPrimary);
 
   m_typeChoice = new wxChoice(m_leftControlPanel, wxID_ANY, wxDefaultPosition,
-                              wxSize(-1, 32));
+                              wxSize(-1, 32_dip));
   m_typeChoice->Append(L"通识 OCR");
   m_typeChoice->Append(L"表格识别 (Table)");
   m_typeChoice->Append(L"公式识别 (Formula)");
@@ -90,12 +90,12 @@ void OcrView::InitUI() {
   m_typeChoice->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL,
                                wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
 
-  leftControlSizer->Add(m_typeLabel, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 12);
+  leftControlSizer->Add(m_typeLabel, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 12_dip);
   leftControlSizer->Add(m_typeChoice, 1,
-                        wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, 12);
+                        wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, 12_dip);
   m_leftControlPanel->SetSizer(leftControlSizer);
 
-  leftColSizer->Add(m_leftControlPanel, 0, wxEXPAND | wxBOTTOM, 12);
+  leftColSizer->Add(m_leftControlPanel, 0, wxEXPAND | wxBOTTOM, 12_dip);
 
   // Dropzone Card
   m_dropzonePanel = new wxPanel(this, wxID_ANY, wxDefaultPosition,
@@ -106,23 +106,23 @@ void OcrView::InitUI() {
   wxBoxSizer *dropSizer = new wxBoxSizer(wxVERTICAL);
 
   m_topOverlayBar =
-      new wxPanel(m_dropzonePanel, wxID_ANY, wxDefaultPosition, wxSize(-1, 42));
+      new wxPanel(m_dropzonePanel, wxID_ANY, wxDefaultPosition, wxSize(-1, 42_dip));
   m_topOverlayBar->SetBackgroundColour(wxColour(0, 0, 0, 128));
 
   wxBoxSizer *topOverlaySizer = new wxBoxSizer(wxHORIZONTAL);
   m_previewBtn = new CustomButton(
       m_topOverlayBar, wxID_ANY, L"预览", ButtonStyle::Secondary,
-      wxDefaultPosition, wxSize(76, 30));
-  m_previewBtn->SetIcon(SVG::EYE, wxSize(14, 14), palette.textPrimary);
+      wxDefaultPosition, dip(76, 30));
+  m_previewBtn->SetIcon(SVG::EYE, dip(14, 14), palette.textPrimary);
 
   m_replaceBtn = new CustomButton(
       m_topOverlayBar, wxID_ANY, L"替换", ButtonStyle::Primary,
-      wxDefaultPosition, wxSize(76, 30));
-  m_replaceBtn->SetIcon(SVG::REPLACE, wxSize(14, 14), *wxWHITE);
+      wxDefaultPosition, dip(76, 30));
+  m_replaceBtn->SetIcon(SVG::REPLACE, dip(14, 14), *wxWHITE);
 
   topOverlaySizer->AddStretchSpacer(1);
-  topOverlaySizer->Add(m_previewBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6);
-  topOverlaySizer->Add(m_replaceBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
+  topOverlaySizer->Add(m_previewBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6_dip);
+  topOverlaySizer->Add(m_replaceBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10_dip);
   m_topOverlayBar->SetSizer(topOverlaySizer);
   m_topOverlayBar->Hide();
 
@@ -131,14 +131,14 @@ void OcrView::InitUI() {
 
   m_centerUploadBtn = new CustomButton(
       m_dropzonePanel, wxID_ANY, L" 替换图片", ButtonStyle::Primary,
-      wxDefaultPosition, wxSize(130, 38));
-  m_centerUploadBtn->SetIcon(SVG::CLOUD_UPLOAD, wxSize(16, 16),
+      wxDefaultPosition, dip(130, 38));
+  m_centerUploadBtn->SetIcon(SVG::CLOUD_UPLOAD, dip(16, 16),
                              *wxWHITE);
   m_centerUploadBtn->Hide();
   dropSizer->Add(m_centerUploadBtn, 0, wxALIGN_CENTER_HORIZONTAL);
 
   wxBitmapBundle uploadBundle = IconManager::GetIconBundle(
-      SVG::CLOUD_UPLOAD, wxSize(44, 44), palette.accentPrimary);
+      SVG::CLOUD_UPLOAD, dip(44, 44), palette.accentPrimary);
   m_uploadIconBmp = new wxStaticBitmap(m_dropzonePanel, wxID_ANY, uploadBundle);
 
   m_dropTextPrimary =
@@ -155,8 +155,8 @@ void OcrView::InitUI() {
                                       "Microsoft YaHei"));
   m_dropTextSecondary->SetForegroundColour(palette.textSecondary);
 
-  dropSizer->Add(m_uploadIconBmp, 0, wxALIGN_CENTER_HORIZONTAL | wxBOTTOM, 8);
-  dropSizer->Add(m_dropTextPrimary, 0, wxALIGN_CENTER_HORIZONTAL | wxBOTTOM, 4);
+  dropSizer->Add(m_uploadIconBmp, 0, wxALIGN_CENTER_HORIZONTAL | wxBOTTOM, 8_dip);
+  dropSizer->Add(m_dropTextPrimary, 0, wxALIGN_CENTER_HORIZONTAL | wxBOTTOM, 4_dip);
   dropSizer->Add(m_dropTextSecondary, 0, wxALIGN_CENTER_HORIZONTAL);
   dropSizer->AddStretchSpacer(1);
 
@@ -178,7 +178,7 @@ void OcrView::InitUI() {
       return;
 
     if (m_loadedImage.IsOk() && !m_loadedImagePath.IsEmpty()) {
-      int pad = 6;
+      int pad = 6_dip;
       int availW = size.x - pad * 2;
       int availH = size.y - pad * 2;
       if (availW > 0 && availH > 0) {
@@ -195,19 +195,19 @@ void OcrView::InitUI() {
         scaledImg.Rescale(drawW, drawH, wxIMAGE_QUALITY_HIGH);
         wxBitmap bmp(scaledImg);
 
-        gc->Clip(4, 4, size.x - 8, size.y - 8);
+        gc->Clip(4_dip, 4_dip, size.x - 8_dip, size.y - 8_dip);
         gc->DrawBitmap(bmp, drawX, drawY, drawW, drawH);
         gc->ResetClip();
 
         wxGraphicsPath borderPath = gc->CreatePath();
-        borderPath.AddRoundedRectangle(4, 4, size.x - 8, size.y - 8, 8);
+        borderPath.AddRoundedRectangle(4_dip, 4_dip, size.x - 8_dip, size.y - 8_dip, 8_dip);
         wxPen pen(p.cardBorder, 1);
         gc->SetPen(pen);
         gc->StrokePath(borderPath);
       }
     } else {
       wxGraphicsPath path = gc->CreatePath();
-      path.AddRoundedRectangle(4, 4, size.x - 8, size.y - 8, 8);
+      path.AddRoundedRectangle(4_dip, 4_dip, size.x - 8_dip, size.y - 8_dip, 8_dip);
 
       wxPen pen(p.cardBorder, 2, wxPENSTYLE_SHORT_DASH);
       gc->SetPen(pen);
@@ -216,7 +216,7 @@ void OcrView::InitUI() {
   });
 
   leftColSizer->Add(m_dropzonePanel, 1, wxEXPAND);
-  contentSizer->Add(leftColSizer, 45, wxEXPAND | wxRIGHT, 12);
+  contentSizer->Add(leftColSizer, 45, wxEXPAND | wxRIGHT, 12_dip);
 
   // Right Column: Recognized Text Card (Ratio 55%)
   m_resultCard = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
@@ -233,22 +233,22 @@ void OcrView::InitUI() {
 
   m_copyBtn = new CustomButton(m_resultCard, wxID_ANY, L"",
                                ButtonStyle::Secondary,
-                               wxDefaultPosition, wxSize(34, 34));
-  m_copyBtn->SetIcon(SVG::COPY, wxSize(16, 16), palette.textPrimary);
+                               wxDefaultPosition, dip(34, 34));
+  m_copyBtn->SetIcon(SVG::COPY, dip(16, 16), palette.textPrimary);
   m_copyBtn->SetToolTip(L"复制文本");
 
   m_clearBtn = new CustomButton(m_resultCard, wxID_ANY, L"",
                                 ButtonStyle::Secondary,
-                                wxDefaultPosition, wxSize(34, 34));
-  m_clearBtn->SetIcon(SVG::CLEAR, wxSize(16, 16), palette.textPrimary);
+                                wxDefaultPosition, dip(34, 34));
+  m_clearBtn->SetIcon(SVG::CLEAR, dip(16, 16), palette.textPrimary);
   m_clearBtn->SetToolTip(L"清空内容");
 
-  resultHeader->Add(m_resultTitle, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 16);
+  resultHeader->Add(m_resultTitle, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 16_dip);
   resultHeader->AddStretchSpacer(1);
-  resultHeader->Add(m_copyBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6);
-  resultHeader->Add(m_clearBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 16);
+  resultHeader->Add(m_copyBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6_dip);
+  resultHeader->Add(m_clearBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 16_dip);
 
-  resultSizer->Add(resultHeader, 0, wxEXPAND | wxTOP | wxBOTTOM, 10);
+  resultSizer->Add(resultHeader, 0, wxEXPAND | wxTOP | wxBOTTOM, 10_dip);
 
   m_resultTextCtrl =
       new wxTextCtrl(m_resultCard, wxID_ANY, L"", wxDefaultPosition,
@@ -260,7 +260,7 @@ void OcrView::InitUI() {
   m_resultTextCtrl->SetBackgroundColour(palette.windowBg);
   m_resultTextCtrl->SetForegroundColour(palette.textPrimary);
 
-  resultSizer->Add(m_resultTextCtrl, 1, wxEXPAND | wxLEFT | wxRIGHT, 16);
+  resultSizer->Add(m_resultTextCtrl, 1, wxEXPAND | wxLEFT | wxRIGHT, 16_dip);
 
   wxBoxSizer *resultFooter = new wxBoxSizer(wxHORIZONTAL);
   m_charCountText = new wxStaticText(m_resultCard, wxID_ANY, L"0 字符");
@@ -270,33 +270,33 @@ void OcrView::InitUI() {
   m_charCountText->SetForegroundColour(palette.textSecondary);
 
   resultFooter->AddStretchSpacer(1);
-  resultFooter->Add(m_charCountText, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 16);
-  resultSizer->Add(resultFooter, 0, wxEXPAND | wxTOP | wxBOTTOM, 10);
+  resultFooter->Add(m_charCountText, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 16_dip);
+  resultSizer->Add(resultFooter, 0, wxEXPAND | wxTOP | wxBOTTOM, 10_dip);
 
   m_resultCard->SetSizer(resultSizer);
   contentSizer->Add(m_resultCard, 55, wxEXPAND);
 
-  mainSizer->Add(contentSizer, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 20);
+  mainSizer->Add(contentSizer, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 20_dip);
 
   // 3. Bottom Action Bar: Recognize / Stop Buttons
   wxBoxSizer *bottomSizer = new wxBoxSizer(wxHORIZONTAL);
 
   m_recognizeBtn = new CustomButton(
       this, wxID_ANY, L"识别", ButtonStyle::Primary,
-      wxDefaultPosition, wxSize(145, 42));
-  m_recognizeBtn->SetIcon(SVG::OCR, wxSize(16, 16), *wxWHITE);
+      wxDefaultPosition, dip(145, 42));
+  m_recognizeBtn->SetIcon(SVG::OCR, dip(16, 16), *wxWHITE);
 
   m_stopBtn = new CustomButton(this, wxID_ANY, L"停止",
                                ButtonStyle::Danger,
-                               wxDefaultPosition, wxSize(145, 42));
-  m_stopBtn->SetIcon(SVG::STOP, wxSize(16, 16), *wxWHITE);
+                               wxDefaultPosition, dip(145, 42));
+  m_stopBtn->SetIcon(SVG::STOP, dip(16, 16), *wxWHITE);
   m_stopBtn->Hide();
 
   bottomSizer->Add(m_recognizeBtn, 0);
   bottomSizer->Add(m_stopBtn, 0);
   bottomSizer->AddStretchSpacer(1);
 
-  mainSizer->Add(bottomSizer, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 20);
+  mainSizer->Add(bottomSizer, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 20_dip);
 
   SetSizer(mainSizer);
 

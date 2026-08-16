@@ -6,10 +6,10 @@ ImagePreviewDialog::ImagePreviewDialog(wxWindow* parent, const wxImage& image, c
     : wxDialog(parent, wxID_ANY, titleName, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE),
       m_originalImage(image) {
 
-    wxSize parentSize = parent ? parent->GetSize() : wxSize(1024, 720);
-    wxSize dialogSize(std::min(1280, std::max(700, static_cast<int>(parentSize.x * 0.85))),
-                      std::min(900, std::max(500, static_cast<int>(parentSize.y * 0.85))));
-    SetSize(dialogSize);
+    wxSize parentSize = parent ? parent->GetSize() : dip(1024, 720);
+    wxSize dialogSize(std::min(1280_dip, std::max(700_dip, static_cast<int>(parentSize.x * 0.85))),
+                      std::min(900_dip, std::max(500_dip, static_cast<int>(parentSize.y * 0.85))));
+    SetClientSize(dialogSize);
     CentreOnParent();
 
     InitUI();
@@ -22,7 +22,7 @@ void ImagePreviewDialog::InitUI() {
     auto palette = ThemeColors::GetCurrentPalette();
 
     // Custom Top Bar (Supports Window Dragging & Maximize/Minimize)
-    m_topBar = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxSize(-1, 44));
+    m_topBar = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxSize(-1, 44_dip));
     m_topBar->SetBackgroundColour(wxColour(15, 17, 21));
 
     wxBoxSizer* topSizer = new wxBoxSizer(wxHORIZONTAL);
@@ -35,28 +35,28 @@ void ImagePreviewDialog::InitUI() {
     m_infoText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
     m_infoText->SetForegroundColour(wxColour(160, 170, 185));
 
-    m_resetBtn = new CustomButton(m_topBar, wxID_ANY, L"1:1 重置", ButtonStyle::Secondary, wxDefaultPosition, wxSize(76, 28));
+    m_resetBtn = new CustomButton(m_topBar, wxID_ANY, L"1:1 重置", ButtonStyle::Secondary, wxDefaultPosition, dip(76, 28));
 
     // Window control buttons: Minimize, Maximize/Restore, Close
-    m_minBtn = new CustomButton(m_topBar, wxID_ANY, L"", ButtonStyle::Secondary, wxDefaultPosition, wxSize(32, 28));
-    m_minBtn->SetIcon(SVG::MINIMIZE, wxSize(14, 14), palette.textPrimary);
+    m_minBtn = new CustomButton(m_topBar, wxID_ANY, L"", ButtonStyle::Secondary, wxDefaultPosition, dip(32, 28));
+    m_minBtn->SetIcon(SVG::MINIMIZE, dip(14, 14), palette.textPrimary);
     m_minBtn->SetToolTip(L"最小化");
 
-    m_maxBtn = new CustomButton(m_topBar, wxID_ANY, L"", ButtonStyle::Secondary, wxDefaultPosition, wxSize(32, 28));
-    m_maxBtn->SetIcon(SVG::MAXIMIZE, wxSize(14, 14), palette.textPrimary);
+    m_maxBtn = new CustomButton(m_topBar, wxID_ANY, L"", ButtonStyle::Secondary, wxDefaultPosition, dip(32, 28));
+    m_maxBtn->SetIcon(SVG::MAXIMIZE, dip(14, 14), palette.textPrimary);
     m_maxBtn->SetToolTip(L"最大化 / 还原");
 
-    m_closeBtn = new CustomButton(m_topBar, wxID_ANY, L"", ButtonStyle::Danger, wxDefaultPosition, wxSize(34, 28));
-    m_closeBtn->SetIcon(SVG::CLOSE, wxSize(14, 14), *wxWHITE);
+    m_closeBtn = new CustomButton(m_topBar, wxID_ANY, L"", ButtonStyle::Danger, wxDefaultPosition, dip(34, 28));
+    m_closeBtn->SetIcon(SVG::CLOSE, dip(14, 14), *wxWHITE);
     m_closeBtn->SetToolTip(L"关闭窗口");
 
-    topSizer->Add(titleText, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 16);
-    topSizer->Add(m_infoText, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 12);
+    topSizer->Add(titleText, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 16_dip);
+    topSizer->Add(m_infoText, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 12_dip);
     topSizer->AddStretchSpacer(1);
-    topSizer->Add(m_resetBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 12);
-    topSizer->Add(m_minBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
-    topSizer->Add(m_maxBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
-    topSizer->Add(m_closeBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
+    topSizer->Add(m_resetBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 12_dip);
+    topSizer->Add(m_minBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4_dip);
+    topSizer->Add(m_maxBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4_dip);
+    topSizer->Add(m_closeBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10_dip);
 
     m_topBar->SetSizer(topSizer);
     mainSizer->Add(m_topBar, 0, wxEXPAND);

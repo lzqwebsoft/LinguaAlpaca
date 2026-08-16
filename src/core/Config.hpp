@@ -20,6 +20,16 @@ struct AppConfig {
     std::string targetLang{"zh"};
     int gpuLayers{99};
     int ocrGpuLayers{0}; // 默认 OCR 使用 0 层（CPU模式），避免 Vulkan 显存分配超限
+
+    // 划词翻译相关配置
+    bool selectionTranslateEnabled{true};
+    int selectionTriggerMode{0}; // 0: 鼠标直接划词, 1: 划词+辅助按键, 2: 双击/三击划词
+    int selectionModifierKey{0}; // 0: Ctrl, 1: Alt, 2: Shift
+    bool preserveClipboard{true}; // 保护剪贴板 (复制提取后恢复原剪贴板内容)
+    std::string selectionTargetLang{"zh"};
+
+    // 日志配置
+    bool saveLogToFile{false};
 };
 
 class ConfigManager {
@@ -29,6 +39,8 @@ public:
 
     static std::string GetConfigFilePath();
     static std::string GetDefaultModelDir();
+    static std::string GetDefaultLogDir();
+    static std::string GetDefaultLogFilePath();
 
     AppConfig GetConfig() const;
     void UpdateConfig(const AppConfig& newConfig);
@@ -36,6 +48,8 @@ public:
     void SaveModelPath(const std::string& path);
     void SaveOcrConfig(const std::string& ocrModelPath, const std::string& ocrMmprojPath);
     void SaveThemeMode(const std::string& themeMode);
+    void SaveSelectionConfig(bool enabled, int mode, int modifierKey, bool preserveClip);
+    void SaveLogConfig(bool saveLogToFile);
 
     bool Load();
     bool Save();

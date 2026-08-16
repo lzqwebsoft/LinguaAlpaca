@@ -88,3 +88,28 @@ This file records project-scoped rules, developer guidelines, and architectural 
 - **Unit Testing with wxWidgets Runtime**:
   - In Catch2 test runners that instantiate components calling `ConfigManager` (which relies on `wxStandardPaths`), always initialize wxWidgets runtime via `wxInitializer initializer;` inside `main(int argc, char* argv[])` with `#define CATCH_CONFIG_RUNNER`.
   - Run tests with `.\build\bin\Debug\unit_tests.exe`.
+
+---
+
+## 🎨 6. High-DPI Scaling & Elastic Flow Layout Rules
+
+- **Per-Monitor V2 Awareness**:
+  - `src/main.cpp` enables Windows `DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2`. All UI controls must adapt cleanly across 100%, 125%, 150%, 175%, and 200% scaling factors without blurred text or clipped bounding boxes.
+- **Modern C++ DPI Syntactic Sugar (`_dip` & `dip(...)`)**:
+  - Defined in `src/ui/theme/Dpi.hpp` (automatically exposed via `Theme.hpp`).
+  - **Avoid Raw `FromDIP(wxSize(...))` Boilerplate**: Always use modern syntactic sugar instead of verbose nested wrappers:
+    - Scalar margins & heights: `16_dip`, `54_dip`, `28_dip`
+    - Floating-point geometry (for `wxGraphicsContext` rounded corners): `10.0_dip`, `12.0_dip`
+    - Size constructors: `dip(1080, 780)`, `dip(16, 16)` (preserves `-1` for unconstrained dimensions like `dip(-1, 54)`).
+- **Elastic Flow Layout (`wxBoxSizer` Best Practices)**:
+  - **Zero Hardcoded Container Sizes**: Never hardcode width/height on large body panels, cards, or text controls. Allow `wxSizer` to dynamically calculate layout based on available client rects.
+  - **Proportional Flex Weights (`proportion`)**:
+    - Equal Split: `cardsSizer->Add(m_sourceCard, 1, wxEXPAND | wxRIGHT, 12_dip);` and `cardsSizer->Add(m_targetCard, 1, wxEXPAND | wxLEFT, 12_dip);` for 50%:50% split.
+    - Asymmetric Golden Ratio: Use `45` vs `55` proportion for OCR left upload column and right text result column.
+  - **Elastic Spacers (`AddStretchSpacer`)**:
+    - Use `sizer->AddStretchSpacer(1)` to push right-aligned controls (e.g. window control buttons in custom titlebars, utility buttons in bottom action bars) without calculating pixel offsets.
+    - Sandwich centered widgets (e.g. dropzone icons & texts) between top and bottom `AddStretchSpacer(1)` for true vertical centering.
+  - **Cross-Axis Expansion (`wxEXPAND`)**: Always specify `wxEXPAND` on primary body panels (e.g. `m_contentContainer`, log consoles, text views) so they fill 100% of the remaining client space on window maximize/resize.
+- **Multi-Monitor Boundary & Region Safety (`FloatingIconFrame` & `TranslationBubbleFrame`)**:
+  - In floating tool frames, calculate screen boundary clamping against `MONITORINFO.rcWork` using `_dip` offsets (e.g. `10_dip` padding).
+  - When shaping Windows regions (`CreateEllipticRgn` / `SetWindowRgn`), always use `38_dip` to ensure rounded shapes scale synchronously with physical pixels on high-DPI screens.

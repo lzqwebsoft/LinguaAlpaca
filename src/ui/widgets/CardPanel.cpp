@@ -17,7 +17,7 @@ void CardPanel::InitUI() {
   wxBoxSizer *sizer = new wxBoxSizer(wxVERTICAL);
   auto palette = ThemeColors::GetCurrentPalette();
 
-  sizer->AddSpacer(42);
+  sizer->AddSpacer(42_dip);
 
   long textStyle = wxTE_MULTILINE | wxBORDER_NONE;
   if (m_isActiveBorder) {
@@ -32,8 +32,8 @@ void CardPanel::InitUI() {
   m_textCtrl->SetForegroundColour(m_isActiveBorder ? palette.accentPrimary
                                                    : palette.textPrimary);
 
-  sizer->Add(m_textCtrl, 1, wxEXPAND | wxLEFT | wxRIGHT, 14);
-  sizer->AddSpacer(32);
+  sizer->Add(m_textCtrl, 1, wxEXPAND | wxLEFT | wxRIGHT, 14_dip);
+  sizer->AddSpacer(32_dip);
 
   SetSizer(sizer);
 
@@ -82,7 +82,7 @@ void CardPanel::OnPaint(wxPaintEvent &WXUNUSED(event)) {
     return;
 
   // 1. 绘制圆角卡片背景与边框
-  double radius = 12.0;
+  double radius = 12.0_dip;
   gc->SetBrush(gc->CreateBrush(wxBrush(palette.cardBg)));
 
   wxColour borderColor =
@@ -96,22 +96,23 @@ void CardPanel::OnPaint(wxPaintEvent &WXUNUSED(event)) {
                    wxFONTWEIGHT_BOLD, false, "Microsoft YaHei");
   gc->SetFont(titleFont,
               m_isActiveBorder ? palette.accentPrimary : palette.textPrimary);
-  gc->DrawText(m_title, 16, 12);
+  gc->DrawText(m_title, 16_dip, 12_dip);
 
   // 3. 绘制右侧 SVG 工具图标
-  int toolX = size.x - 24;
+  int toolX = size.x - 24_dip;
+  wxSize toolIconSz = dip(16, 16);
 
   for (int i = (int)m_tools.size() - 1; i >= 0; --i) {
-    toolX -= 16;
+    toolX -= toolIconSz.x;
     wxColour toolColor =
         (m_hoverToolIndex == i) ? palette.accentPrimary : palette.textSecondary;
     wxBitmapBundle bundle = IconManager::GetIconBundle(
-        m_tools[i].svgContent, wxSize(16, 16), toolColor);
-    wxBitmap bmp = bundle.GetBitmap(wxSize(16, 16));
+        m_tools[i].svgContent, toolIconSz, toolColor);
+    wxBitmap bmp = bundle.GetBitmap(toolIconSz);
     if (bmp.IsOk()) {
-      gc->DrawBitmap(bmp, toolX, 12, 16, 16);
+      gc->DrawBitmap(bmp, toolX, 12_dip, toolIconSz.x, toolIconSz.y);
     }
-    toolX -= 12;
+    toolX -= 12_dip;
   }
 
   // 4. 绘制 Footer 字符数
@@ -122,7 +123,7 @@ void CardPanel::OnPaint(wxPaintEvent &WXUNUSED(event)) {
   wxString countText = wxString::Format(L"%zu 字符", m_charCount);
   double cw, ch;
   gc->GetTextExtent(countText, &cw, &ch);
-  gc->DrawText(countText, size.x - cw - 16, size.y - ch - 10);
+  gc->DrawText(countText, size.x - cw - 16_dip, size.y - ch - 10_dip);
 }
 
 void CardPanel::OnMouseMove(wxMouseEvent &event) {
@@ -133,15 +134,16 @@ void CardPanel::OnMouseMove(wxMouseEvent &event) {
   int oldHover = m_hoverToolIndex;
   m_hoverToolIndex = -1;
 
-  if (y >= 8 && y <= 32) {
-    int toolX = sizeX - 24;
+  if (y >= 8_dip && y <= 32_dip) {
+    int toolX = sizeX - 24_dip;
+    int iconW = 16_dip;
     for (int i = (int)m_tools.size() - 1; i >= 0; --i) {
-      toolX -= 16;
-      if (x >= toolX - 4 && x <= toolX + 20) {
+      toolX -= iconW;
+      if (x >= toolX - 4_dip && x <= toolX + iconW + 4_dip) {
         m_hoverToolIndex = i;
         break;
       }
-      toolX -= 12;
+      toolX -= 12_dip;
     }
   }
 

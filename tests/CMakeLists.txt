@@ -3,7 +3,13 @@ add_executable(unit_tests
     ModelManagerTest.cpp
     LlamaCppEngineTest.cpp
     LlamaSseClientTest.cpp
+    SelectionTranslateTest.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/Logger.cpp
     ${CMAKE_SOURCE_DIR}/src/core/Config.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/ClipboardHelper.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/WinUIAutomationHelper.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/WinMediaOcrHelper.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/ScreenTextExtractor.cpp
     ${CMAKE_SOURCE_DIR}/src/core/LlamaClient.cpp
     ${CMAKE_SOURCE_DIR}/src/core/LlamaServer.cpp
     ${CMAKE_SOURCE_DIR}/src/core/ModelManager.cpp
@@ -28,6 +34,10 @@ target_link_libraries(unit_tests PRIVATE
     llama-server-impl
     llama-cli-impl
 )
+
+if(WIN32)
+    target_link_libraries(unit_tests PRIVATE ole32 oleaut32 windowsapp)
+endif()
 
 add_test(NAME CoreAndEngineTests COMMAND unit_tests)
 

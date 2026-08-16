@@ -84,7 +84,35 @@ private:
     wxPanel* m_ocrFooterPanel{nullptr};
     wxStaticText* m_ocrFooterText{nullptr};
 
-    // UI Elements - 3. 首选项 Group
+    // UI Elements - 3. 划词翻译 Group
+    wxPanel* m_selectionCard{nullptr};
+    wxStaticText* m_selectionTitleText{nullptr};
+    wxCheckBox* m_selectionEnableCheck{nullptr};
+    wxRadioBox* m_selectionModeRadio{nullptr};
+    wxStaticText* m_modifierKeyLabel{nullptr};
+    wxChoice* m_modifierKeyChoice{nullptr};
+    wxCheckBox* m_preserveClipCheck{nullptr};
+    CustomButton* m_selectionSaveBtn{nullptr};
+    wxStaticText* m_selectionStatusText{nullptr};
+
+    void OnSaveSelectionConfig(wxCommandEvent& event);
+    void OnSelectionModeChanged(wxCommandEvent& event);
+    void SetSelectionConfig(const AppConfig& cfg);
+
+    // UI Elements - 4. 日志与诊断设置 Group
+    wxPanel* m_logCard{nullptr};
+    wxStaticText* m_logTitleText{nullptr};
+    wxCheckBox* m_saveLogToFileCheck{nullptr};
+    wxStaticText* m_logPathInfoText{nullptr};
+    CustomButton* m_openLogDirBtn{nullptr};
+    CustomButton* m_logSaveBtn{nullptr};
+    wxStaticText* m_logStatusText{nullptr};
+
+    void OnSaveLogConfig(wxCommandEvent& event);
+    void OnOpenLogDirFromSettings(wxCommandEvent& event);
+    void SetLogConfig(const AppConfig& cfg);
+
+    // UI Elements - 5. 偏好设置 Group
     wxPanel* m_prefCard{nullptr};
     wxStaticText* m_prefTitle{nullptr};
 

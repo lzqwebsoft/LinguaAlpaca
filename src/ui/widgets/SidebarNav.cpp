@@ -8,16 +8,17 @@ namespace LinguaAlpaca::UI {
 wxDEFINE_EVENT(EVT_SIDEBAR_NAV_CHANGED, wxCommandEvent);
 
 SidebarNav::SidebarNav(wxWindow* parent, wxWindowID id)
-    : wxPanel(parent, id, wxDefaultPosition, wxSize(80, -1), wxBORDER_NONE) {
+    : wxPanel(parent, id, wxDefaultPosition, wxSize(80_dip, -1), wxBORDER_NONE) {
     
     SetBackgroundStyle(wxBG_STYLE_PAINT);
 
     m_items = {
         { 0, L"文本", SVG::TEXT },
         { 1, L"OCR", SVG::OCR },
-        { 2, L"历史", SVG::HISTORY }
+        { 2, L"历史", SVG::HISTORY },
+        { 3, L"日志", SVG::LOG }
     };
-    m_bottomItem = { 3, L"设置", SVG::SETTINGS };
+    m_bottomItem = { 4, L"设置", SVG::SETTINGS };
 
     Bind(wxEVT_PAINT, &SidebarNav::OnPaint, this);
     Bind(wxEVT_LEFT_DOWN, &SidebarNav::OnLeftDown, this);
@@ -47,27 +48,30 @@ void SidebarNav::OnPaint(wxPaintEvent& WXUNUSED(event)) {
     gc->SetPen(gc->CreatePen(wxPen(palette.cardBorder, 1)));
     gc->StrokeLine(size.x - 1, 0, size.x - 1, size.y);
 
-    int itemHeight = 66;
-    int topOffset = 16;
+    int itemHeight = 66_dip;
+    int topOffset = 16_dip;
+    int itemBoxHeight = 58_dip;
+    int itemRadius = 10_dip;
+    int itemMarginX = 12_dip;
 
     auto drawItem = [&](const SidebarNavItem& item, int yPos, bool isSelected, bool isHovered) {
         if (isSelected) {
             gc->SetBrush(gc->CreateBrush(wxBrush(palette.accentPrimary)));
             gc->SetPen(*wxTRANSPARENT_PEN);
-            gc->DrawRoundedRectangle(12, yPos, size.x - 24, 58, 10);
+            gc->DrawRoundedRectangle(itemMarginX, yPos, size.x - itemMarginX * 2, itemBoxHeight, itemRadius);
         } else if (isHovered) {
             gc->SetBrush(gc->CreateBrush(wxBrush(palette.windowBg)));
             gc->SetPen(*wxTRANSPARENT_PEN);
-            gc->DrawRoundedRectangle(12, yPos, size.x - 24, 58, 10);
+            gc->DrawRoundedRectangle(itemMarginX, yPos, size.x - itemMarginX * 2, itemBoxHeight, itemRadius);
         }
 
         wxColour iconTextColour = isSelected ? *wxWHITE : (isHovered ? palette.textPrimary : palette.textSecondary);
 
         // SVG Vector Icon
-        wxBitmapBundle bundle = IconManager::GetIconBundle(item.svgContent, wxSize(20, 20), iconTextColour);
-        wxBitmap bmp = bundle.GetBitmap(wxSize(20, 20));
+        wxBitmapBundle bundle = IconManager::GetIconBundle(item.svgContent, dip(20, 20), iconTextColour);
+        wxBitmap bmp = bundle.GetBitmap(dip(20, 20));
         if (bmp.IsOk()) {
-            gc->DrawBitmap(bmp, (size.x - 20) / 2.0, yPos + 8, 20, 20);
+            gc->DrawBitmap(bmp, (size.x - bmp.GetWidth()) / 2.0, yPos + 8_dip, bmp.GetWidth(), bmp.GetHeight());
         }
 
         // Label
@@ -75,11 +79,11 @@ void SidebarNav::OnPaint(wxPaintEvent& WXUNUSED(event)) {
         gc->SetFont(labelFont, iconTextColour);
         double lw, lh;
         gc->GetTextExtent(item.label, &lw, &lh);
-        gc->DrawText(item.label, (size.x - lw) / 2.0, yPos + 34);
+        gc->DrawText(item.label, (size.x - lw) / 2.0, yPos + 34_dip);
     };
 
     auto getItemY = [topOffset, itemHeight](size_t i) -> int {
-        return (i <= 1) ? (topOffset + (int)i * itemHeight) : (topOffset + 2 * itemHeight + 20);
+        return (i <= 1) ? (topOffset + (int)i * itemHeight) : (topOffset + (int)i * itemHeight + 16_dip);
     };
 
     for (size_t i = 0; i < m_items.size(); ++i) {
@@ -88,33 +92,33 @@ void SidebarNav::OnPaint(wxPaintEvent& WXUNUSED(event)) {
     }
 
     // 绘制居中的横向短分割线 (位于“OCR”与“历史”按钮之间)
-    double dividerY = topOffset + 2 * itemHeight + 4.0;
-    double lineLen = 28.0;
+    double dividerY = topOffset + 2 * itemHeight + 4.0_dip;
+    double lineLen = 28.0_dip;
     gc->SetPen(gc->CreatePen(wxPen(palette.cardBorder, 1)));
     gc->StrokeLine((size.x - lineLen) / 2.0, dividerY, (size.x + lineLen) / 2.0, dividerY);
 
     // 底部设置按钮
-    int bottomY = size.y - 74;
-    drawItem(m_bottomItem, bottomY, m_selectedIndex == 3, m_hoverIndex == 3);
+    int bottomY = size.y - 74_dip;
+    drawItem(m_bottomItem, bottomY, m_selectedIndex == 4, m_hoverIndex == 4);
 }
 
 void SidebarNav::OnLeftDown(wxMouseEvent& event) {
     int y = event.GetY();
     int sizeY = GetClientSize().y;
-    int topOffset = 16;
-    int itemHeight = 66;
+    int topOffset = 16_dip;
+    int itemHeight = 66_dip;
 
     int newIndex = -1;
     for (size_t i = 0; i < m_items.size(); ++i) {
-        int itemY = (i <= 1) ? (topOffset + (int)i * itemHeight) : (topOffset + 2 * itemHeight + 20);
-        if (y >= itemY && y <= itemY + 58) {
+        int itemY = (i <= 1) ? (topOffset + (int)i * itemHeight) : (topOffset + (int)i * itemHeight + 16_dip);
+        if (y >= itemY && y <= itemY + 58_dip) {
             newIndex = (int)i;
             break;
         }
     }
 
-    if (y >= sizeY - 74 && y <= sizeY - 16) {
-        newIndex = 3;
+    if (y >= sizeY - 74_dip && y <= sizeY - 16_dip) {
+        newIndex = 4;
     }
 
     if (newIndex != -1) {
@@ -129,22 +133,22 @@ void SidebarNav::OnLeftDown(wxMouseEvent& event) {
 void SidebarNav::OnMouseMove(wxMouseEvent& event) {
     int y = event.GetY();
     int sizeY = GetClientSize().y;
-    int topOffset = 16;
-    int itemHeight = 66;
+    int topOffset = 16_dip;
+    int itemHeight = 66_dip;
 
     int oldHover = m_hoverIndex;
     m_hoverIndex = -1;
 
     for (size_t i = 0; i < m_items.size(); ++i) {
-        int itemY = (i <= 1) ? (topOffset + (int)i * itemHeight) : (topOffset + 2 * itemHeight + 20);
-        if (y >= itemY && y <= itemY + 58) {
+        int itemY = (i <= 1) ? (topOffset + (int)i * itemHeight) : (topOffset + (int)i * itemHeight + 16_dip);
+        if (y >= itemY && y <= itemY + 58_dip) {
             m_hoverIndex = (int)i;
             break;
         }
     }
 
-    if (y >= sizeY - 74 && y <= sizeY - 16) {
-        m_hoverIndex = 3;
+    if (y >= sizeY - 74_dip && y <= sizeY - 16_dip) {
+        m_hoverIndex = 4;
     }
 
     if (oldHover != m_hoverIndex) {

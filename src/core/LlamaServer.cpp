@@ -1,5 +1,6 @@
 #pragma execution_character_set("utf-8")
 #include "LlamaServer.hpp"
+#include "Logger.hpp"
 
 #include <chrono>
 #include <filesystem>
@@ -14,28 +15,28 @@
 
 namespace LinguaAlpaca {
 
-static void AppendServerLog(const std::string& msg) {
-    static std::mutex logMutex;
-    std::lock_guard<std::mutex> lock(logMutex);
-    std::ofstream logFile("llama_server.log", std::ios::app);
-    if (logFile.is_open()) {
-        logFile << msg;
-        if (msg.empty() || msg.back() != '\n') {
-            logFile << "\n";
-        }
-        logFile.flush();
-    }
-}
-
 static void InitLlamaLogger() {
     static std::once_flag initFlag;
     std::call_once(initFlag, []() {
-        common_log_set_file(common_log_main(), "llama_server.log");
         llama_log_set(
-            [](ggml_log_level /*level*/, const char* text, void* /*user_data*/) {
+            [](ggml_log_level level, const char* text, void* /*user_data*/) {
                 if (!text) return;
-                AppendServerLog(text);
-                std::cerr << text;
+                std::string s(text);
+                while (!s.empty() && (s.back() == '\n' || s.back() == '\r')) {
+                    s.pop_back();
+                }
+                if (s.empty()) return;
+
+                LogLevel lvl = LogLevel::Info;
+                if (level == GGML_LOG_LEVEL_ERROR) {
+                    lvl = LogLevel::Error;
+                } else if (level == GGML_LOG_LEVEL_WARN) {
+                    lvl = LogLevel::Warning;
+                } else if (level == GGML_LOG_LEVEL_DEBUG) {
+                    lvl = LogLevel::Debug;
+                }
+
+                Logger::GetInstance().Log(lvl, "llama.cpp", s);
             },
             nullptr);
     });
@@ -82,7 +83,7 @@ bool LlamaServer::Start(const ServerConfig& config) {
     if (config.port <= 0) {
         m_port = common_http_get_free_port();
         if (m_port <= 0) {
-            std::cerr << "[LlamaServer] Error: Failed to find an available HTTP port." << std::endl;
+            LOG_ERROR("LlamaServer", "Failed to find an available HTTP port.");
             return false;
         }
     } else {
@@ -105,31 +106,23 @@ bool LlamaServer::Start(const ServerConfig& config) {
     if (!config.mmprojPath.empty()) {
         server_params.mmproj.path = config.mmprojPath;
     }
+    server_params.use_jinja = true;
     server_params.ui = false; // 禁用 UI
 
     m_thread = std::thread([this, server_params]() mutable {
-        std::string startMsg = "[LlamaServer] Starting server thread at " +
-                               m_baseUrl +
-                               " with model=" + server_params.model.path +
-                               ", mmproj=" + server_params.mmproj.path + "\n";
-        std::cout << startMsg;
-        AppendServerLog(startMsg);
+        LOG_INFO("LlamaServer", "Starting server thread at " + m_baseUrl +
+                 " with model=" + server_params.model.path +
+                 ", mmproj=" + server_params.mmproj.path);
 
         try {
             int res = llama_server(server_params, 0, nullptr);
             if (res != 0) {
-                std::string errStr = "[LlamaServer] ERROR: llama_server exited with code " + std::to_string(res) + "\n";
-                std::cerr << errStr;
-                AppendServerLog(errStr);
+                LOG_ERROR("LlamaServer", "llama_server exited with code " + std::to_string(res));
             }
         } catch (const std::exception& e) {
-            std::string excStr = std::string("[LlamaServer] EXCEPTION: ") + e.what() + "\n";
-            std::cerr << excStr;
-            AppendServerLog(excStr);
+            LOG_ERROR("LlamaServer", std::string("EXCEPTION: ") + e.what());
         } catch (...) {
-            std::string excStr = "[LlamaServer] EXCEPTION: unknown exception.\n";
-            std::cerr << excStr;
-            AppendServerLog(excStr);
+            LOG_ERROR("LlamaServer", "EXCEPTION: unknown exception.");
         }
         m_isAlive.store(false, std::memory_order_release);
     });
@@ -143,7 +136,7 @@ void LlamaServer::Stop() {
     }
 
     if (m_isAlive.load(std::memory_order_acquire)) {
-        std::cout << "[LlamaServer] Terminating server thread..." << std::endl;
+        LOG_INFO("LlamaServer", "Terminating server thread...");
         llama_server_terminate();
     }
 
@@ -215,7 +208,7 @@ bool LlamaServer::WaitUntilReady(int timeoutSec, const std::function<bool()>& sh
 
         ServerStatusInfo info;
         if (QueryHealth(info) && info.state == ServerHealthState::Ready) {
-            std::cout << "[LlamaServer] Server is ready at " << m_baseUrl << std::endl;
+            LOG_INFO("LlamaServer", "Server is ready at " + m_baseUrl);
             return true;
         }
 

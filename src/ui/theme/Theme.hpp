@@ -2,6 +2,7 @@
 #pragma execution_character_set("utf-8")
 
 #include <wx/wx.h>
+#include "Dpi.hpp"
 #include <functional>
 #include <vector>
 

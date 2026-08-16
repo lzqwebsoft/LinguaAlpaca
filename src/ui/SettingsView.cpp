@@ -32,7 +32,7 @@ void SettingsView::InitUI() {
   wxBoxSizer *headerSizer = new wxBoxSizer(wxHORIZONTAL);
 
   wxBitmapBundle titleBundle = IconManager::GetIconBundle(
-      SVG::SETTINGS, wxSize(24, 24), palette.accentPrimary);
+      SVG::SETTINGS, dip(24, 24), palette.accentPrimary);
   wxStaticBitmap *titleIcon = new wxStaticBitmap(this, wxID_ANY, titleBundle);
 
   m_titleText = new wxStaticText(this, wxID_ANY, L"系统设置");
@@ -41,27 +41,27 @@ void SettingsView::InitUI() {
   m_titleText->SetForegroundColour(palette.textPrimary);
 
   wxPanel *prefBadge = new wxPanel(this, wxID_ANY, wxDefaultPosition,
-                                   wxSize(70, 28), wxBORDER_NONE);
+                                   dip(70, 28), wxBORDER_NONE);
   prefBadge->SetBackgroundColour(palette.bannerBg);
   wxBoxSizer *prefBadgeSizer = new wxBoxSizer(wxHORIZONTAL);
   wxBitmapBundle prefIconBundle = IconManager::GetIconBundle(
-      SVG::INFO, wxSize(14, 14), palette.bannerText);
+      SVG::INFO, dip(14, 14), palette.bannerText);
   wxStaticBitmap *prefIcon =
       new wxStaticBitmap(prefBadge, wxID_ANY, prefIconBundle);
   wxStaticText *prefBadgeText = new wxStaticText(prefBadge, wxID_ANY, L"偏好");
   prefBadgeText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL,
                                 wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
   prefBadgeText->SetForegroundColour(palette.bannerText);
-  prefBadgeSizer->Add(prefIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
+  prefBadgeSizer->Add(prefIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4_dip);
   prefBadgeSizer->Add(prefBadgeText, 0, wxALIGN_CENTER_VERTICAL);
   prefBadge->SetSizer(prefBadgeSizer);
 
-  headerSizer->Add(titleIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
+  headerSizer->Add(titleIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10_dip);
   headerSizer->Add(m_titleText, 0, wxALIGN_CENTER_VERTICAL);
   headerSizer->AddStretchSpacer(1);
   headerSizer->Add(prefBadge, 0, wxALIGN_CENTER_VERTICAL);
 
-  mainSizer->Add(headerSizer, 0, wxEXPAND | wxALL, 20);
+  mainSizer->Add(headerSizer, 0, wxEXPAND | wxALL, 20_dip);
 
   // Group 1: 翻译模型 (Translation Model Settings Card)
   m_modelCard = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
@@ -74,7 +74,7 @@ void SettingsView::InitUI() {
   wxBoxSizer *cardTitleSizer = new wxBoxSizer(wxHORIZONTAL);
 
   wxBitmapBundle cardTitleBundle = IconManager::GetIconBundle(
-      SVG::MODEL_LOAD, wxSize(18, 18), palette.textPrimary);
+      SVG::MODEL_LOAD, dip(18, 18), palette.textPrimary);
   wxStaticBitmap *cardTitleIcon =
       new wxStaticBitmap(m_modelCard, wxID_ANY, cardTitleBundle);
 
@@ -85,39 +85,39 @@ void SettingsView::InitUI() {
   m_modelCardTitle->SetForegroundColour(palette.textPrimary);
 
   m_statusBadge = new wxPanel(m_modelCard, wxID_ANY, wxDefaultPosition,
-                              wxSize(-1, 28), wxBORDER_NONE);
+                              wxSize(-1, 28_dip), wxBORDER_NONE);
   m_statusBadge->SetBackgroundColour(wxColour(254, 242, 242));
   wxBoxSizer *statusSizer = new wxBoxSizer(wxHORIZONTAL);
   m_statusText = new wxStaticText(m_statusBadge, wxID_ANY, L"● 未配置模型");
   m_statusText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL,
                                wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
   m_statusText->SetForegroundColour(wxColour(220, 38, 38));
-  statusSizer->Add(m_statusText, 0, wxALIGN_CENTER | wxLEFT | wxRIGHT, 10);
+  statusSizer->Add(m_statusText, 0, wxALIGN_CENTER | wxLEFT | wxRIGHT, 10_dip);
   m_statusBadge->SetSizer(statusSizer);
 
-  cardTitleSizer->Add(cardTitleIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
+  cardTitleSizer->Add(cardTitleIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8_dip);
   cardTitleSizer->Add(m_modelCardTitle, 0, wxALIGN_CENTER_VERTICAL);
   cardTitleSizer->AddStretchSpacer(1);
   cardTitleSizer->Add(m_statusBadge, 0, wxALIGN_CENTER_VERTICAL);
 
-  modelCardSizer->Add(cardTitleSizer, 0, wxEXPAND | wxALL, 16);
+  modelCardSizer->Add(cardTitleSizer, 0, wxEXPAND | wxALL, 16_dip);
 
   // 选项卡切换按钮 (`[本地文件]` | `[推荐模型]`)
   wxBoxSizer *tabSizer = new wxBoxSizer(wxHORIZONTAL);
   m_localTabBtn = new CustomButton(
       m_modelCard, wxID_ANY, L"本地文件", ButtonStyle::Primary,
-      wxDefaultPosition, wxSize(200, 36));
-  m_localTabBtn->SetIcon(SVG::FOLDER, wxSize(16, 16), *wxWHITE);
+      wxDefaultPosition, dip(200, 36));
+  m_localTabBtn->SetIcon(SVG::FOLDER, dip(16, 16), *wxWHITE);
 
   m_recommendTabBtn = new CustomButton(
       m_modelCard, wxID_ANY, L"推荐模型", ButtonStyle::Secondary,
-      wxDefaultPosition, wxSize(200, 36));
-  m_recommendTabBtn->SetIcon(SVG::MODEL_LOAD, wxSize(16, 16),
+      wxDefaultPosition, dip(200, 36));
+  m_recommendTabBtn->SetIcon(SVG::MODEL_LOAD, dip(16, 16),
                              palette.textPrimary);
 
-  tabSizer->Add(m_localTabBtn, 1, wxRIGHT, 8);
+  tabSizer->Add(m_localTabBtn, 1, wxRIGHT, 8_dip);
   tabSizer->Add(m_recommendTabBtn, 1);
-  modelCardSizer->Add(tabSizer, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 16);
+  modelCardSizer->Add(tabSizer, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 16_dip);
 
   // Tab 1: 本地文件浏览面板
   m_localPanel = new wxPanel(m_modelCard, wxID_ANY, wxDefaultPosition,
@@ -128,7 +128,7 @@ void SettingsView::InitUI() {
   wxBoxSizer *pathSizer = new wxBoxSizer(wxHORIZONTAL);
   m_modelPathCtrl =
       new wxTextCtrl(m_localPanel, wxID_ANY, L"", wxDefaultPosition,
-                     wxSize(-1, 38), wxBORDER_NONE);
+                     wxSize(-1, 38_dip), wxBORDER_NONE);
   m_modelPathCtrl->SetHint(L"选择 GGUF 模型文件路径");
   m_modelPathCtrl->SetFont(wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL,
                                   wxFONTWEIGHT_NORMAL, false,
@@ -138,28 +138,28 @@ void SettingsView::InitUI() {
 
   m_browseBtn = new CustomButton(m_localPanel, wxID_ANY, L"浏览",
                                  ButtonStyle::Secondary,
-                                 wxDefaultPosition, wxSize(90, 38));
-  m_browseBtn->SetIcon(SVG::BROWSE, wxSize(16, 16));
+                                 wxDefaultPosition, dip(90, 38));
+  m_browseBtn->SetIcon(SVG::BROWSE, dip(16, 16));
 
   m_openDirBtn = new CustomButton(
       m_localPanel, wxID_ANY, L"打开模型目录",
-      ButtonStyle::Secondary, wxDefaultPosition, wxSize(145, 38));
-  m_openDirBtn->SetIcon(SVG::FOLDER_OPEN, wxSize(16, 16));
+      ButtonStyle::Secondary, wxDefaultPosition, dip(145, 38));
+  m_openDirBtn->SetIcon(SVG::FOLDER_OPEN, dip(16, 16));
 
-  pathSizer->Add(m_modelPathCtrl, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
-  pathSizer->Add(m_browseBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
+  pathSizer->Add(m_modelPathCtrl, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8_dip);
+  pathSizer->Add(m_browseBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8_dip);
   pathSizer->Add(m_openDirBtn, 0, wxALIGN_CENTER_VERTICAL);
-  localSizer->Add(pathSizer, 0, wxEXPAND | wxBOTTOM, 10);
+  localSizer->Add(pathSizer, 0, wxEXPAND | wxBOTTOM, 10_dip);
 
   wxStaticText *pathNote = new wxStaticText(
       m_localPanel, wxID_ANY, L"支持 .gguf 格式的 llama.cpp 兼容翻译模型。");
   pathNote->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL,
                            wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
   pathNote->SetForegroundColour(palette.textSecondary);
-  localSizer->Add(pathNote, 0, wxBOTTOM, 12);
+  localSizer->Add(pathNote, 0, wxBOTTOM, 12_dip);
 
   m_localPanel->SetSizer(localSizer);
-  modelCardSizer->Add(m_localPanel, 0, wxEXPAND | wxLEFT | wxRIGHT, 16);
+  modelCardSizer->Add(m_localPanel, 0, wxEXPAND | wxLEFT | wxRIGHT, 16_dip);
 
   // Tab 2: 推荐模型面板
   m_recommendPanel = new wxPanel(m_modelCard, wxID_ANY, wxDefaultPosition,
@@ -168,7 +168,7 @@ void SettingsView::InitUI() {
   wxBoxSizer *recSizer = new wxBoxSizer(wxVERTICAL);
 
   wxPanel *itemPanel =
-      new wxPanel(m_recommendPanel, wxID_ANY, wxDefaultPosition, wxSize(-1, 68),
+      new wxPanel(m_recommendPanel, wxID_ANY, wxDefaultPosition, wxSize(-1, 68_dip),
                   wxBORDER_NONE);
   itemPanel->SetBackgroundColour(palette.windowBg);
 
@@ -191,7 +191,7 @@ void SettingsView::InitUI() {
   infoSizer->Add(tDesc, 0);
 
   wxPanel *sizeTag = new wxPanel(itemPanel, wxID_ANY, wxDefaultPosition,
-                                 wxSize(68, 24), wxBORDER_NONE);
+                                 dip(68, 24), wxBORDER_NONE);
   sizeTag->SetBackgroundColour(palette.cardBg);
   wxBoxSizer *stSizer = new wxBoxSizer(wxHORIZONTAL);
   wxStaticText *stText = new wxStaticText(sizeTag, wxID_ANY, L"~1.2 GB");
@@ -203,15 +203,15 @@ void SettingsView::InitUI() {
 
   m_downloadBtn = new CustomButton(
       itemPanel, wxID_ANY, L"自动下载模型", ButtonStyle::Primary,
-      wxDefaultPosition, wxSize(145, 34));
-  m_downloadBtn->SetIcon(SVG::DOWNLOAD, wxSize(16, 16), *wxWHITE);
+      wxDefaultPosition, dip(145, 34));
+  m_downloadBtn->SetIcon(SVG::DOWNLOAD, dip(16, 16), *wxWHITE);
 
-  itemSizer->Add(infoSizer, 1, wxALIGN_CENTER_VERTICAL | wxLEFT, 12);
-  itemSizer->Add(sizeTag, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 12);
-  itemSizer->Add(m_downloadBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 12);
+  itemSizer->Add(infoSizer, 1, wxALIGN_CENTER_VERTICAL | wxLEFT, 12_dip);
+  itemSizer->Add(sizeTag, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 12_dip);
+  itemSizer->Add(m_downloadBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 12_dip);
 
   itemPanel->SetSizer(itemSizer);
-  recSizer->Add(itemPanel, 0, wxEXPAND | wxBOTTOM, 8);
+  recSizer->Add(itemPanel, 0, wxEXPAND | wxBOTTOM, 8_dip);
 
   // 下载进度条与状态文本
   m_progressPanel = new wxPanel(m_recommendPanel, wxID_ANY, wxDefaultPosition,
@@ -226,37 +226,37 @@ void SettingsView::InitUI() {
   m_progressText->SetForegroundColour(palette.textPrimary);
 
   m_downloadGauge = new wxGauge(m_progressPanel, wxID_ANY, 100,
-                                wxDefaultPosition, wxSize(-1, 10));
+                                wxDefaultPosition, wxSize(-1, 10_dip));
 
-  progressSizer->Add(m_progressText, 0, wxLEFT | wxTOP | wxRIGHT, 8);
-  progressSizer->Add(m_downloadGauge, 0, wxEXPAND | wxALL, 8);
+  progressSizer->Add(m_progressText, 0, wxLEFT | wxTOP | wxRIGHT, 8_dip);
+  progressSizer->Add(m_downloadGauge, 0, wxEXPAND | wxALL, 8_dip);
   m_progressPanel->SetSizer(progressSizer);
   m_progressPanel->Hide();
 
-  recSizer->Add(m_progressPanel, 0, wxEXPAND | wxBOTTOM, 8);
+  recSizer->Add(m_progressPanel, 0, wxEXPAND | wxBOTTOM, 8_dip);
 
   m_recommendPanel->SetSizer(recSizer);
   m_recommendPanel->Hide();
-  modelCardSizer->Add(m_recommendPanel, 0, wxEXPAND | wxLEFT | wxRIGHT, 16);
+  modelCardSizer->Add(m_recommendPanel, 0, wxEXPAND | wxLEFT | wxRIGHT, 16_dip);
 
   // 保存与测试操作按钮 (`保存配置` & `测试模型`)
   wxBoxSizer *actionSizer = new wxBoxSizer(wxHORIZONTAL);
   m_saveBtn = new CustomButton(m_modelCard, wxID_ANY, L"保存配置",
                                ButtonStyle::Primary,
-                               wxDefaultPosition, wxSize(145, 40));
-  m_saveBtn->SetIcon(SVG::COPY, wxSize(16, 16), *wxWHITE);
+                               wxDefaultPosition, dip(145, 40));
+  m_saveBtn->SetIcon(SVG::COPY, dip(16, 16), *wxWHITE);
 
   m_testBtn = new CustomButton(m_modelCard, wxID_ANY, L"测试模型",
                                ButtonStyle::Secondary,
-                               wxDefaultPosition, wxSize(130, 40));
-  m_testBtn->SetIcon(SVG::TRANSLATE, wxSize(16, 16));
+                               wxDefaultPosition, dip(130, 40));
+  m_testBtn->SetIcon(SVG::TRANSLATE, dip(16, 16));
 
-  actionSizer->Add(m_saveBtn, 0, wxRIGHT, 12);
+  actionSizer->Add(m_saveBtn, 0, wxRIGHT, 12_dip);
   actionSizer->Add(m_testBtn, 0);
-  modelCardSizer->Add(actionSizer, 0, wxALL, 16);
+  modelCardSizer->Add(actionSizer, 0, wxALL, 16_dip);
 
   m_modelCard->SetSizer(modelCardSizer);
-  mainSizer->Add(m_modelCard, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 20);
+  mainSizer->Add(m_modelCard, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 20_dip);
 
   // Group 2: OCR 模型 (OCR Model Settings Card)
   m_ocrCard = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
@@ -269,7 +269,7 @@ void SettingsView::InitUI() {
   wxBoxSizer *ocrTitleSizer = new wxBoxSizer(wxHORIZONTAL);
 
   wxBitmapBundle ocrTitleBundle = IconManager::GetIconBundle(
-      SVG::OCR, wxSize(18, 18), palette.textPrimary);
+      SVG::OCR, dip(18, 18), palette.textPrimary);
   wxStaticBitmap *ocrTitleIcon =
       new wxStaticBitmap(m_ocrCard, wxID_ANY, ocrTitleBundle);
 
@@ -279,7 +279,7 @@ void SettingsView::InitUI() {
   m_ocrTitleText->SetForegroundColour(palette.textPrimary);
 
   m_ocrStatusBadge = new wxPanel(m_ocrCard, wxID_ANY, wxDefaultPosition,
-                                 wxSize(-1, 28), wxBORDER_NONE);
+                                 wxSize(-1, 28_dip), wxBORDER_NONE);
   m_ocrStatusBadge->SetBackgroundColour(wxColour(254, 242, 242));
   wxBoxSizer *ocrStatusSizer = new wxBoxSizer(wxHORIZONTAL);
   m_ocrStatusText = new wxStaticText(m_ocrStatusBadge, wxID_ANY, L"● 未配置");
@@ -287,20 +287,20 @@ void SettingsView::InitUI() {
                                   wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
   m_ocrStatusText->SetForegroundColour(wxColour(220, 38, 38));
   ocrStatusSizer->Add(m_ocrStatusText, 0, wxALIGN_CENTER | wxLEFT | wxRIGHT,
-                      10);
+                      10_dip);
   m_ocrStatusBadge->SetSizer(ocrStatusSizer);
 
-  ocrTitleSizer->Add(ocrTitleIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
+  ocrTitleSizer->Add(ocrTitleIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8_dip);
   ocrTitleSizer->Add(m_ocrTitleText, 0, wxALIGN_CENTER_VERTICAL);
   ocrTitleSizer->AddStretchSpacer(1);
   ocrTitleSizer->Add(m_ocrStatusBadge, 0, wxALIGN_CENTER_VERTICAL);
 
-  ocrCardSizer->Add(ocrTitleSizer, 0, wxEXPAND | wxALL, 16);
+  ocrCardSizer->Add(ocrTitleSizer, 0, wxEXPAND | wxALL, 16_dip);
 
   // Row 1: 主模型文件路径选择
   wxBoxSizer *ocrMainRow = new wxBoxSizer(wxHORIZONTAL);
   m_ocrMainLabel = new wxStaticText(m_ocrCard, wxID_ANY, L"主模型",
-                                    wxDefaultPosition, wxSize(70, -1));
+                                    wxDefaultPosition, wxSize(70_dip, -1));
   m_ocrMainLabel->SetFont(wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL,
                                  wxFONTWEIGHT_NORMAL, false,
                                  "Microsoft YaHei"));
@@ -308,7 +308,7 @@ void SettingsView::InitUI() {
 
   m_ocrModelPathCtrl =
       new wxTextCtrl(m_ocrCard, wxID_ANY, L"", wxDefaultPosition,
-                     wxSize(-1, 38), wxBORDER_NONE);
+                     wxSize(-1, 38_dip), wxBORDER_NONE);
   m_ocrModelPathCtrl->SetHint(L"选择 OCR 主模型文件路径");
   m_ocrModelPathCtrl->SetFont(wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL,
                                      wxFONTWEIGHT_NORMAL, false,
@@ -318,19 +318,19 @@ void SettingsView::InitUI() {
 
   m_ocrBrowseBtn = new CustomButton(
       m_ocrCard, wxID_ANY, L"浏览", ButtonStyle::Secondary,
-      wxDefaultPosition, wxSize(90, 38));
-  m_ocrBrowseBtn->SetIcon(SVG::BROWSE, wxSize(16, 16));
+      wxDefaultPosition, dip(90, 38));
+  m_ocrBrowseBtn->SetIcon(SVG::BROWSE, dip(16, 16));
 
-  ocrMainRow->Add(m_ocrMainLabel, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 16);
-  ocrMainRow->Add(m_ocrModelPathCtrl, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
-  ocrMainRow->Add(m_ocrBrowseBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 16);
+  ocrMainRow->Add(m_ocrMainLabel, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 16_dip);
+  ocrMainRow->Add(m_ocrModelPathCtrl, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8_dip);
+  ocrMainRow->Add(m_ocrBrowseBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 16_dip);
 
-  ocrCardSizer->Add(ocrMainRow, 0, wxEXPAND | wxBOTTOM, 12);
+  ocrCardSizer->Add(ocrMainRow, 0, wxEXPAND | wxBOTTOM, 12_dip);
 
   // Row 2: mmproj 视觉投影器文件路径选择
   wxBoxSizer *ocrMmprojRow = new wxBoxSizer(wxHORIZONTAL);
   m_ocrMmprojLabel = new wxStaticText(m_ocrCard, wxID_ANY, L"mmproj",
-                                      wxDefaultPosition, wxSize(70, -1));
+                                      wxDefaultPosition, wxSize(70_dip, -1));
   m_ocrMmprojLabel->SetFont(wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL,
                                    wxFONTWEIGHT_NORMAL, false,
                                    "Microsoft YaHei"));
@@ -338,7 +338,7 @@ void SettingsView::InitUI() {
 
   m_ocrMmprojPathCtrl =
       new wxTextCtrl(m_ocrCard, wxID_ANY, L"", wxDefaultPosition,
-                     wxSize(-1, 38), wxBORDER_NONE);
+                     wxSize(-1, 38_dip), wxBORDER_NONE);
   m_ocrMmprojPathCtrl->SetHint(L"选择 mmproj 视觉投影器文件路径");
   m_ocrMmprojPathCtrl->SetFont(wxFont(10, wxFONTFAMILY_SWISS,
                                       wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL,
@@ -348,32 +348,32 @@ void SettingsView::InitUI() {
 
   m_ocrMmprojBrowseBtn = new CustomButton(
       m_ocrCard, wxID_ANY, L"浏览", ButtonStyle::Secondary,
-      wxDefaultPosition, wxSize(90, 38));
-  m_ocrMmprojBrowseBtn->SetIcon(SVG::BROWSE, wxSize(16, 16));
+      wxDefaultPosition, dip(90, 38));
+  m_ocrMmprojBrowseBtn->SetIcon(SVG::BROWSE, dip(16, 16));
 
-  ocrMmprojRow->Add(m_ocrMmprojLabel, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 16);
+  ocrMmprojRow->Add(m_ocrMmprojLabel, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 16_dip);
   ocrMmprojRow->Add(m_ocrMmprojPathCtrl, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT,
-                    8);
+                    8_dip);
   ocrMmprojRow->Add(m_ocrMmprojBrowseBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT,
-                    16);
+                    16_dip);
 
-  ocrCardSizer->Add(ocrMmprojRow, 0, wxEXPAND | wxBOTTOM, 16);
+  ocrCardSizer->Add(ocrMmprojRow, 0, wxEXPAND | wxBOTTOM, 16_dip);
 
   // OCR 操作按钮 (`保存配置` & `测试模型`)
   wxBoxSizer *ocrActionSizer = new wxBoxSizer(wxHORIZONTAL);
   m_ocrSaveBtn = new CustomButton(
       m_ocrCard, wxID_ANY, L"保存配置", ButtonStyle::Primary,
-      wxDefaultPosition, wxSize(145, 40));
-  m_ocrSaveBtn->SetIcon(SVG::COPY, wxSize(16, 16), *wxWHITE);
+      wxDefaultPosition, dip(145, 40));
+  m_ocrSaveBtn->SetIcon(SVG::COPY, dip(16, 16), *wxWHITE);
 
   m_ocrTestBtn = new CustomButton(
       m_ocrCard, wxID_ANY, L"测试模型", ButtonStyle::Secondary,
-      wxDefaultPosition, wxSize(130, 40));
-  m_ocrTestBtn->SetIcon(SVG::TRANSLATE, wxSize(16, 16));
+      wxDefaultPosition, dip(130, 40));
+  m_ocrTestBtn->SetIcon(SVG::TRANSLATE, dip(16, 16));
 
-  ocrActionSizer->Add(m_ocrSaveBtn, 0, wxRIGHT, 12);
+  ocrActionSizer->Add(m_ocrSaveBtn, 0, wxRIGHT, 12_dip);
   ocrActionSizer->Add(m_ocrTestBtn, 0);
-  ocrCardSizer->Add(ocrActionSizer, 0, wxLEFT | wxRIGHT | wxBOTTOM, 16);
+  ocrCardSizer->Add(ocrActionSizer, 0, wxLEFT | wxRIGHT | wxBOTTOM, 16_dip);
 
   // 底部说明
   m_ocrFooterPanel = new wxPanel(m_ocrCard, wxID_ANY, wxDefaultPosition,
@@ -382,7 +382,7 @@ void SettingsView::InitUI() {
   wxBoxSizer *ocrFooterSizer = new wxBoxSizer(wxHORIZONTAL);
 
   wxBitmapBundle infoBundle = IconManager::GetIconBundle(
-      SVG::INFO, wxSize(16, 16), palette.accentPrimary);
+      SVG::INFO, dip(16, 16), palette.accentPrimary);
   wxStaticBitmap *infoIcon =
       new wxStaticBitmap(m_ocrFooterPanel, wxID_ANY, infoBundle);
 
@@ -394,17 +394,133 @@ void SettingsView::InitUI() {
                                   "Microsoft YaHei"));
   m_ocrFooterText->SetForegroundColour(palette.textSecondary);
 
-  ocrFooterSizer->Add(infoIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6);
+  ocrFooterSizer->Add(infoIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6_dip);
   ocrFooterSizer->Add(m_ocrFooterText, 0, wxALIGN_CENTER_VERTICAL);
   m_ocrFooterPanel->SetSizer(ocrFooterSizer);
 
   ocrCardSizer->Add(m_ocrFooterPanel, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM,
-                    16);
+                    16_dip);
 
   m_ocrCard->SetSizer(ocrCardSizer);
-  mainSizer->Add(m_ocrCard, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 20);
+  mainSizer->Add(m_ocrCard, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 20_dip);
 
-  // Group 3: 偏好设置卡片
+  // Group 3: 划词翻译设置卡片
+  m_selectionCard = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE);
+  m_selectionCard->SetBackgroundColour(palette.cardBg);
+  wxBoxSizer* selSizer = new wxBoxSizer(wxVERTICAL);
+
+  wxBoxSizer* selTitleSizer = new wxBoxSizer(wxHORIZONTAL);
+  wxBitmapBundle selBundle = IconManager::GetIconBundle(SVG::TRANSLATE, dip(18, 18), palette.accentPrimary);
+  wxStaticBitmap* selIcon = new wxStaticBitmap(m_selectionCard, wxID_ANY, selBundle);
+
+  m_selectionTitleText = new wxStaticText(m_selectionCard, wxID_ANY, L"全局划词翻译设置");
+  m_selectionTitleText->SetFont(wxFont(12, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
+  m_selectionTitleText->SetForegroundColour(palette.textPrimary);
+
+  selTitleSizer->Add(selIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8_dip);
+  selTitleSizer->Add(m_selectionTitleText, 0, wxALIGN_CENTER_VERTICAL);
+  selSizer->Add(selTitleSizer, 0, wxALL, 16_dip);
+
+  // 1. 启用开关
+  m_selectionEnableCheck = new wxCheckBox(m_selectionCard, wxID_ANY, L"启用全局划词翻译（选中文本后在光标旁显示悬浮按钮）");
+  m_selectionEnableCheck->SetFont(wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
+  m_selectionEnableCheck->SetForegroundColour(palette.textPrimary);
+  selSizer->Add(m_selectionEnableCheck, 0, wxLEFT | wxRIGHT | wxBOTTOM, 16_dip);
+
+  // 2. 触发模式选择
+  wxArrayString modes;
+  modes.Add(L"① 鼠标直接划词（拖拽选中文本后自动检测）");
+  modes.Add(L"② 划词 + 辅助按键（按住辅助按键划词触发）");
+  modes.Add(L"③ 双击划词 / 三击划段（双击选词或三击选段触发）");
+  m_selectionModeRadio = new wxRadioBox(m_selectionCard, wxID_ANY, L"划词触发模式", wxDefaultPosition, wxDefaultSize, modes, 1, wxRA_SPECIFY_COLS);
+  m_selectionModeRadio->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+  m_selectionModeRadio->SetForegroundColour(palette.textPrimary);
+  selSizer->Add(m_selectionModeRadio, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 16_dip);
+
+  // 3. 辅助按键选择
+  wxBoxSizer* modKeySizer = new wxBoxSizer(wxHORIZONTAL);
+  m_modifierKeyLabel = new wxStaticText(m_selectionCard, wxID_ANY, L"辅助触发按键：");
+  m_modifierKeyLabel->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+  m_modifierKeyLabel->SetForegroundColour(palette.textPrimary);
+
+  wxArrayString keys;
+  keys.Add(L"Ctrl 键 (推荐)");
+  keys.Add(L"Alt 键");
+  keys.Add(L"Shift 键");
+  m_modifierKeyChoice = new wxChoice(m_selectionCard, wxID_ANY, wxDefaultPosition, dip(140, 28), keys);
+  m_modifierKeyChoice->SetSelection(0);
+
+  modKeySizer->Add(m_modifierKeyLabel, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8_dip);
+  modKeySizer->Add(m_modifierKeyChoice, 0, wxALIGN_CENTER_VERTICAL);
+  selSizer->Add(modKeySizer, 0, wxLEFT | wxRIGHT | wxBOTTOM, 16_dip);
+
+  // 4. 保护剪贴板复选框
+  m_preserveClipCheck = new wxCheckBox(m_selectionCard, wxID_ANY, L"保护剪贴板（划词提取完成后自动恢复系统原剪贴板内容，避免污染复制历史）");
+  m_preserveClipCheck->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+  m_preserveClipCheck->SetForegroundColour(palette.textPrimary);
+  selSizer->Add(m_preserveClipCheck, 0, wxLEFT | wxRIGHT | wxBOTTOM, 16_dip);
+
+  // 5. 保存按钮与状态
+  wxBoxSizer* btnSizer = new wxBoxSizer(wxHORIZONTAL);
+  m_selectionSaveBtn = new CustomButton(m_selectionCard, wxID_ANY, L"保存划词设置", ButtonStyle::Primary);
+  m_selectionStatusText = new wxStaticText(m_selectionCard, wxID_ANY, "");
+  m_selectionStatusText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+  m_selectionStatusText->SetForegroundColour(palette.accentGreen);
+
+  btnSizer->Add(m_selectionSaveBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 12_dip);
+  btnSizer->Add(m_selectionStatusText, 0, wxALIGN_CENTER_VERTICAL);
+  selSizer->Add(btnSizer, 0, wxLEFT | wxRIGHT | wxBOTTOM, 16_dip);
+
+  m_selectionCard->SetSizer(selSizer);
+  mainSizer->Add(m_selectionCard, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 20_dip);
+
+  // Group 4: 日志与诊断设置卡片
+  m_logCard = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE);
+  m_logCard->SetBackgroundColour(palette.cardBg);
+  wxBoxSizer* logSizer = new wxBoxSizer(wxVERTICAL);
+
+  wxBoxSizer* logTitleSizer = new wxBoxSizer(wxHORIZONTAL);
+  wxBitmapBundle logBundle = IconManager::GetIconBundle(SVG::LOG, dip(18, 18), palette.accentPrimary);
+  wxStaticBitmap* logIcon = new wxStaticBitmap(m_logCard, wxID_ANY, logBundle);
+
+  m_logTitleText = new wxStaticText(m_logCard, wxID_ANY, L"运行日志与诊断设置");
+  m_logTitleText->SetFont(wxFont(12, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
+  m_logTitleText->SetForegroundColour(palette.textPrimary);
+
+  logTitleSizer->Add(logIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8_dip);
+  logTitleSizer->Add(m_logTitleText, 0, wxALIGN_CENTER_VERTICAL);
+  logSizer->Add(logTitleSizer, 0, wxALL, 16_dip);
+
+  // 1. 保存日志到文件开关
+  m_saveLogToFileCheck = new wxCheckBox(m_logCard, wxID_ANY, L"保存运行日志到本地文件（便于问题排查与诊断）");
+  m_saveLogToFileCheck->SetFont(wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
+  m_saveLogToFileCheck->SetForegroundColour(palette.textPrimary);
+  logSizer->Add(m_saveLogToFileCheck, 0, wxLEFT | wxRIGHT | wxBOTTOM, 12_dip);
+
+  // 2. 日志文件保存路径说明
+  wxString logPathStr = wxString::FromUTF8(ConfigManager::GetDefaultLogFilePath());
+  m_logPathInfoText = new wxStaticText(m_logCard, wxID_ANY, L"日志文件保存位置：" + logPathStr);
+  m_logPathInfoText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+  m_logPathInfoText->SetForegroundColour(palette.textSecondary);
+  logSizer->Add(m_logPathInfoText, 0, wxLEFT | wxRIGHT | wxBOTTOM, 16_dip);
+
+  // 3. 按钮行
+  wxBoxSizer* logBtnSizer = new wxBoxSizer(wxHORIZONTAL);
+  m_logSaveBtn = new CustomButton(m_logCard, wxID_ANY, L"保存日志设置", ButtonStyle::Primary);
+  m_openLogDirBtn = new CustomButton(m_logCard, wxID_ANY, L"打开日志目录", ButtonStyle::Secondary);
+  m_logStatusText = new wxStaticText(m_logCard, wxID_ANY, "");
+  m_logStatusText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+  m_logStatusText->SetForegroundColour(palette.accentGreen);
+
+  logBtnSizer->Add(m_logSaveBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8_dip);
+  logBtnSizer->Add(m_openLogDirBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 12_dip);
+  logBtnSizer->Add(m_logStatusText, 0, wxALIGN_CENTER_VERTICAL);
+  logSizer->Add(logBtnSizer, 0, wxLEFT | wxRIGHT | wxBOTTOM, 16_dip);
+
+  m_logCard->SetSizer(logSizer);
+  mainSizer->Add(m_logCard, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 20_dip);
+
+  // Group 5: 偏好设置卡片
   m_prefCard = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
                            wxBORDER_NONE);
   m_prefCard->SetBackgroundColour(palette.cardBg);
@@ -412,7 +528,7 @@ void SettingsView::InitUI() {
 
   wxBoxSizer *prefTitleSizer = new wxBoxSizer(wxHORIZONTAL);
   wxBitmapBundle moonBundle = IconManager::GetIconBundle(
-      SVG::MOON, wxSize(18, 18), palette.textPrimary);
+      SVG::MOON, dip(18, 18), palette.textPrimary);
   wxStaticBitmap *moonIcon =
       new wxStaticBitmap(m_prefCard, wxID_ANY, moonBundle);
 
@@ -421,12 +537,12 @@ void SettingsView::InitUI() {
                               wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
   m_prefTitle->SetForegroundColour(palette.textPrimary);
 
-  prefTitleSizer->Add(moonIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
+  prefTitleSizer->Add(moonIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8_dip);
   prefTitleSizer->Add(m_prefTitle, 0, wxALIGN_CENTER_VERTICAL);
-  prefSizer->Add(prefTitleSizer, 0, wxALL, 16);
+  prefSizer->Add(prefTitleSizer, 0, wxALL, 16_dip);
 
   m_prefCard->SetSizer(prefSizer);
-  mainSizer->Add(m_prefCard, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 20);
+  mainSizer->Add(m_prefCard, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 20_dip);
 
   SetSizer(mainSizer);
   Layout();
@@ -437,6 +553,8 @@ void SettingsView::InitUI() {
     SetModelPath(wxString::FromUTF8(cfg.modelPath));
     SetOcrModelPath(wxString::FromUTF8(cfg.ocrModelPath),
                     wxString::FromUTF8(cfg.ocrMmprojPath));
+    SetSelectionConfig(cfg);
+    SetLogConfig(cfg);
   }
 
   // 事件绑定 - 翻译模型 Group
@@ -457,6 +575,14 @@ void SettingsView::InitUI() {
                              this);
   m_ocrSaveBtn->Bind(wxEVT_BUTTON, &SettingsView::OnSaveOcrConfig, this);
   m_ocrTestBtn->Bind(wxEVT_BUTTON, &SettingsView::OnTestOcrModel, this);
+
+  // 事件绑定 - 划词翻译 Group
+  m_selectionModeRadio->Bind(wxEVT_RADIOBOX, &SettingsView::OnSelectionModeChanged, this);
+  m_selectionSaveBtn->Bind(wxEVT_BUTTON, &SettingsView::OnSaveSelectionConfig, this);
+
+  // 事件绑定 - 日志与诊断 Group
+  m_logSaveBtn->Bind(wxEVT_BUTTON, &SettingsView::OnSaveLogConfig, this);
+  m_openLogDirBtn->Bind(wxEVT_BUTTON, &SettingsView::OnOpenLogDirFromSettings, this);
 }
 
 void SettingsView::OnTabChanged(int tabIndex) {
@@ -465,21 +591,21 @@ void SettingsView::OnTabChanged(int tabIndex) {
 
   if (tabIndex == 0) {
     m_localTabBtn->SetButtonStyle(ButtonStyle::Primary);
-    m_localTabBtn->SetIcon(SVG::FOLDER, wxSize(16, 16), *wxWHITE);
+    m_localTabBtn->SetIcon(SVG::FOLDER, dip(16, 16), *wxWHITE);
 
     m_recommendTabBtn->SetButtonStyle(ButtonStyle::Secondary);
-    m_recommendTabBtn->SetIcon(SVG::MODEL_LOAD, wxSize(16, 16),
+    m_recommendTabBtn->SetIcon(SVG::MODEL_LOAD, dip(16, 16),
                                palette.textPrimary);
 
     m_localPanel->Show();
     m_recommendPanel->Hide();
   } else {
     m_recommendTabBtn->SetButtonStyle(ButtonStyle::Primary);
-    m_recommendTabBtn->SetIcon(SVG::MODEL_LOAD, wxSize(16, 16),
+    m_recommendTabBtn->SetIcon(SVG::MODEL_LOAD, dip(16, 16),
                                *wxWHITE);
 
     m_localTabBtn->SetButtonStyle(ButtonStyle::Secondary);
-    m_localTabBtn->SetIcon(SVG::FOLDER, wxSize(16, 16),
+    m_localTabBtn->SetIcon(SVG::FOLDER, dip(16, 16),
                            palette.textPrimary);
 
     m_localPanel->Hide();
@@ -737,6 +863,34 @@ void SettingsView::UpdateTheme() {
   if (m_prefTitle)
     m_prefTitle->SetForegroundColour(palette.textPrimary);
 
+  if (m_selectionCard)
+    m_selectionCard->SetBackgroundColour(palette.cardBg);
+  if (m_selectionTitleText)
+    m_selectionTitleText->SetForegroundColour(palette.textPrimary);
+  if (m_selectionEnableCheck)
+    m_selectionEnableCheck->SetForegroundColour(palette.textPrimary);
+  if (m_selectionModeRadio)
+    m_selectionModeRadio->SetForegroundColour(palette.textPrimary);
+  if (m_modifierKeyLabel)
+    m_modifierKeyLabel->SetForegroundColour(palette.textPrimary);
+  if (m_preserveClipCheck)
+    m_preserveClipCheck->SetForegroundColour(palette.textPrimary);
+  if (m_selectionSaveBtn)
+    m_selectionSaveBtn->Refresh();
+
+  if (m_logCard)
+    m_logCard->SetBackgroundColour(palette.cardBg);
+  if (m_logTitleText)
+    m_logTitleText->SetForegroundColour(palette.textPrimary);
+  if (m_saveLogToFileCheck)
+    m_saveLogToFileCheck->SetForegroundColour(palette.textPrimary);
+  if (m_logPathInfoText)
+    m_logPathInfoText->SetForegroundColour(palette.textSecondary);
+  if (m_logSaveBtn)
+    m_logSaveBtn->Refresh();
+  if (m_openLogDirBtn)
+    m_openLogDirBtn->Refresh();
+
   if (m_modelPathCtrl) {
     m_modelPathCtrl->SetBackgroundColour(palette.windowBg);
     m_modelPathCtrl->SetForegroundColour(palette.textPrimary);
@@ -762,6 +916,70 @@ void SettingsView::UpdateTheme() {
   OnTabChanged(m_activeTab);
   UpdateOcrStatus();
   Refresh();
+}
+
+void SettingsView::SetSelectionConfig(const AppConfig& cfg) {
+  if (m_selectionEnableCheck) {
+    m_selectionEnableCheck->SetValue(cfg.selectionTranslateEnabled);
+  }
+  if (m_selectionModeRadio) {
+    m_selectionModeRadio->SetSelection(cfg.selectionTriggerMode);
+  }
+  if (m_modifierKeyChoice) {
+    m_modifierKeyChoice->SetSelection(cfg.selectionModifierKey);
+    m_modifierKeyChoice->Enable(cfg.selectionTriggerMode == 1);
+  }
+  if (m_preserveClipCheck) {
+    m_preserveClipCheck->SetValue(cfg.preserveClipboard);
+  }
+}
+
+void SettingsView::OnSelectionModeChanged(wxCommandEvent& WXUNUSED(event)) {
+  if (m_selectionModeRadio && m_modifierKeyChoice) {
+    int sel = m_selectionModeRadio->GetSelection();
+    m_modifierKeyChoice->Enable(sel == 1);
+  }
+}
+
+void SettingsView::OnSaveSelectionConfig(wxCommandEvent& WXUNUSED(event)) {
+  if (!m_configManager) return;
+
+  bool enabled = m_selectionEnableCheck ? m_selectionEnableCheck->GetValue() : true;
+  int mode = m_selectionModeRadio ? m_selectionModeRadio->GetSelection() : 0;
+  int modifierKey = m_modifierKeyChoice ? m_modifierKeyChoice->GetSelection() : 0;
+  bool preserveClip = m_preserveClipCheck ? m_preserveClipCheck->GetValue() : true;
+
+  m_configManager->SaveSelectionConfig(enabled, mode, modifierKey, preserveClip);
+
+  if (m_selectionStatusText) {
+    m_selectionStatusText->SetLabel(L"划词配置已保存并即时生效！");
+  }
+}
+
+void SettingsView::SetLogConfig(const AppConfig& cfg) {
+  if (m_saveLogToFileCheck) {
+    m_saveLogToFileCheck->SetValue(cfg.saveLogToFile);
+  }
+}
+
+void SettingsView::OnSaveLogConfig(wxCommandEvent& WXUNUSED(event)) {
+  if (!m_configManager) return;
+
+  bool saveToFile = m_saveLogToFileCheck ? m_saveLogToFileCheck->GetValue() : false;
+  m_configManager->SaveLogConfig(saveToFile);
+
+  if (m_logStatusText) {
+    m_logStatusText->SetLabel(saveToFile ? L"已开启日志文件记录！" : L"已关闭日志文件记录！");
+  }
+}
+
+void SettingsView::OnOpenLogDirFromSettings(wxCommandEvent& WXUNUSED(event)) {
+  std::string logDir = ConfigManager::GetDefaultLogDir();
+  wxString dirPath = wxString::FromUTF8(logDir);
+  if (!wxDirExists(dirPath)) {
+    wxFileName::Mkdir(dirPath, 0777, wxPATH_MKDIR_FULL);
+  }
+  wxLaunchDefaultApplication(dirPath);
 }
 
 } // namespace LinguaAlpaca::UI

@@ -39,7 +39,7 @@ wxSize CustomButton::DoGetBestSize() const {
                        wxFONTWEIGHT_BOLD, false, "Microsoft YaHei");
   dc.SetFont(font);
   wxSize extent = dc.GetTextExtent(m_label);
-  return wxSize(extent.x + 36, 40);
+  return wxSize(extent.x + 36_dip, 40_dip);
 }
 
 void CustomButton::OnPaint(wxPaintEvent &WXUNUSED(event)) {
@@ -85,7 +85,7 @@ void CustomButton::OnPaint(wxPaintEvent &WXUNUSED(event)) {
   }
 
   // 圆角矩形绘制
-  double radius = 10.0;
+  double radius = 10.0_dip;
   gc->SetBrush(gc->CreateBrush(wxBrush(bgColour)));
   if (borderColour.IsOk()) {
     gc->SetPen(gc->CreatePen(wxPen(borderColour, 1)));
@@ -108,18 +108,19 @@ void CustomButton::OnPaint(wxPaintEvent &WXUNUSED(event)) {
   double iconW = 0, iconH = 0;
   wxBitmap bmp;
   if (m_iconBundle.IsOk()) {
-    bmp = m_iconBundle.GetBitmap(wxSize(16, 16));
+    wxSize reqIconSize = dip(16, 16);
+    bmp = m_iconBundle.GetBitmap(reqIconSize);
     if (bmp.IsOk()) {
       iconW = bmp.GetWidth();
       iconH = bmp.GetHeight();
     }
   }
 
-  double spacing = (iconW > 0 && tw > 0) ? 6.0 : 0.0;
+  double spacing = (iconW > 0 && tw > 0) ? 6.0_dip : 0.0;
   double totalW = iconW + spacing + tw;
   double startX = (size.x - totalW) / 2.0;
-  if (startX < 6.0)
-    startX = 6.0;
+  if (startX < 6.0_dip)
+    startX = 6.0_dip;
 
   if (bmp.IsOk()) {
     double iconY = (size.y - iconH) / 2.0;

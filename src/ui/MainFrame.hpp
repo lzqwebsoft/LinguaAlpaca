@@ -5,6 +5,7 @@
 #include "widgets/SidebarNav.hpp"
 #include "TextView.hpp"
 #include "OcrView.hpp"
+#include "LogView.hpp"
 #include "SettingsView.hpp"
 #include "PlaceholderView.hpp"
 
@@ -13,6 +14,7 @@ namespace LinguaAlpaca::UI {
 class MainFrame : public wxFrame {
 public:
     explicit MainFrame(std::shared_ptr<ModelManager> modelManager);
+    ~MainFrame() override = default;
 
     void NavigateToSettings();
 
@@ -20,6 +22,7 @@ private:
     void InitUI();
     void OnThemeToggle(wxCommandEvent& event);
     void OnNavChanged(wxCommandEvent& event);
+    void OnClose(wxCloseEvent& event);
 
     // 拖动与窗口控制
     void OnHeaderLeftDown(wxMouseEvent& event);
@@ -38,6 +41,7 @@ private:
     TextView* m_textView{nullptr};
     OcrView* m_ocrView{nullptr};
     PlaceholderView* m_historyView{nullptr};
+    LogView* m_logView{nullptr};
     SettingsView* m_settingsView{nullptr};
 
     wxStaticText* m_appNameText{nullptr};

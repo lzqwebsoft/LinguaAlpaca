@@ -58,8 +58,20 @@ add_subdirectory(third_party/llama.cpp)
 # 模块化源码组织
 set(CORE_SOURCES
     src/core/Types.hpp
+    src/core/Logger.hpp
+    src/core/Logger.cpp
     src/core/Config.hpp
     src/core/Config.cpp
+    src/core/ClipboardHelper.hpp
+    src/core/ClipboardHelper.cpp
+    src/core/WinUIAutomationHelper.hpp
+    src/core/WinUIAutomationHelper.cpp
+    src/core/WinMediaOcrHelper.hpp
+    src/core/WinMediaOcrHelper.cpp
+    src/core/ScreenTextExtractor.hpp
+    src/core/ScreenTextExtractor.cpp
+    src/core/SelectionService.hpp
+    src/core/SelectionService.cpp
     src/core/LlamaServer.hpp
     src/core/LlamaServer.cpp
     src/core/LlamaClient.hpp
@@ -95,10 +107,16 @@ set(UI_SOURCES
     src/ui/widgets/WelcomeModelDialog.cpp
     src/ui/widgets/ImagePreviewDialog.hpp
     src/ui/widgets/ImagePreviewDialog.cpp
+    src/ui/widgets/FloatingIconFrame.hpp
+    src/ui/widgets/FloatingIconFrame.cpp
+    src/ui/widgets/TranslationBubbleFrame.hpp
+    src/ui/widgets/TranslationBubbleFrame.cpp
     src/ui/TextView.hpp
     src/ui/TextView.cpp
     src/ui/OcrView.hpp
     src/ui/OcrView.cpp
+    src/ui/LogView.hpp
+    src/ui/LogView.cpp
     src/ui/SettingsView.hpp
     src/ui/SettingsView.cpp
     src/ui/PlaceholderView.hpp
@@ -134,6 +152,10 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     llama-cli-impl
     mtmd
 )
+
+if(WIN32)
+    target_link_libraries(${PROJECT_NAME} PRIVATE ole32 oleaut32 windowsapp)
+endif()
 
 # 自动将第三方 DLL 复制到 output 目录
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD

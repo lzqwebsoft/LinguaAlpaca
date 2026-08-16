@@ -220,6 +220,32 @@ inline constexpr const char *REPLACE = R"(
 </svg>
 )";
 
+// 27. 终端/日志 (Log / Terminal)
+inline constexpr const char *LOG = R"(
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <polyline points="4 17 10 11 4 5"/>
+  <line x1="12" y1="19" x2="20" y2="19"/>
+</svg>
+)";
+
+// 28. 图钉/固定 (Pin / Thumbtack)
+inline constexpr const char *PIN = R"(
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <line x1="12" y1="17" x2="12" y2="22"/>
+  <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/>
+</svg>
+)";
+
+// 29. 取消固定 (Pin Off)
+inline constexpr const char *PIN_OFF = R"(
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <line x1="2" y1="2" x2="22" y2="22"/>
+  <line x1="12" y1="17" x2="12" y2="22"/>
+  <path d="M9 9v1.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V17h12"/>
+  <path d="M15 9.34V6h1a2 2 0 0 0 0-4H7.89"/>
+</svg>
+)";
+
 } // namespace SVG
 
 } // namespace LinguaAlpaca::UI

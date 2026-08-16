@@ -5,7 +5,8 @@
 namespace LinguaAlpaca::UI {
 
 WelcomeModelDialog::WelcomeModelDialog(wxWindow* parent)
-    : wxDialog(parent, wxID_ANY, L"欢迎使用 LinguaAlpaca", wxDefaultPosition, wxSize(560, 480), wxDEFAULT_DIALOG_STYLE) {
+    : wxDialog(parent, wxID_ANY, L"欢迎使用 LinguaAlpaca", wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE) {
+    SetClientSize(dip(560, 480));
     InitUI();
     CentreOnParent();
 }
@@ -16,14 +17,14 @@ void WelcomeModelDialog::InitUI() {
 
     wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
 
-    mainSizer->AddSpacer(20);
+    mainSizer->AddSpacer(20_dip);
 
     // 1. Alpaca 吉祥物图标 🦙
     wxStaticText* mascotText = new wxStaticText(this, wxID_ANY, L"🦙");
     mascotText->SetFont(wxFont(42, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Segoe UI Emoji"));
     mainSizer->Add(mascotText, 0, wxALIGN_CENTER);
 
-    mainSizer->AddSpacer(10);
+    mainSizer->AddSpacer(10_dip);
 
     // 2. 主标题 `欢迎使用 LinguaAlpaca`
     wxStaticText* titleText = new wxStaticText(this, wxID_ANY, L"欢迎使用 LinguaAlpaca");
@@ -31,7 +32,7 @@ void WelcomeModelDialog::InitUI() {
     titleText->SetForegroundColour(palette.textPrimary);
     mainSizer->Add(titleText, 0, wxALIGN_CENTER);
 
-    mainSizer->AddSpacer(10);
+    mainSizer->AddSpacer(10_dip);
 
     // 3. 副标题说明
     wxStaticText* subtitleText = new wxStaticText(this, wxID_ANY, L"灵驼译 是一款基于 llama.cpp 的离线翻译工具，翻译质量高、保护隐私。");
@@ -39,7 +40,7 @@ void WelcomeModelDialog::InitUI() {
     subtitleText->SetForegroundColour(palette.textSecondary);
     mainSizer->Add(subtitleText, 0, wxALIGN_CENTER);
 
-    mainSizer->AddSpacer(20);
+    mainSizer->AddSpacer(20_dip);
 
     // 4. 蓝框提示 Banner
     wxPanel* bannerPanel = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE);
@@ -55,24 +56,24 @@ void WelcomeModelDialog::InitUI() {
     info2->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
     info2->SetForegroundColour(palette.bannerText);
 
-    bannerSizer->Add(info1, 0, wxALL, 12);
-    bannerSizer->Add(info2, 0, wxLEFT | wxRIGHT | wxBOTTOM, 12);
+    bannerSizer->Add(info1, 0, wxALL, 12_dip);
+    bannerSizer->Add(info2, 0, wxLEFT | wxRIGHT | wxBOTTOM, 12_dip);
     bannerPanel->SetSizer(bannerSizer);
 
-    mainSizer->Add(bannerPanel, 0, wxEXPAND | wxLEFT | wxRIGHT, 24);
+    mainSizer->Add(bannerPanel, 0, wxEXPAND | wxLEFT | wxRIGHT, 24_dip);
 
-    mainSizer->AddSpacer(24);
+    mainSizer->AddSpacer(24_dip);
 
     // 5. 按钮操作栏 (`⚙ 前往设置配置模型` & `稍后再说`)
     wxBoxSizer* btnSizer = new wxBoxSizer(wxHORIZONTAL);
-    CustomButton* goToSettingsBtn = new CustomButton(this, wxID_ANY, L"⚙  前往设置配置模型", ButtonStyle::Primary, wxDefaultPosition, wxSize(190, 42));
-    CustomButton* laterBtn = new CustomButton(this, wxID_ANY, L"稍后再说", ButtonStyle::Secondary, wxDefaultPosition, wxSize(120, 42));
+    CustomButton* goToSettingsBtn = new CustomButton(this, wxID_ANY, L"⚙  前往设置配置模型", ButtonStyle::Primary, wxDefaultPosition, dip(190, 42));
+    CustomButton* laterBtn = new CustomButton(this, wxID_ANY, L"稍后再说", ButtonStyle::Secondary, wxDefaultPosition, dip(120, 42));
 
-    btnSizer->Add(goToSettingsBtn, 0, wxRIGHT, 12);
+    btnSizer->Add(goToSettingsBtn, 0, wxRIGHT, 12_dip);
     btnSizer->Add(laterBtn, 0);
     mainSizer->Add(btnSizer, 0, wxALIGN_CENTER);
 
-    mainSizer->AddSpacer(18);
+    mainSizer->AddSpacer(18_dip);
 
     // 6. 底部 Footer 说明
     wxStaticText* footerText = new wxStaticText(this, wxID_ANY, L"配置后即可开始翻译，支持中、英、日、韩等多语言");

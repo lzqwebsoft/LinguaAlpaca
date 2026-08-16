@@ -35,7 +35,7 @@ void TextView::InitUI() {
   wxBoxSizer *headerSizer = new wxBoxSizer(wxHORIZONTAL);
 
   wxBitmapBundle titleBundle = IconManager::GetIconBundle(
-      SVG::TEXT, wxSize(22, 22), palette.accentPrimary);
+      SVG::TEXT, dip(22, 22), palette.accentPrimary);
   wxStaticBitmap *titleIcon = new wxStaticBitmap(this, wxID_ANY, titleBundle);
 
   m_titleText = new wxStaticText(this, wxID_ANY, L"文本翻译");
@@ -43,7 +43,7 @@ void TextView::InitUI() {
                               wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
   m_titleText->SetForegroundColour(palette.textPrimary);
 
-  m_statusBadge = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxSize(-1, 28),
+  m_statusBadge = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxSize(-1, 28_dip),
                               wxBORDER_NONE);
   m_statusBadge->SetBackgroundColour(palette.badgeBg);
   wxBoxSizer *badgeSizer = new wxBoxSizer(wxHORIZONTAL);
@@ -51,25 +51,25 @@ void TextView::InitUI() {
   m_badgeText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL,
                               wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
   m_badgeText->SetForegroundColour(palette.badgeText);
-  badgeSizer->Add(m_badgeText, 0, wxALIGN_CENTER | wxLEFT | wxRIGHT, 10);
+  badgeSizer->Add(m_badgeText, 0, wxALIGN_CENTER | wxLEFT | wxRIGHT, 10_dip);
   m_statusBadge->SetSizer(badgeSizer);
 
-  headerSizer->Add(titleIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
+  headerSizer->Add(titleIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10_dip);
   headerSizer->Add(m_titleText, 0, wxALIGN_CENTER_VERTICAL);
   headerSizer->AddStretchSpacer(1);
   headerSizer->Add(m_statusBadge, 0, wxALIGN_CENTER_VERTICAL);
 
-  mainSizer->Add(headerSizer, 0, wxEXPAND | wxALL, 20);
+  mainSizer->Add(headerSizer, 0, wxEXPAND | wxALL, 20_dip);
 
   // 2. 划词状态提示 Banner (SVG Info Icon)
-  m_bannerPanel = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxSize(-1, 44),
+  m_bannerPanel = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxSize(-1, 44_dip),
                               wxBORDER_NONE);
   m_bannerPanel->SetBackgroundColour(palette.bannerBg);
 
   wxBoxSizer *bannerSizer = new wxBoxSizer(wxHORIZONTAL);
 
   wxBitmapBundle infoBundle = IconManager::GetIconBundle(
-      SVG::INFO, wxSize(16, 16), palette.textSecondary);
+      SVG::INFO, dip(16, 16), palette.textSecondary);
   wxStaticBitmap *infoIcon =
       new wxStaticBitmap(m_bannerPanel, wxID_ANY, infoBundle);
 
@@ -80,7 +80,7 @@ void TextView::InitUI() {
   m_bannerText->SetForegroundColour(palette.bannerText);
 
   m_selectedTagPanel = new wxPanel(m_bannerPanel, wxID_ANY, wxDefaultPosition,
-                                   wxSize(-1, 24), wxBORDER_NONE);
+                                   wxSize(-1, 24_dip), wxBORDER_NONE);
   m_selectedTagPanel->SetBackgroundColour(palette.bannerBg);
   wxBoxSizer *tagSizer = new wxBoxSizer(wxHORIZONTAL);
   m_tagText =
@@ -93,29 +93,29 @@ void TextView::InitUI() {
 
   m_instantTransBtn = new CustomButton(
       m_bannerPanel, wxID_ANY, L"立即翻译", ButtonStyle::Primary,
-      wxDefaultPosition, wxSize(96, 32));
+      wxDefaultPosition, dip(96, 32));
 
-  bannerSizer->Add(infoIcon, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 16);
-  bannerSizer->Add(m_bannerText, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 6);
+  bannerSizer->Add(infoIcon, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 16_dip);
+  bannerSizer->Add(m_bannerText, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 6_dip);
   bannerSizer->Add(m_selectedTagPanel, 0, wxALIGN_CENTER_VERTICAL);
   bannerSizer->AddStretchSpacer(1);
-  bannerSizer->Add(m_instantTransBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 12);
+  bannerSizer->Add(m_instantTransBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 12_dip);
 
   m_bannerPanel->SetSizer(bannerSizer);
-  mainSizer->Add(m_bannerPanel, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 20);
+  mainSizer->Add(m_bannerPanel, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 20_dip);
 
   // 3. 语言选择条
-  m_langPanel = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxSize(-1, 52),
+  m_langPanel = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxSize(-1, 52_dip),
                             wxBORDER_NONE);
   m_langPanel->SetBackgroundColour(palette.cardBg);
 
   wxBoxSizer *langSizer = new wxBoxSizer(wxHORIZONTAL);
   m_langSelector = new LanguageBar(m_langPanel);
   langSizer->Add(m_langSelector, 1, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT,
-                 12);
+                 12_dip);
   m_langPanel->SetSizer(langSizer);
 
-  mainSizer->Add(m_langPanel, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 20);
+  mainSizer->Add(m_langPanel, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 20_dip);
 
   // 4. 原文与译文卡片区
   wxBoxSizer *cardsSizer = new wxBoxSizer(wxHORIZONTAL);
@@ -151,49 +151,49 @@ void TextView::InitUI() {
   m_targetCard->GetTextCtrl()->SetValue(L"你好，欢迎使用灵驼译！");
   m_targetCard->SetCharacterCount(11);
 
-  cardsSizer->Add(m_sourceCard, 1, wxEXPAND | wxRIGHT, 12);
-  cardsSizer->Add(m_targetCard, 1, wxEXPAND | wxLEFT, 12);
+  cardsSizer->Add(m_sourceCard, 1, wxEXPAND | wxRIGHT, 12_dip);
+  cardsSizer->Add(m_targetCard, 1, wxEXPAND | wxLEFT, 12_dip);
 
-  mainSizer->Add(cardsSizer, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 20);
+  mainSizer->Add(cardsSizer, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 20_dip);
 
   // 5. 底部操作按钮栏
   wxBoxSizer *bottomSizer = new wxBoxSizer(wxHORIZONTAL);
 
   m_translateBtn = new CustomButton(
       this, wxID_ANY, L"翻译", ButtonStyle::Primary,
-      wxDefaultPosition, wxSize(110, 42));
-  m_translateBtn->SetIcon(SVG::TRANSLATE, wxSize(16, 16), *wxWHITE);
+      wxDefaultPosition, dip(110, 42));
+  m_translateBtn->SetIcon(SVG::TRANSLATE, dip(16, 16), *wxWHITE);
 
   m_stopBtn = new CustomButton(this, wxID_ANY, L"中断翻译",
                                ButtonStyle::Danger,
-                               wxDefaultPosition, wxSize(130, 42));
-  m_stopBtn->SetIcon(SVG::STOP, wxSize(16, 16), *wxWHITE);
+                               wxDefaultPosition, dip(130, 42));
+  m_stopBtn->SetIcon(SVG::STOP, dip(16, 16), *wxWHITE);
 
   m_clearBtn = new CustomButton(this, wxID_ANY, L"清空",
                                 ButtonStyle::Secondary,
-                                wxDefaultPosition, wxSize(100, 42));
-  m_clearBtn->SetIcon(SVG::CLEAR, wxSize(16, 16));
+                                wxDefaultPosition, dip(100, 42));
+  m_clearBtn->SetIcon(SVG::CLEAR, dip(16, 16));
 
   m_swapBtn = new CustomButton(this, wxID_ANY, L"交换",
                                ButtonStyle::Secondary,
-                               wxDefaultPosition, wxSize(100, 42));
-  m_swapBtn->SetIcon(SVG::SWAP, wxSize(16, 16));
+                               wxDefaultPosition, dip(100, 42));
+  m_swapBtn->SetIcon(SVG::SWAP, dip(16, 16));
 
   m_copyBtn = new CustomButton(this, wxID_ANY, L"复制译文",
                                ButtonStyle::Green,
-                               wxDefaultPosition, wxSize(120, 42));
-  m_copyBtn->SetIcon(SVG::COPY, wxSize(16, 16), *wxWHITE);
+                               wxDefaultPosition, dip(120, 42));
+  m_copyBtn->SetIcon(SVG::COPY, dip(16, 16), *wxWHITE);
 
   m_stopBtn->Hide();
 
-  bottomSizer->Add(m_translateBtn, 0, wxRIGHT, 12);
-  bottomSizer->Add(m_stopBtn, 0, wxRIGHT, 12);
+  bottomSizer->Add(m_translateBtn, 0, wxRIGHT, 12_dip);
+  bottomSizer->Add(m_stopBtn, 0, wxRIGHT, 12_dip);
   bottomSizer->Add(m_clearBtn, 0);
   bottomSizer->AddStretchSpacer(1);
-  bottomSizer->Add(m_swapBtn, 0, wxRIGHT, 12);
+  bottomSizer->Add(m_swapBtn, 0, wxRIGHT, 12_dip);
   bottomSizer->Add(m_copyBtn, 0);
 
-  mainSizer->Add(bottomSizer, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 20);
+  mainSizer->Add(bottomSizer, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 20_dip);
 
   SetSizer(mainSizer);
   Layout();

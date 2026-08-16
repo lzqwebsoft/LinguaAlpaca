@@ -50,16 +50,16 @@ void LanguageBar::InitUI() {
     m_targetChoice->SetForegroundColour(palette.textPrimary);
 
     // 交换按钮 (SVG Swap)
-    wxBitmapBundle swapBundle = IconManager::GetIconBundle(SVG::SWAP, wxSize(16, 16), palette.textPrimary);
-    m_swapBtn = new wxBitmapButton(this, wxID_ANY, swapBundle, wxDefaultPosition, wxSize(36, 30), wxBORDER_NONE);
+    wxBitmapBundle swapBundle = IconManager::GetIconBundle(SVG::SWAP, dip(16, 16), palette.textPrimary);
+    m_swapBtn = new wxBitmapButton(this, wxID_ANY, swapBundle, wxDefaultPosition, dip(36, 30), wxBORDER_NONE);
     m_swapBtn->SetBackgroundColour(palette.windowBg);
     m_swapBtn->SetToolTip(L"互换源语言与目标语言");
 
-    mainSizer->Add(m_srcLabel, 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, 10);
-    mainSizer->Add(m_sourceChoice, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, 16);
-    mainSizer->Add(m_swapBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 16);
-    mainSizer->Add(m_targetLabel, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
-    mainSizer->Add(m_targetChoice, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
+    mainSizer->Add(m_srcLabel, 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, 10_dip);
+    mainSizer->Add(m_sourceChoice, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, 16_dip);
+    mainSizer->Add(m_swapBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 16_dip);
+    mainSizer->Add(m_targetLabel, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10_dip);
+    mainSizer->Add(m_targetChoice, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10_dip);
 
     SetSizer(mainSizer);
 
@@ -89,7 +89,7 @@ void LanguageBar::UpdateTheme() {
     }
 
     if (m_swapBtn) {
-        wxBitmapBundle swapBundle = IconManager::GetIconBundle(SVG::SWAP, wxSize(16, 16), palette.textPrimary);
+        wxBitmapBundle swapBundle = IconManager::GetIconBundle(SVG::SWAP, dip(16, 16), palette.textPrimary);
         m_swapBtn->SetBitmap(swapBundle);
         m_swapBtn->SetBackgroundColour(palette.windowBg);
         m_swapBtn->Refresh();

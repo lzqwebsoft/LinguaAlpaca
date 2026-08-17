@@ -119,7 +119,7 @@ namespace LinguaAlpaca {
         m_config.sourceLang = fileConfig.Read("/Language/SourceLang", "en").ToUTF8().data();
         m_config.targetLang = fileConfig.Read("/Language/TargetLang", "zh").ToUTF8().data();
         m_config.gpuLayers = fileConfig.ReadLong("/Model/GpuLayers", 99);       // 99 表示全部是GPU
-        m_config.ocrGpuLayers = fileConfig.ReadLong("/OCRModel/GpuLayers", 99); // 这里-1改为自动
+        m_config.ocrGpuLayers = fileConfig.ReadLong("/OCRModel/GpuLayers", -1); // 这里-1改为自动
 
         // 划词翻译配置
         m_config.selectionTranslateEnabled = fileConfig.ReadBool("/Selection/Enabled", true);

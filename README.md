@@ -1,6 +1,6 @@
-# LinguaAlpaca · 译驼灵
+# LinguaAlpaca · 译灵驼
 
-**LinguaAlpaca (译驼灵)** 是一款使用 C++17 与 wxWidgets 打造的现代化、高颜值的跨平台桌面离线 AI 翻译与多模态 OCR 工具。项目基于 **llama.cpp** 内嵌服务（默认推荐腾讯 **Hy-MT2-1.8B-GGUF** 中英日韩高性能离线翻译模型 与 **PaddleOCR-VL-1.6** 视觉大模型），采用清晰扁平、高内聚低耦合的模块化设计，具备单一中枢调度、按需异步加载、实时健康探针及完整的自动化单元测试支持。
+**LinguaAlpaca (译灵驼)** 是一款使用 C++17 与 wxWidgets 打造的现代化、高颜值的跨平台桌面离线 AI 翻译与多模态 OCR 工具。项目基于 **llama.cpp** 内嵌服务（默认推荐腾讯 **Hy-MT2-1.8B-GGUF** 中英日韩高性能离线翻译模型 与 **PaddleOCR-VL-1.6** 视觉大模型），采用清晰扁平、高内聚低耦合的模块化设计，具备单一中枢调度、按需异步加载、实时健康探针及完整的自动化单元测试支持。
 
 ---
 
@@ -97,6 +97,7 @@ src/
 ## 🛠 快速开始与构建 (Quick Start)
 
 ### 1. 初始化 Git 子模块
+
 拉取项目及所有嵌套依赖（包含 `wxWidgets` 及其第三方依赖库）：
 
 ```bash
@@ -104,6 +105,7 @@ git submodule update --init --recursive --force
 ```
 
 ### 2. CMake 配置与项目生成 (Windows / Visual Studio)
+
 使用 CMake 生成 Visual Studio 工程：
 
 ```powershell
@@ -121,6 +123,7 @@ cmake --build build --config Debug --target LinguaAlpaca
 ```
 
 ### 4. 运行单元测试
+
 项目集成了 Catch2 单元测试套件，可独立编译运行：
 
 ```powershell

@@ -132,15 +132,20 @@ bool LlamaServer::Start(const ServerConfig& config) {
 
 void LlamaServer::Stop() {
     if (m_isStopping.exchange(true)) {
+        if (m_thread.joinable() && std::this_thread::get_id() != m_thread.get_id()) {
+            m_thread.join();
+        }
         return;
     }
 
-    if (m_isAlive.load(std::memory_order_acquire)) {
-        LOG_INFO("LlamaServer", "Terminating server thread...");
+    LOG_INFO("LlamaServer", "Terminating server thread...");
+
+    while (m_isAlive.load(std::memory_order_acquire)) {
         llama_server_terminate();
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
 
-    if (m_thread.joinable()) {
+    if (m_thread.joinable() && std::this_thread::get_id() != m_thread.get_id()) {
         m_thread.join();
     }
 
@@ -202,7 +207,7 @@ bool LlamaServer::WaitUntilReady(int timeoutSec, const std::function<bool()>& sh
         if (shouldAbort && shouldAbort()) {
             return false;
         }
-        if (!IsAlive()) {
+        if (!IsAlive() || m_isStopping.load(std::memory_order_acquire)) {
             return false;
         }
 
@@ -220,7 +225,8 @@ bool LlamaServer::WaitUntilReady(int timeoutSec, const std::function<bool()>& sh
 
 bool LlamaServer::EnsureModelRunning(
     const ServerConfig& config,
-    const std::function<void(const std::string& status)>& onStatus) {
+    const std::function<void(const std::string& status)>& onStatus,
+    const std::function<bool()>& shouldAbort) {
     
     bool sameConfig = false;
     {
@@ -236,22 +242,32 @@ bool LlamaServer::EnsureModelRunning(
         }
     }
 
+    if (shouldAbort && shouldAbort()) {
+        return false;
+    }
+
     if (onStatus) {
         onStatus("模型加载中...");
     }
 
     Stop();
 
+    if (shouldAbort && shouldAbort()) {
+        return false;
+    }
+
     if (!Start(config)) {
         if (onStatus) onStatus("服务启动失败");
         return false;
     }
 
-    bool ready = WaitUntilReady(45, nullptr);
+    bool ready = WaitUntilReady(45, shouldAbort);
     if (ready) {
         if (onStatus) onStatus("就绪");
     } else {
-        if (onStatus) onStatus("模型加载超时或失败");
+        if (onStatus && (!shouldAbort || !shouldAbort())) {
+            onStatus("模型加载超时或失败");
+        }
     }
     return ready;
 }

@@ -8,6 +8,7 @@
 #include "core/ModelManager.hpp"
 #include "widgets/CustomButton.hpp"
 #include "widgets/ImagePreviewDialog.hpp"
+#include "widgets/TextCtrl.hpp"
 
 namespace LinguaAlpaca::UI {
 
@@ -78,7 +79,7 @@ private:
     // Right Column Controls
     wxPanel* m_resultCard{nullptr};
     wxStaticText* m_resultTitle{nullptr};
-    wxTextCtrl* m_resultTextCtrl{nullptr};
+    TextCtrl* m_resultTextCtrl{nullptr};
     wxStaticText* m_charCountText{nullptr};
     CustomButton* m_copyBtn{nullptr};
     CustomButton* m_clearBtn{nullptr};

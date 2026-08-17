@@ -5,7 +5,7 @@
 #include "core/Logger.hpp"
 #include "core/Config.hpp"
 #include "widgets/CustomButton.hpp"
-#include "widgets/CardPanel.hpp"
+#include "widgets/TextCtrl.hpp"
 
 namespace LinguaAlpaca::UI {
 
@@ -44,7 +44,7 @@ private:
     CustomButton* m_openDirBtn{nullptr};
 
     wxPanel* m_cardContainer{nullptr};
-    wxTextCtrl* m_logTextCtrl{nullptr};
+    TextCtrl* m_logTextCtrl{nullptr};
 };
 
 } // namespace LinguaAlpaca::UI

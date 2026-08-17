@@ -24,6 +24,7 @@ namespace LinguaAlpaca {
 	}
 
 	ModelManager::~ModelManager() {
+		++m_currentSessionId;
 		if (m_server) {
 			m_server->Stop();
 		}
@@ -84,12 +85,17 @@ namespace LinguaAlpaca {
 			}
 		}
 
+		uint64_t sessionId = ++m_currentSessionId;
 		int targetNgl = (type == TargetModelType::Ocr) ? appConfig.ocrGpuLayers : appConfig.gpuLayers;
 
 		m_isSwitching.store(true, std::memory_order_release);
 
-		std::thread([this, type, targetModelPath, targetMmprojPath, targetNgl, onProgress, onComplete]() {
+		std::thread([this, sessionId, type, targetModelPath, targetMmprojPath, targetNgl, onProgress, onComplete]() {
 			std::lock_guard<std::mutex> lock(m_switchMutex);
+
+			if (sessionId != m_currentSessionId.load(std::memory_order_acquire)) {
+				return;
+			}
 
 			if (onProgress) {
 				onProgress("正在切换并装载模型...");
@@ -100,7 +106,15 @@ namespace LinguaAlpaca {
 			serverConfig.mmprojPath = targetMmprojPath;
 			serverConfig.ngl = targetNgl;
 
-			bool ok = m_server->EnsureModelRunning(serverConfig, onProgress);
+			auto shouldAbort = [this, sessionId]() {
+				return sessionId != m_currentSessionId.load(std::memory_order_acquire);
+			};
+
+			bool ok = m_server->EnsureModelRunning(serverConfig, onProgress, shouldAbort);
+
+			if (sessionId != m_currentSessionId.load(std::memory_order_acquire)) {
+				return;
+			}
 
 			ServerStatusInfo finalInfo;
 			if (ok) {
@@ -123,7 +137,22 @@ namespace LinguaAlpaca {
 			if (onComplete) {
 				onComplete(ok, finalInfo);
 			}
-			}).detach();
+		}).detach();
+	}
+
+	void ModelManager::StopModelAsync(std::function<void()> onComplete) {
+		++m_currentSessionId;
+		std::thread([this, onComplete]() {
+			std::lock_guard<std::mutex> lock(m_switchMutex);
+			if (m_server && m_server->IsAlive()) {
+				m_server->Stop();
+			}
+			m_activeModelType.store(TargetModelType::None, std::memory_order_release);
+			m_isSwitching.store(false, std::memory_order_release);
+			if (onComplete) {
+				onComplete();
+			}
+		}).detach();
 	}
 
 	ServerStatusInfo ModelManager::GetHealthStatus(TargetModelType targetType) const {

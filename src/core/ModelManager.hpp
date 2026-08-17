@@ -30,6 +30,8 @@ public:
         std::function<void(bool success, const ServerStatusInfo& info)> onComplete = nullptr
     );
 
+    void StopModelAsync(std::function<void()> onComplete = nullptr);
+
     // 同步探针查询模型健康状态
     ServerStatusInfo GetHealthStatus(TargetModelType targetType) const;
 
@@ -73,6 +75,7 @@ private:
 
     std::atomic<TargetModelType> m_activeModelType{TargetModelType::None};
     std::atomic<bool> m_isSwitching{false};
+    std::atomic<uint64_t> m_currentSessionId{0};
     mutable std::mutex m_switchMutex;
 
     mutable std::mutex m_historyMutex;

@@ -111,6 +111,12 @@ set(UI_SOURCES
     src/ui/widgets/FloatingIconFrame.cpp
     src/ui/widgets/TranslationBubbleFrame.hpp
     src/ui/widgets/TranslationBubbleFrame.cpp
+    src/ui/widgets/SplitterWindow.hpp
+    src/ui/widgets/SplitterWindow.cpp
+    src/ui/widgets/TextCtrl.hpp
+    src/ui/widgets/TextCtrl.cpp
+    src/ui/widgets/ScrollBar.hpp
+    src/ui/widgets/ScrollBar.cpp
     src/ui/TextView.hpp
     src/ui/TextView.cpp
     src/ui/OcrView.hpp

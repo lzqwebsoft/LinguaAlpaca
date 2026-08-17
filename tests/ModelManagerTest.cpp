@@ -34,4 +34,19 @@ TEST_CASE("ModelManager - Basic Stream Translation Test", "[core][model_manager]
         );
         REQUIRE(done == true);
     }
+
+    SECTION("StopModelAsync resets active model type") {
+        bool stopped = false;
+        manager.StopModelAsync([&stopped]() {
+            stopped = true;
+        });
+        
+        int waitCount = 0;
+        while (!stopped && waitCount < 20) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            waitCount++;
+        }
+        REQUIRE(stopped == true);
+        REQUIRE(manager.GetActiveModelType() == TargetModelType::None);
+    }
 }

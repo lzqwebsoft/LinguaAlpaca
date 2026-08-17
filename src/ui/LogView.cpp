@@ -2,7 +2,9 @@
 #include "theme/Theme.hpp"
 #include "theme/IconManager.hpp"
 #include <wx/clipbrd.h>
+#include <wx/dcbuffer.h>
 #include <wx/filename.h>
+#include <wx/graphics.h>
 #include <wx/stdpaths.h>
 #include <wx/utils.h>
 
@@ -96,15 +98,35 @@ void LogView::InitUI() {
     m_headerPanel->SetSizer(headerSizer);
     mainSizer->Add(m_headerPanel, 0, wxEXPAND | wxALL, 16_dip);
 
-    // 2. 日志内容卡片 Panel
+    // 2. 日志内容卡片 Panel (参考 CardPanel 绘制圆角与边框)
     m_cardContainer = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE);
-    m_cardContainer->SetBackgroundColour(palette.cardBg);
+    m_cardContainer->SetBackgroundStyle(wxBG_STYLE_PAINT);
+
+    m_cardContainer->Bind(wxEVT_PAINT, [this](wxPaintEvent&) {
+        wxAutoBufferedPaintDC dc(m_cardContainer);
+        wxSize size = m_cardContainer->GetClientSize();
+        if (size.x <= 0 || size.y <= 0)
+            return;
+
+        auto palette = ThemeColors::GetCurrentPalette();
+        dc.SetBackground(wxBrush(palette.windowBg));
+        dc.Clear();
+
+        std::unique_ptr<wxGraphicsContext> gc(wxGraphicsContext::Create(dc));
+        if (!gc)
+            return;
+
+        // 绘制圆角卡片背景与边框
+        double radius = 12.0_dip;
+        gc->SetBrush(gc->CreateBrush(wxBrush(palette.cardBg)));
+        gc->SetPen(gc->CreatePen(wxPen(palette.cardBorder, 1.0)));
+        gc->DrawRoundedRectangle(1, 1, size.x - 2, size.y - 2, radius);
+    });
 
     wxBoxSizer* cardSizer = new wxBoxSizer(wxVERTICAL);
 
     long textStyle = wxTE_MULTILINE | wxTE_READONLY | wxTE_RICH2 | wxBORDER_NONE;
-    m_logTextCtrl = new wxTextCtrl(m_cardContainer, wxID_ANY, wxEmptyString,
-                                   wxDefaultPosition, wxDefaultSize, textStyle);
+    m_logTextCtrl = new TextCtrl(m_cardContainer, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, textStyle);
     
     // 设置等宽控制台字体
     wxFont monoFont(9, wxFONTFAMILY_TELETYPE, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Consolas");
@@ -112,7 +134,7 @@ void LogView::InitUI() {
     m_logTextCtrl->SetBackgroundColour(palette.cardBg);
     m_logTextCtrl->SetForegroundColour(palette.textPrimary);
 
-    cardSizer->Add(m_logTextCtrl, 1, wxEXPAND | wxALL, 12_dip);
+    cardSizer->Add(m_logTextCtrl, 1, wxEXPAND | wxALL, 8_dip);
     m_cardContainer->SetSizer(cardSizer);
 
     mainSizer->Add(m_cardContainer, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 16_dip);
@@ -155,9 +177,7 @@ void LogView::AppendLogMessage(const LogMessage& msg) {
     }
 
     wxTextAttr attr(levelCol, palette.cardBg);
-    wxFont monoFont(9, wxFONTFAMILY_TELETYPE, wxFONTSTYLE_NORMAL, 
-                    (msg.level == LogLevel::Error || msg.level == LogLevel::Warning) ? wxFONTWEIGHT_BOLD : wxFONTWEIGHT_NORMAL, 
-                    false, "Consolas");
+    wxFont monoFont(9, wxFONTFAMILY_TELETYPE, wxFONTSTYLE_NORMAL,  (msg.level == LogLevel::Error || msg.level == LogLevel::Warning) ? wxFONTWEIGHT_BOLD : wxFONTWEIGHT_NORMAL, false, "Consolas");
     attr.SetFont(monoFont);
     m_logTextCtrl->SetDefaultStyle(attr);
 
@@ -227,7 +247,9 @@ void LogView::UpdateTheme() {
     auto palette = ThemeColors::GetCurrentPalette();
     SetBackgroundColour(palette.windowBg);
     if (m_headerPanel) m_headerPanel->SetBackgroundColour(palette.windowBg);
-    if (m_cardContainer) m_cardContainer->SetBackgroundColour(palette.cardBg);
+    if (m_cardContainer) {
+        m_cardContainer->Refresh();
+    }
 
     if (m_titleIcon) {
         wxBitmapBundle logIconBundle = IconManager::GetIconBundle(SVG::LOG, wxSize(20, 20), palette.accentPrimary);

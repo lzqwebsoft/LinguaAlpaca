@@ -3,6 +3,7 @@
 #include <vector>
 #include <functional>
 #include "../theme/Theme.hpp"
+#include "TextCtrl.hpp"
 
 namespace LinguaAlpaca::UI {
 
@@ -20,7 +21,7 @@ public:
     void AddToolIcon(int id, const char* svgContent, const wxString& tooltip, std::function<void()> onClick);
     void SetCharacterCount(size_t count);
     void UpdateTheme();
-    wxTextCtrl* GetTextCtrl() const { return m_textCtrl; }
+    TextCtrl* GetTextCtrl() const { return m_textCtrl; }
 
 private:
     void InitUI();
@@ -32,7 +33,7 @@ private:
     bool m_isActiveBorder;
     size_t m_charCount{0};
 
-    wxTextCtrl* m_textCtrl{nullptr};
+    TextCtrl* m_textCtrl{nullptr};
     std::vector<CardToolIcon> m_tools;
     int m_hoverToolIndex{-1};
 };

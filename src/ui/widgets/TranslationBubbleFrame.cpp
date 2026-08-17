@@ -7,6 +7,7 @@
 
 #include <wx/display.h>
 #include <wx/dcbuffer.h>
+#include <wx/graphics.h>
 #include <algorithm>
 
 namespace LinguaAlpaca::UI {
@@ -35,15 +36,15 @@ void TranslationBubbleFrame::InitUI() {
 
     wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
 
-    // 1. 顶部拖拽标题栏
-    m_headerPanel = new wxPanel(m_mainPanel, wxID_ANY);
-    m_headerPanel->SetBackgroundColour(palette.sidebarBg);
+    // 1. 顶部拖拽标题栏 (参考 MainFrame 美化风格)
+    m_headerPanel = new wxPanel(m_mainPanel, wxID_ANY, wxDefaultPosition, wxSize(-1, 38_dip), wxBORDER_NONE);
+    m_headerPanel->SetBackgroundStyle(wxBG_STYLE_PAINT);
     wxBoxSizer* headerSizer = new wxBoxSizer(wxHORIZONTAL);
 
     wxBitmapBundle logoBundle = IconManager::GetIconBundle(SVG::TRANSLATE, dip(16, 16), palette.accentPrimary);
     wxStaticBitmap* logoIcon = new wxStaticBitmap(m_headerPanel, wxID_ANY, logoBundle);
 
-    m_titleText = new wxStaticText(m_headerPanel, wxID_ANY, L"划词翻译");
+    m_titleText = new wxStaticText(m_headerPanel, wxID_ANY, L"译灵驼");
     m_titleText->SetFont(wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
     m_titleText->SetForegroundColour(palette.textPrimary);
 
@@ -52,20 +53,25 @@ void TranslationBubbleFrame::InitUI() {
     m_langBadge->SetForegroundColour(palette.accentPrimary);
     m_langBadge->SetBackgroundColour(palette.bannerBg);
 
-    // 按钮：Pin、复制、关闭
+    // 按钮：Pin、重试、复制、关闭 (统一使用 wxBitmapButton / wxBORDER_NONE 扁平无边框风格，贴合 MainFrame)
     wxBitmapBundle pinBundle = IconManager::GetIconBundle(SVG::PIN, dip(14, 14), palette.textSecondary);
-    m_pinBtn = new wxButton(m_headerPanel, wxID_ANY, "", wxDefaultPosition, dip(26, 26), wxNO_BORDER);
-    m_pinBtn->SetBitmap(pinBundle);
+    m_pinBtn = new wxBitmapButton(m_headerPanel, wxID_ANY, pinBundle, wxDefaultPosition, dip(28, 28), wxBORDER_NONE);
+    m_pinBtn->SetBackgroundColour(palette.sidebarBg);
     m_pinBtn->SetToolTip(L"固定窗口位置");
 
+    wxBitmapBundle retryBundle = IconManager::GetIconBundle(SVG::REPLACE, dip(14, 14), palette.textSecondary);
+    m_retryBtn = new wxBitmapButton(m_headerPanel, wxID_ANY, retryBundle, wxDefaultPosition, dip(28, 28), wxBORDER_NONE);
+    m_retryBtn->SetBackgroundColour(palette.sidebarBg);
+    m_retryBtn->SetToolTip(L"重新翻译 (再次请求模型)");
+
     wxBitmapBundle copyBundle = IconManager::GetIconBundle(SVG::COPY, dip(14, 14), palette.textSecondary);
-    m_copyBtn = new wxButton(m_headerPanel, wxID_ANY, "", wxDefaultPosition, dip(26, 26), wxNO_BORDER);
-    m_copyBtn->SetBitmap(copyBundle);
+    m_copyBtn = new wxBitmapButton(m_headerPanel, wxID_ANY, copyBundle, wxDefaultPosition, dip(28, 28), wxBORDER_NONE);
+    m_copyBtn->SetBackgroundColour(palette.sidebarBg);
     m_copyBtn->SetToolTip(L"复制译文");
 
     wxBitmapBundle closeBundle = IconManager::GetIconBundle(SVG::CLOSE, dip(14, 14), palette.textSecondary);
-    m_closeBtn = new wxButton(m_headerPanel, wxID_ANY, "", wxDefaultPosition, dip(26, 26), wxNO_BORDER);
-    m_closeBtn->SetBitmap(closeBundle);
+    m_closeBtn = new wxBitmapButton(m_headerPanel, wxID_ANY, closeBundle, wxDefaultPosition, dip(28, 28), wxBORDER_NONE);
+    m_closeBtn->SetBackgroundColour(palette.sidebarBg);
     m_closeBtn->SetToolTip(L"关闭");
 
     headerSizer->Add(logoIcon, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 10_dip);
@@ -73,25 +79,48 @@ void TranslationBubbleFrame::InitUI() {
     headerSizer->Add(m_langBadge, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 8_dip);
     headerSizer->AddStretchSpacer(1);
     headerSizer->Add(m_pinBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4_dip);
+    headerSizer->Add(m_retryBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4_dip);
     headerSizer->Add(m_copyBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4_dip);
     headerSizer->Add(m_closeBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8_dip);
     m_headerPanel->SetSizer(headerSizer);
 
-    // 2. 原文展示区
-    m_sourceCtrl = new wxTextCtrl(m_mainPanel, wxID_ANY, "", wxDefaultPosition, wxSize(-1, 65_dip),
-                                  wxTE_MULTILINE | wxTE_READONLY | wxBORDER_NONE);
+    // 2. 原文与译文区域 (通过可拖动的 Splitter 进行上下平分与弹性调整)
+    m_splitter = new SplitterWindow(m_mainPanel, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+                                    wxSP_LIVE_UPDATE | wxSP_NOBORDER);
+    m_splitter->SetBackgroundColour(palette.cardBg);
+
+    // 原文展示区
+    m_sourcePanel = new wxPanel(m_splitter, wxID_ANY);
+    m_sourcePanel->SetBackgroundColour(palette.windowBg);
+    wxBoxSizer* sourceSizer = new wxBoxSizer(wxVERTICAL);
+
+    m_sourceCtrl = new TextCtrl(m_sourcePanel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize,
+                                wxTE_MULTILINE | wxTE_READONLY | wxBORDER_NONE);
     m_sourceCtrl->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
     m_sourceCtrl->SetBackgroundColour(palette.windowBg);
     m_sourceCtrl->SetForegroundColour(palette.textSecondary);
+    sourceSizer->Add(m_sourceCtrl, 1, wxEXPAND);
+    m_sourcePanel->SetSizer(sourceSizer);
 
-    // 3. 译文输出区
-    m_targetCtrl = new wxTextCtrl(m_mainPanel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize,
-                                  wxTE_MULTILINE | wxTE_READONLY | wxBORDER_NONE | wxTE_RICH2);
+    // 译文输出区
+    m_targetPanel = new wxPanel(m_splitter, wxID_ANY);
+    m_targetPanel->SetBackgroundColour(palette.cardBg);
+    wxBoxSizer* targetSizer = new wxBoxSizer(wxVERTICAL);
+
+    m_targetCtrl = new TextCtrl(m_targetPanel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize,
+                                wxTE_MULTILINE | wxTE_READONLY | wxBORDER_NONE | wxTE_RICH2);
     m_targetCtrl->SetFont(wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
     m_targetCtrl->SetBackgroundColour(palette.cardBg);
     m_targetCtrl->SetForegroundColour(palette.textPrimary);
+    targetSizer->Add(m_targetCtrl, 1, wxEXPAND);
+    m_targetPanel->SetSizer(targetSizer);
 
-    // 4. 底部状态栏与 Resize 手柄
+    // 平分窗体高度并设置最小 Pane 限制与等比缩放
+    m_splitter->SetMinimumPaneSize(35_dip);
+    m_splitter->SetSashGravity(0.5);
+    m_splitter->SplitHorizontally(m_sourcePanel, m_targetPanel, dip(110, 0).x);
+
+    // 3. 底部状态栏与 Resize 手柄
     m_footerPanel = new wxPanel(m_mainPanel, wxID_ANY);
     m_footerPanel->SetBackgroundColour(palette.sidebarBg);
     wxBoxSizer* footerSizer = new wxBoxSizer(wxHORIZONTAL);
@@ -109,9 +138,8 @@ void TranslationBubbleFrame::InitUI() {
     footerSizer->Add(m_resizeGrip, 0, wxALIGN_BOTTOM | wxRIGHT | wxBOTTOM, 2_dip);
     m_footerPanel->SetSizer(footerSizer);
 
-    mainSizer->Add(m_headerPanel, 0, wxEXPAND | wxBOTTOM, 1);
-    mainSizer->Add(m_sourceCtrl, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, 8_dip);
-    mainSizer->Add(m_targetCtrl, 1, wxEXPAND | wxALL, 8_dip);
+    mainSizer->Add(m_headerPanel, 0, wxEXPAND);
+    mainSizer->Add(m_splitter, 1, wxEXPAND | wxLEFT | wxRIGHT, 6_dip);
     mainSizer->Add(m_footerPanel, 0, wxEXPAND);
 
     m_mainPanel->SetSizer(mainSizer);
@@ -120,6 +148,22 @@ void TranslationBubbleFrame::InitUI() {
     frameSizer->Add(m_mainPanel, 1, wxEXPAND | wxALL, 1);
     SetSizer(frameSizer);
     Layout();
+
+    // 绘制 Header Panel 底部的精细分隔线 (参考 MainFrame 样式)
+    m_headerPanel->Bind(wxEVT_PAINT, [this](wxPaintEvent&) {
+        wxAutoBufferedPaintDC dc(m_headerPanel);
+        wxSize size = m_headerPanel->GetClientSize();
+        ThemePalette p = ThemeManager::GetCurrentPalette();
+
+        dc.SetBackground(wxBrush(p.sidebarBg));
+        dc.Clear();
+
+        std::unique_ptr<wxGraphicsContext> gc(wxGraphicsContext::Create(dc));
+        if (gc) {
+            gc->SetPen(gc->CreatePen(wxPen(p.cardBorder, 1)));
+            gc->StrokeLine(0, size.y - 1, size.x, size.y - 1);
+        }
+    });
 
     // 标题栏拖拽与边缘检测事件
     m_headerPanel->Bind(wxEVT_LEFT_DOWN, &TranslationBubbleFrame::OnHeaderLeftDown, this);
@@ -152,10 +196,12 @@ void TranslationBubbleFrame::InitUI() {
     // 按钮操作事件
     m_copyBtn->Bind(wxEVT_BUTTON, &TranslationBubbleFrame::OnCopyResult, this);
     m_pinBtn->Bind(wxEVT_BUTTON, &TranslationBubbleFrame::OnTogglePin, this);
+    m_retryBtn->Bind(wxEVT_BUTTON, &TranslationBubbleFrame::OnRetry, this);
     m_closeBtn->Bind(wxEVT_BUTTON, &TranslationBubbleFrame::OnCloseBtn, this);
 }
 
 void TranslationBubbleFrame::ShowAndTranslate(const wxPoint& spawnPos, const std::string& sourceText) {
+    m_lastSourceText = sourceText;
     m_sourceCtrl->SetValue(wxString::FromUTF8(sourceText));
     m_targetCtrl->SetValue(L"正在启动翻译引擎...");
     m_statusText->SetLabel(L"正在翻译...");
@@ -233,14 +279,55 @@ void TranslationBubbleFrame::ShowAndTranslate(const wxPoint& spawnPos, const std
         return;
     }
 
-    // 构造翻译任务并异步执行
+    wxWeakRef<TranslationBubbleFrame> weakSelf(this);
+
+    // 确保翻译模型已装载就绪，再执行流式翻译
+    m_modelManager->EnsureModelAsync(
+        TargetModelType::Translation,
+        [weakSelf](const std::string& statusMsg) {
+            if (wxTheApp) {
+                wxTheApp->CallAfter([weakSelf, statusMsg]() {
+                    if (!weakSelf || !weakSelf->m_statusText) return;
+                    weakSelf->m_statusText->SetLabel(wxString::FromUTF8(statusMsg));
+                });
+            }
+        },
+        [weakSelf, sourceText](bool ok, const ServerStatusInfo& info) {
+            if (wxTheApp) {
+                wxTheApp->CallAfter([weakSelf, ok, info, sourceText]() {
+                    if (!weakSelf) return;
+                    if (!ok) {
+                        if (weakSelf->m_targetCtrl) {
+                            weakSelf->m_targetCtrl->SetValue(L"模型未就绪: " + wxString::FromUTF8(info.message) + L"\n请点击右上角「重新翻译」按钮重试。");
+                        }
+                        if (weakSelf->m_statusText) {
+                            weakSelf->m_statusText->SetLabel(L"模型未就绪 (点击重试)");
+                        }
+                    } else {
+                        weakSelf->DoExecuteTranslation(sourceText);
+                    }
+                });
+            }
+        }
+    );
+}
+
+void TranslationBubbleFrame::DoExecuteTranslation(const std::string& sourceText) {
+    if (!m_modelManager) {
+        if (m_targetCtrl) m_targetCtrl->SetValue(L"错误: ModelManager 未初始化");
+        if (m_statusText) m_statusText->SetLabel(L"异常");
+        return;
+    }
+
     TranslationTask task(
         sourceText,
         LanguageCode::AutoDetect,
         LanguageCode::Chinese
     );
 
-    m_targetCtrl->Clear();
+    if (m_targetCtrl) m_targetCtrl->Clear();
+    m_currentFullText.clear();
+    if (m_statusText) m_statusText->SetLabel(L"正在翻译...");
 
     wxWeakRef<TranslationBubbleFrame> weakSelf(this);
 
@@ -268,9 +355,9 @@ void TranslationBubbleFrame::ShowAndTranslate(const wxPoint& spawnPos, const std
                             weakSelf->m_statusText->SetLabel(L"翻译完成 (Hy-MT2)");
                         }
                     } else {
-                        weakSelf->m_targetCtrl->SetValue(L"翻译失败: " + wxString::FromUTF8(error));
+                        weakSelf->m_targetCtrl->SetValue(L"翻译失败: " + wxString::FromUTF8(error) + L"\n\n请点击右上角「重新翻译」按钮重试。");
                         if (weakSelf->m_statusText) {
-                            weakSelf->m_statusText->SetLabel(L"推理失败");
+                            weakSelf->m_statusText->SetLabel(L"推理失败 (点击重试)");
                         }
                     }
                 });
@@ -294,6 +381,9 @@ void TranslationBubbleFrame::UpdateTheme() {
         m_langBadge->SetForegroundColour(palette.accentPrimary);
         m_langBadge->SetBackgroundColour(palette.bannerBg);
     }
+    if (m_splitter) m_splitter->SetBackgroundColour(palette.cardBg);
+    if (m_sourcePanel) m_sourcePanel->SetBackgroundColour(palette.windowBg);
+    if (m_targetPanel) m_targetPanel->SetBackgroundColour(palette.cardBg);
     if (m_sourceCtrl) {
         m_sourceCtrl->SetBackgroundColour(palette.windowBg);
         m_sourceCtrl->SetForegroundColour(palette.textSecondary);
@@ -302,16 +392,38 @@ void TranslationBubbleFrame::UpdateTheme() {
         m_targetCtrl->SetBackgroundColour(palette.cardBg);
         m_targetCtrl->SetForegroundColour(palette.textPrimary);
     }
-    if (m_footerPanel) m_footerPanel->SetBackgroundColour(palette.sidebarBg);
+    if (m_footerPanel) {
+        m_footerPanel->SetBackgroundColour(palette.sidebarBg);
+        m_footerPanel->Refresh();
+    }
     if (m_statusText) m_statusText->SetForegroundColour(palette.textSecondary);
     if (m_pinBtn) {
+        m_pinBtn->SetBackgroundColour(palette.sidebarBg);
         wxColour pinColor = m_isPinned ? palette.accentPrimary : palette.textSecondary;
         wxBitmapBundle pinBundle = IconManager::GetIconBundle(SVG::PIN, dip(14, 14), pinColor);
         m_pinBtn->SetBitmap(pinBundle);
     }
+    if (m_retryBtn) {
+        m_retryBtn->SetBackgroundColour(palette.sidebarBg);
+        wxBitmapBundle retryBundle = IconManager::GetIconBundle(SVG::REPLACE, dip(14, 14), palette.textSecondary);
+        m_retryBtn->SetBitmap(retryBundle);
+    }
+    if (m_copyBtn) {
+        m_copyBtn->SetBackgroundColour(palette.sidebarBg);
+        wxBitmapBundle copyBundle = IconManager::GetIconBundle(SVG::COPY, dip(14, 14), palette.textSecondary);
+        m_copyBtn->SetBitmap(copyBundle);
+    }
+    if (m_closeBtn) {
+        m_closeBtn->SetBackgroundColour(palette.sidebarBg);
+        wxBitmapBundle closeBundle = IconManager::GetIconBundle(SVG::CLOSE, dip(14, 14), palette.textSecondary);
+        m_closeBtn->SetBitmap(closeBundle);
+    }
     if (m_resizeGrip) {
         m_resizeGrip->SetBackgroundColour(palette.sidebarBg);
         m_resizeGrip->Refresh();
+    }
+    if (m_splitter) {
+        m_splitter->Refresh();
     }
 
     Refresh();
@@ -655,6 +767,59 @@ void TranslationBubbleFrame::OnTogglePin(wxCommandEvent& WXUNUSED(event)) {
     wxBitmapBundle pinBundle = IconManager::GetIconBundle(SVG::PIN, dip(14, 14), iconColor);
     m_pinBtn->SetBitmap(pinBundle);
     m_pinBtn->SetToolTip(m_isPinned ? L"已固定窗口位置 (再次点击取消固定)" : L"固定窗口位置");
+}
+
+void TranslationBubbleFrame::OnRetry(wxCommandEvent& WXUNUSED(event)) {
+    std::string textToTranslate = m_lastSourceText;
+    if (textToTranslate.empty() && m_sourceCtrl) {
+        textToTranslate = m_sourceCtrl->GetValue().ToStdString();
+    }
+    if (textToTranslate.empty()) {
+        return;
+    }
+
+    if (m_targetCtrl) {
+        m_targetCtrl->SetValue(L"正在重新连接模型并翻译...");
+    }
+    if (m_statusText) {
+        m_statusText->SetLabel(L"正在重试...");
+    }
+
+    if (!m_modelManager) {
+        if (m_targetCtrl) m_targetCtrl->SetValue(L"错误: ModelManager 未初始化");
+        if (m_statusText) m_statusText->SetLabel(L"异常");
+        return;
+    }
+
+    wxWeakRef<TranslationBubbleFrame> weakSelf(this);
+    m_modelManager->EnsureModelAsync(
+        TargetModelType::Translation,
+        [weakSelf](const std::string& statusMsg) {
+            if (wxTheApp) {
+                wxTheApp->CallAfter([weakSelf, statusMsg]() {
+                    if (!weakSelf || !weakSelf->m_statusText) return;
+                    weakSelf->m_statusText->SetLabel(wxString::FromUTF8(statusMsg));
+                });
+            }
+        },
+        [weakSelf, textToTranslate](bool ok, const ServerStatusInfo& info) {
+            if (wxTheApp) {
+                wxTheApp->CallAfter([weakSelf, ok, info, textToTranslate]() {
+                    if (!weakSelf) return;
+                    if (!ok) {
+                        if (weakSelf->m_targetCtrl) {
+                            weakSelf->m_targetCtrl->SetValue(L"模型启动失败: " + wxString::FromUTF8(info.message) + L"\n请检查模型路径或点击重试。");
+                        }
+                        if (weakSelf->m_statusText) {
+                            weakSelf->m_statusText->SetLabel(L"模型未就绪 (点击重试)");
+                        }
+                    } else {
+                        weakSelf->DoExecuteTranslation(textToTranslate);
+                    }
+                });
+            }
+        }
+    );
 }
 
 void TranslationBubbleFrame::OnCloseBtn(wxCommandEvent& WXUNUSED(event)) {

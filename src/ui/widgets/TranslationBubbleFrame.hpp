@@ -7,6 +7,8 @@
 #include "../../core/ModelManager.hpp"
 #include "../../core/Config.hpp"
 #include "CustomButton.hpp"
+#include "SplitterWindow.hpp"
+#include "TextCtrl.hpp"
 
 namespace LinguaAlpaca::UI {
 
@@ -72,7 +74,10 @@ private:
     // 按钮操作
     void OnCopyResult(wxCommandEvent& event);
     void OnTogglePin(wxCommandEvent& event);
+    void OnRetry(wxCommandEvent& event);
     void OnCloseBtn(wxCommandEvent& event);
+
+    void DoExecuteTranslation(const std::string& sourceText);
 
     std::shared_ptr<ModelManager> m_modelManager;
 
@@ -81,12 +86,16 @@ private:
     wxPanel* m_headerPanel{nullptr};
     wxStaticText* m_titleText{nullptr};
     wxStaticText* m_langBadge{nullptr};
-    wxButton* m_pinBtn{nullptr};
-    wxButton* m_copyBtn{nullptr};
-    wxButton* m_closeBtn{nullptr};
+    wxBitmapButton* m_pinBtn{nullptr};
+    wxBitmapButton* m_retryBtn{nullptr};
+    wxBitmapButton* m_copyBtn{nullptr};
+    wxBitmapButton* m_closeBtn{nullptr};
 
-    wxTextCtrl* m_sourceCtrl{nullptr};
-    wxTextCtrl* m_targetCtrl{nullptr};
+    SplitterWindow* m_splitter{nullptr};
+    wxPanel* m_sourcePanel{nullptr};
+    wxPanel* m_targetPanel{nullptr};
+    TextCtrl* m_sourceCtrl{nullptr};
+    TextCtrl* m_targetCtrl{nullptr};
 
     wxPanel* m_footerPanel{nullptr};
     wxStaticText* m_statusText{nullptr};
@@ -97,6 +106,7 @@ private:
     wxPoint m_pinnedPos;
     bool m_isDragging{false};
     wxPoint m_dragStartPos;
+    std::string m_lastSourceText;
     std::string m_currentFullText;
 
     // 缩放状态与尺寸记忆

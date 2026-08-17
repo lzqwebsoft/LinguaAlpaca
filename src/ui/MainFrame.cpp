@@ -11,7 +11,7 @@
 namespace LinguaAlpaca::UI {
 
     MainFrame::MainFrame(std::shared_ptr<ModelManager> modelManager)
-        : wxFrame(nullptr, wxID_ANY, L"译驼灵 · LinguaAlpaca", wxDefaultPosition,
+        : wxFrame(nullptr, wxID_ANY, L"译灵驼 · LinguaAlpaca", wxDefaultPosition,
             wxDefaultSize, wxBORDER_NONE),
         m_modelManager(std::move(modelManager)) {
         SetClientSize(dip(1080, 780));
@@ -29,6 +29,7 @@ namespace LinguaAlpaca::UI {
         // 1. 顶部自定义 Titlebar Header Panel
         m_topHeaderPanel = new wxPanel(this, wxID_ANY, wxDefaultPosition,
             wxSize(-1, 54_dip), wxBORDER_NONE);
+        m_topHeaderPanel->SetBackgroundColour(palette.sidebarBg);
         m_topHeaderPanel->SetBackgroundStyle(wxBG_STYLE_PAINT);
 
         wxBoxSizer* headerSizer = new wxBoxSizer(wxHORIZONTAL);
@@ -40,15 +41,16 @@ namespace LinguaAlpaca::UI {
         logoBadge->SetBackgroundColour(palette.accentPrimary);
         wxBoxSizer* badgeSizer = new wxBoxSizer(wxHORIZONTAL);
         wxStaticText* badgeText = new wxStaticText(logoBadge, wxID_ANY, L"译");
-        badgeText->SetFont(wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL,
-            wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
+        badgeText->SetFont(wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
         badgeText->SetForegroundColour(*wxWHITE);
+        badgeText->SetBackgroundColour(palette.accentPrimary);
         badgeSizer->Add(badgeText, 0, wxALIGN_CENTER);
         logoBadge->SetSizer(badgeSizer);
 
-        m_appNameText = new wxStaticText(m_topHeaderPanel, wxID_ANY, L"灵驼译 · LinguaAlpaca");
+        m_appNameText = new wxStaticText(m_topHeaderPanel, wxID_ANY, L"译灵驼 · LinguaAlpaca");
         m_appNameText->SetFont(wxFont(13, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
         m_appNameText->SetForegroundColour(palette.textPrimary);
+        m_appNameText->SetBackgroundColour(palette.sidebarBg);
 
         // 模式切换按钮 (SVG Moon/Sun)
         bool isLight = ThemeManager::GetInstance().GetCurrentTheme() == ThemeMode::Light;
@@ -170,6 +172,12 @@ namespace LinguaAlpaca::UI {
     }
 
     void MainFrame::OnClose(wxCloseEvent& event) {
+        if (m_modelManager) {
+            m_modelManager->StopModelAsync();
+        }
+        if (wxTheApp) {
+            wxTheApp->ExitMainLoop();
+        }
         event.Skip();
     }
 
@@ -227,6 +235,7 @@ namespace LinguaAlpaca::UI {
 
         if (m_appNameText) {
             m_appNameText->SetForegroundColour(palette.textPrimary);
+            m_appNameText->SetBackgroundColour(palette.sidebarBg);
             m_appNameText->Refresh();
         }
 

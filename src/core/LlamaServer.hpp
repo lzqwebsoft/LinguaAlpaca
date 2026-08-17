@@ -38,7 +38,8 @@ public:
 
     bool EnsureModelRunning(
         const ServerConfig& config,
-        const std::function<void(const std::string& status)>& onStatus = nullptr
+        const std::function<void(const std::string& status)>& onStatus = nullptr,
+        const std::function<bool()>& shouldAbort = nullptr
     );
 
     std::string GetBaseUrl() const;

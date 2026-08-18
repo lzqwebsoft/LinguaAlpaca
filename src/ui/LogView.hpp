@@ -1,7 +1,7 @@
 #pragma once
-#include <wx/wx.h>
 #include <memory>
 #include <vector>
+#include "AsyncTrackable.hpp"
 #include "core/Logger.hpp"
 #include "core/Config.hpp"
 #include "widgets/CustomButton.hpp"
@@ -9,7 +9,7 @@
 
 namespace LinguaAlpaca::UI {
 
-class LogView : public wxPanel {
+class LogView : public wxPanel, public AsyncTrackable {
 public:
     LogView(wxWindow* parent,
             std::shared_ptr<ConfigManager> configManager,

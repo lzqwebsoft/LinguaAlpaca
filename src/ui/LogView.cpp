@@ -17,16 +17,11 @@ LogView::LogView(wxWindow* parent,
       m_configManager(std::move(configManager)) {
     InitUI();
 
-    // 订阅 Logger 的实时日志通知
-    wxWeakRef<LogView> weakSelf(this);
-    m_listenerId = Logger::GetInstance().AddListener([weakSelf](const LogMessage& msg) {
-        if (wxTheApp) {
-            wxTheApp->CallAfter([weakSelf, msg]() {
-                if (!weakSelf || !weakSelf->m_logTextCtrl) return;
-                weakSelf->AppendLogMessage(msg);
-            });
-        }
-    });
+    // 订阅 Logger 的实时日志通知 (使用 BindUi 自动跨线程安全调度)
+    m_listenerId = Logger::GetInstance().AddListener(BindUi([this](const LogMessage& msg) {
+        if (!m_logTextCtrl) return;
+        AppendLogMessage(msg);
+    }));
 
     // 加载当前内存中已有的历史日志
     ReloadLogs();

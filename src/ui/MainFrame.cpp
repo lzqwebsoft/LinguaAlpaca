@@ -29,15 +29,15 @@ namespace LinguaAlpaca::UI {
 
         // 1. 顶部自定义 Titlebar Header Panel
         m_topHeaderPanel = new wxPanel(this, wxID_ANY, wxDefaultPosition,
-            wxSize(-1, 54_dip), wxBORDER_NONE);
+            wxSize(-1, 52_dip), wxBORDER_NONE);
         m_topHeaderPanel->SetBackgroundColour(palette.sidebarBg);
         m_topHeaderPanel->SetBackgroundStyle(wxBG_STYLE_PAINT);
 
         wxBoxSizer* headerSizer = new wxBoxSizer(wxHORIZONTAL);
 
-        // Logo & App Name
-        wxBitmapBundle logoBundle = IconManager::GetAppLogoBundle(dip(28, 28));
-        m_logoIcon = new wxStaticBitmap(m_topHeaderPanel, wxID_ANY, logoBundle, wxDefaultPosition, dip(28, 28));
+        // Logo & App Name (以标准逻辑 DIP 尺寸传入 Bundle，避免多重 DPI 缩放溢出裁剪)
+        wxBitmapBundle logoBundle = IconManager::GetAppLogoBundle(wxSize(30, 30));
+        m_logoIcon = new wxStaticBitmap(m_topHeaderPanel, wxID_ANY, logoBundle);
 
         m_appNameText = new wxStaticText(m_topHeaderPanel, wxID_ANY, L"译灵驼 · LinguaAlpaca");
         m_appNameText->SetFont(wxFont(13, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
@@ -46,31 +46,32 @@ namespace LinguaAlpaca::UI {
 
         // 模式切换按钮 (SVG Moon/Sun)
         bool isLight = ThemeManager::GetInstance().GetCurrentTheme() == ThemeMode::Light;
-        wxBitmapBundle themeBundle = IconManager::GetIconBundle(isLight ? SVG::MOON : SVG::SUN, dip(18, 18), palette.textPrimary);
-        m_themeBtn = new wxBitmapButton(m_topHeaderPanel, wxID_ANY, themeBundle, wxDefaultPosition, dip(36, 36), wxBORDER_NONE);
+        wxBitmapBundle themeBundle = IconManager::GetIconBundle(isLight ? SVG::MOON : SVG::SUN, wxSize(18, 18), palette.textPrimary);
+        m_themeBtn = new wxBitmapButton(m_topHeaderPanel, wxID_ANY, themeBundle, wxDefaultPosition, dip(34, 34), wxBORDER_NONE);
         m_themeBtn->SetBackgroundColour(palette.sidebarBg);
+        m_themeBtn->SetToolTip(L"切换明暗主题");
 
         // 自定义窗口控制按钮 (SVG 最小化, 放大/还原, 关闭)
-        wxBitmapBundle minBundle = IconManager::GetIconBundle(SVG::MINIMIZE, dip(14, 14), palette.textSecondary);
-        wxBitmapBundle maxBundle = IconManager::GetIconBundle(SVG::MAXIMIZE, dip(14, 14), palette.textSecondary);
-        wxBitmapBundle closeBundle = IconManager::GetIconBundle(SVG::CLOSE, dip(14, 14), palette.textSecondary);
+        wxBitmapBundle minBundle = IconManager::GetIconBundle(SVG::MINIMIZE, wxSize(15, 15), palette.textSecondary);
+        wxBitmapBundle maxBundle = IconManager::GetIconBundle(SVG::MAXIMIZE, wxSize(15, 15), palette.textSecondary);
+        wxBitmapBundle closeBundle = IconManager::GetIconBundle(SVG::CLOSE, wxSize(15, 15), palette.textSecondary);
 
-        m_minBtn = new wxBitmapButton(m_topHeaderPanel, wxID_ANY, minBundle, wxDefaultPosition, dip(30, 30), wxBORDER_NONE);
+        m_minBtn = new wxBitmapButton(m_topHeaderPanel, wxID_ANY, minBundle, wxDefaultPosition, dip(32, 32), wxBORDER_NONE);
         m_minBtn->SetBackgroundColour(palette.sidebarBg);
         m_minBtn->SetToolTip(L"最小化");
 
-        m_maxBtn = new wxBitmapButton(m_topHeaderPanel, wxID_ANY, maxBundle, wxDefaultPosition, dip(30, 30), wxBORDER_NONE);
+        m_maxBtn = new wxBitmapButton(m_topHeaderPanel, wxID_ANY, maxBundle, wxDefaultPosition, dip(32, 32), wxBORDER_NONE);
         m_maxBtn->SetBackgroundColour(palette.sidebarBg);
         m_maxBtn->SetToolTip(L"最大化 / 还原");
 
-        m_closeBtn = new wxBitmapButton(m_topHeaderPanel, wxID_ANY, closeBundle, wxDefaultPosition, dip(30, 30), wxBORDER_NONE);
+        m_closeBtn = new wxBitmapButton(m_topHeaderPanel, wxID_ANY, closeBundle, wxDefaultPosition, dip(32, 32), wxBORDER_NONE);
         m_closeBtn->SetBackgroundColour(palette.sidebarBg);
         m_closeBtn->SetToolTip(L"关闭");
 
         headerSizer->Add(m_logoIcon, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 16_dip);
-        headerSizer->Add(m_appNameText, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 8_dip);
+        headerSizer->Add(m_appNameText, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 10_dip);
         headerSizer->AddStretchSpacer(1);
-        headerSizer->Add(m_themeBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 16_dip);
+        headerSizer->Add(m_themeBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 12_dip);
         headerSizer->Add(m_minBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4_dip);
         headerSizer->Add(m_maxBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4_dip);
         headerSizer->Add(m_closeBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 12_dip);
@@ -233,17 +234,17 @@ namespace LinguaAlpaca::UI {
 
         bool isLight = ThemeManager::GetInstance().GetCurrentTheme() == ThemeMode::Light;
         wxBitmapBundle themeBundle = IconManager::GetIconBundle(
-            isLight ? SVG::MOON : SVG::SUN, dip(18, 18),
+            isLight ? SVG::MOON : SVG::SUN, wxSize(18, 18),
             palette.textPrimary);
         m_themeBtn->SetBitmap(themeBundle);
         m_themeBtn->SetBackgroundColour(palette.sidebarBg);
 
         wxBitmapBundle minBundle = IconManager::GetIconBundle(
-            SVG::MINIMIZE, dip(14, 14), palette.textSecondary);
+            SVG::MINIMIZE, wxSize(15, 15), palette.textSecondary);
         wxBitmapBundle maxBundle = IconManager::GetIconBundle(
-            SVG::MAXIMIZE, dip(14, 14), palette.textSecondary);
+            SVG::MAXIMIZE, wxSize(15, 15), palette.textSecondary);
         wxBitmapBundle closeBundle = IconManager::GetIconBundle(
-            SVG::CLOSE, dip(14, 14), palette.textSecondary);
+            SVG::CLOSE, wxSize(15, 15), palette.textSecondary);
 
         m_minBtn->SetBitmap(minBundle);
         m_minBtn->SetBackgroundColour(palette.sidebarBg);

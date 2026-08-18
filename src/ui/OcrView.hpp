@@ -5,6 +5,7 @@
 #include <memory>
 #include <thread>
 #include <atomic>
+#include "AsyncTrackable.hpp"
 #include "core/ModelManager.hpp"
 #include "widgets/CardPanel.hpp"
 #include "widgets/CustomButton.hpp"
@@ -26,7 +27,7 @@ enum class DropzoneHoverAction {
     Replace
 };
 
-class OcrView : public wxPanel {
+class OcrView : public wxPanel, public AsyncTrackable {
 public:
     OcrView(wxWindow* parent,
             std::shared_ptr<ModelManager> modelManager,

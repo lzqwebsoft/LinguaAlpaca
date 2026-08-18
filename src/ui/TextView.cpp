@@ -272,7 +272,6 @@ namespace LinguaAlpaca::UI {
 		m_translateBtn->Disable();
 		Layout();
 
-		wxWeakRef<TextView> weakSelf(this);
 		TranslationTask task(text, srcLang, tgtLang);
 
 		// 3. 直接通过 ModelManager 发起异步流式翻译
@@ -287,50 +286,35 @@ namespace LinguaAlpaca::UI {
 		m_modelManager->ExecuteTranslationStream(
 			task,
 			// Token 流式接收回调 (打字机效果)
-			[weakSelf](const std::string& token) {
-				wxString wToken = wxString::FromUTF8(token);
-				if (wxTheApp) {
-					wxTheApp->CallAfter([weakSelf, wToken]() {
-						if (!weakSelf || !weakSelf->m_targetCard || !weakSelf->m_targetCard->GetTextCtrl())
-							return;
-						weakSelf->m_targetCard->GetTextCtrl()->AppendText(wToken);
-						wxString current = weakSelf->m_targetCard->GetTextCtrl()->GetValue();
-						weakSelf->m_targetCard->SetCharacterCount(current.Length());
-						});
-				}
-			},
+			BindUi([this](const std::string& token) {
+				if (!m_targetCard || !m_targetCard->GetTextCtrl()) return;
+				m_targetCard->GetTextCtrl()->AppendText(wxString::FromUTF8(token));
+				wxString current = m_targetCard->GetTextCtrl()->GetValue();
+				m_targetCard->SetCharacterCount(current.Length());
+			}),
 			// 翻译完成/被中断回调
-			[weakSelf](bool success, const std::string& fullText,
-				const std::string& error) {
-					if (wxTheApp) {
-						wxTheApp->CallAfter([weakSelf, success, fullText, error]() {
-							if (!weakSelf)
-								return;
-							if (weakSelf->m_stopBtn) weakSelf->m_stopBtn->Hide();
-							if (weakSelf->m_translateBtn) weakSelf->m_translateBtn->Enable();
-							weakSelf->Layout();
+			BindUi([this](bool success, const std::string& fullText, const std::string& error) {
+				if (m_stopBtn) m_stopBtn->Hide();
+				if (m_translateBtn) m_translateBtn->Enable();
+				Layout();
 
-							if (!weakSelf->m_targetCard || !weakSelf->m_targetCard->GetTextCtrl())
-								return;
+				if (!m_targetCard || !m_targetCard->GetTextCtrl()) return;
 
-							if (success) {
-								wxString wClean = wxString::FromUTF8(fullText);
-								weakSelf->m_targetCard->GetTextCtrl()->SetValue(wClean);
-								weakSelf->m_targetCard->SetCharacterCount(wClean.Length());
-							}
-							else if (!error.empty()) {
-								if (error == "已取消") {
-									weakSelf->m_targetCard->GetTextCtrl()->AppendText(
-										L"\n\n[⏹ 翻译已被用户中断]");
-								}
-								else {
-									weakSelf->m_targetCard->GetTextCtrl()->SetValue(
-										wxString::FromUTF8("翻译出错: " + error));
-								}
-							}
-							});
+				if (success) {
+					wxString wClean = wxString::FromUTF8(fullText);
+					m_targetCard->GetTextCtrl()->SetValue(wClean);
+					m_targetCard->SetCharacterCount(wClean.Length());
+				}
+				else if (!error.empty()) {
+					if (error == "已取消") {
+						m_targetCard->GetTextCtrl()->AppendText(L"\n\n[⏹ 翻译已被用户中断]");
 					}
-			});
+					else {
+						m_targetCard->GetTextCtrl()->SetValue(wxString::FromUTF8("翻译出错: " + error));
+					}
+				}
+			})
+		);
 	}
 
 	void TextView::OnStopClicked(wxCommandEvent& WXUNUSED(event)) {

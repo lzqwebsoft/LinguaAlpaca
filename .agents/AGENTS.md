@@ -43,10 +43,15 @@ This file records project-scoped rules, developer guidelines, and architectural 
 - **NEVER Check `LLAMA_TOKEN_ATTR_USER_DEFINED`**:
   - In SentencePiece / BPE tokenizers, thousands of standard vocabulary words, punctuation marks, and Chinese characters carry the `USER_DEFINED` attribute.
   - Checking `(attr & LLAMA_TOKEN_ATTR_USER_DEFINED)` will cause premature translation abortion mid-sentence!
-- **UI Completion Sync & Thread-Safe Callbacks (`TextView` & `OcrView`)**:
-  - **Mandatory `wxWeakRef`**: In all async streaming (`onToken`) and completion (`onComplete`) callbacks from background worker threads, **ALWAYS** capture `wxWeakRef<MyView> weakSelf(this)` rather than raw `this`. Inside `wxTheApp->CallAfter`, verify `if (!weakSelf || !weakSelf->m_ctrl) return;` before updating UI controls to prevent access violation crashes (`0xC0000005`) if the view is repainted, re-created, or in transition.
+- **UI Completion Sync & Thread-Safe Callbacks (`AsyncTrackable` & `BindUi`)**:
+  - **`AsyncTrackable` Mixin Pattern**: `wxTrackable` (underlying `wxWeakRef`) is **NOT** thread-safe across background worker threads (`wxTrackable::RemoveNode` asserts when copied/destructed concurrently on non-GUI threads). **ALWAYS** inherit UI components that receive async background callbacks from `public AsyncTrackable` ([AsyncTrackable.hpp](file:///e:/backup/cpp_workspaces/LinguaAlpaca/src/ui/AsyncTrackable.hpp)).
+  - **`BindUi([this](...))` Helper**: Wrap all async callbacks using `BindUi([this](...) { ... })`. `BindUi` automatically:
+    1. Intercepts non-UI thread calls with an atomic alive token.
+    2. Packages arguments into `std::tuple` and dispatches via `wxTheApp->CallAfter`.
+    3. Verifies target UI object liveness on the GUI thread and unpacks arguments via `std::apply`.
+    4. Base class `~AsyncTrackable()` automatically invalidates the token in RAII fashion, requiring zero manual destructor boilerplate in derived views!
   - During streaming, real-time `onToken` callbacks append text pieces to the UI text control (`AppendText`).
-  - Upon task completion, the `onComplete(success, fullText)` callback **MUST** synchronize the final text box value using `SetValue(cleanFullText)` via `wxTheApp->CallAfter`. This eliminates any partial sub-token leakage that rendered during streaming.
+  - Upon task completion, the `onComplete(success, fullText)` callback **MUST** synchronize the final text box value using `SetValue(cleanFullText)`. This eliminates any partial sub-token leakage that rendered during streaming.
 
 ---
 

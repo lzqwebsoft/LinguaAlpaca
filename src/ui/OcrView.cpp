@@ -596,51 +596,34 @@ namespace LinguaAlpaca::UI {
 		std::string imgPath = m_loadedImagePath.ToUTF8().data();
 		std::string taskType = GetSelectedTaskType();
 
-		wxWeakRef<OcrView> weakSelf(this);
-
 		m_modelManager->ExecuteOcrStream(
 			imgPath, taskType,
-			[weakSelf](const std::string& token) {
-				wxString wToken = wxString::FromUTF8(token);
-				if (wxTheApp) {
-					wxTheApp->CallAfter([weakSelf, wToken]() {
-						if (!weakSelf || !weakSelf->m_resultCard)
-							return;
-						weakSelf->m_resultCard->GetTextCtrl()->AppendText(wToken);
-						wxString current = weakSelf->m_resultCard->GetTextCtrl()->GetValue();
-						weakSelf->m_resultCard->SetCharacterCount(current.Length());
-						});
+			BindUi([this](const std::string& token) {
+				if (!m_resultCard || !m_resultCard->GetTextCtrl()) return;
+				m_resultCard->GetTextCtrl()->AppendText(wxString::FromUTF8(token));
+				wxString current = m_resultCard->GetTextCtrl()->GetValue();
+				m_resultCard->SetCharacterCount(current.Length());
+			}),
+			BindUi([this](const std::string& fullText, bool success, const std::string& error) {
+				SetState(OcrTaskState::Idle);
+
+				if (!m_resultCard || !m_resultCard->GetTextCtrl()) return;
+
+				if (success) {
+					wxString wClean = wxString::FromUTF8(fullText);
+					m_resultCard->GetTextCtrl()->SetValue(wClean);
+					m_resultCard->SetCharacterCount(wClean.Length());
 				}
-			},
-			[weakSelf](const std::string& fullText, bool success,
-				const std::string& error) {
-					if (wxTheApp) {
-						wxTheApp->CallAfter([weakSelf, fullText, success, error]() {
-							if (!weakSelf)
-								return;
-							weakSelf->SetState(OcrTaskState::Idle);
-
-							if (!weakSelf->m_resultCard)
-								return;
-
-							if (success) {
-								wxString wClean = wxString::FromUTF8(fullText);
-								weakSelf->m_resultCard->GetTextCtrl()->SetValue(wClean);
-								weakSelf->m_resultCard->SetCharacterCount(wClean.Length());
-							}
-							else if (!error.empty()) {
-								if (error == "已取消") {
-									weakSelf->m_resultCard->GetTextCtrl()->AppendText(
-										L"\n\n[⏹ OCR 识别已被用户中断]");
-								}
-								else {
-									weakSelf->m_resultCard->GetTextCtrl()->SetValue(
-										wxString::FromUTF8("识别出现提示/错误: " + error));
-								}
-							}
-							});
+				else if (!error.empty()) {
+					if (error == "已取消") {
+						m_resultCard->GetTextCtrl()->AppendText(L"\n\n[⏹ OCR 识别已被用户中断]");
 					}
-			});
+					else {
+						m_resultCard->GetTextCtrl()->SetValue(wxString::FromUTF8("识别出现提示/错误: " + error));
+					}
+				}
+			})
+		);
 	}
 
 	void OcrView::OnStopClicked(wxCommandEvent& WXUNUSED(event)) {

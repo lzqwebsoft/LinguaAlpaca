@@ -9,10 +9,11 @@
 #include "CustomButton.hpp"
 #include "SplitterWindow.hpp"
 #include "TextCtrl.hpp"
+#include "../AsyncTrackable.hpp"
 
 namespace LinguaAlpaca::UI {
 
-class TranslationBubbleFrame : public wxFrame {
+class TranslationBubbleFrame : public wxFrame, public AsyncTrackable {
 public:
     enum class ResizeDirection {
         None,
@@ -27,7 +28,7 @@ public:
     };
 
     explicit TranslationBubbleFrame(std::shared_ptr<ModelManager> modelManager, wxWindow* parent = nullptr);
-    ~TranslationBubbleFrame() override = default;
+    ~TranslationBubbleFrame() override;
 
     // 显示并启动划词翻译
     void ShowAndTranslate(const wxPoint& spawnPos, const std::string& sourceText);

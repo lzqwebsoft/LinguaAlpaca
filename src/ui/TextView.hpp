@@ -8,9 +8,11 @@
 #include "widgets/CardPanel.hpp"
 #include "widgets/StatusBadge.hpp"
 
+#include "AsyncTrackable.hpp"
+
 namespace LinguaAlpaca::UI {
 
-class TextView : public wxPanel {
+class TextView : public wxPanel, public AsyncTrackable {
 public:
     TextView(wxWindow* parent, 
              std::shared_ptr<ModelManager> modelManager,

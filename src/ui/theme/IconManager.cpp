@@ -123,13 +123,19 @@ wxImage IconManager::GetAppWindowIconImage() {
 
 wxBitmapBundle IconManager::GetAppLogoBundle(const wxSize& targetSize) {
     wxImage img = GetAppLogoImage();
-    if (!img.IsOk()) {
+    if (!img.IsOk() || targetSize.x <= 0 || targetSize.y <= 0) {
         return wxBitmapBundle();
     }
     wxBitmap bmp(img.Scale(targetSize.x, targetSize.y, wxIMAGE_QUALITY_HIGH));
+    wxBitmap bmp1_25x(img.Scale(static_cast<int>(std::round(targetSize.x * 1.25)), static_cast<int>(std::round(targetSize.y * 1.25)), wxIMAGE_QUALITY_HIGH));
+    wxBitmap bmp1_5x(img.Scale(static_cast<int>(std::round(targetSize.x * 1.5)), static_cast<int>(std::round(targetSize.y * 1.5)), wxIMAGE_QUALITY_HIGH));
+    wxBitmap bmp1_75x(img.Scale(static_cast<int>(std::round(targetSize.x * 1.75)), static_cast<int>(std::round(targetSize.y * 1.75)), wxIMAGE_QUALITY_HIGH));
     wxBitmap bmp2x(img.Scale(targetSize.x * 2, targetSize.y * 2, wxIMAGE_QUALITY_HIGH));
     wxVector<wxBitmap> bitmaps;
     bitmaps.push_back(bmp);
+    bitmaps.push_back(bmp1_25x);
+    bitmaps.push_back(bmp1_5x);
+    bitmaps.push_back(bmp1_75x);
     bitmaps.push_back(bmp2x);
     return wxBitmapBundle::FromBitmaps(bitmaps);
 }

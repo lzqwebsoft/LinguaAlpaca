@@ -126,6 +126,11 @@ void SelectionService::OnLowLevelMouseEvent(int message, int x, int y) {
     }
 
     if (message == WM_LBUTTONUP) {
+        // 综合过滤检测：如果操作发生在本项目自身窗口、或属于拖动标题栏/滑动滑条/调整窗口大小等非文本选中操作，则忽略
+        if (ShouldIgnoreMouseEvent(m_ptDownX, m_ptDownY, x, y)) {
+            return;
+        }
+
         int dx = x - m_ptDownX;
         int dy = y - m_ptDownY;
         int distSq = dx * dx + dy * dy;
@@ -163,12 +168,105 @@ void SelectionService::OnLowLevelMouseEvent(int message, int x, int y) {
     }
 }
 
+bool SelectionService::ShouldIgnoreMouseEvent(int startX, int startY, int endX, int endY) const {
+#ifdef _WIN32
+    DWORD currentPid = GetCurrentProcessId();
+
+    // 1. 检查鼠标释放点所在的窗体是否属于自身进程
+    POINT ptUp = { endX, endY };
+    HWND hwndUp = WindowFromPoint(ptUp);
+    if (hwndUp) {
+        DWORD targetPid = 0;
+        GetWindowThreadProcessId(hwndUp, &targetPid);
+        if (targetPid == currentPid) {
+            return true;
+        }
+    }
+
+    // 2. 检查鼠标按起点所在的窗体是否属于自身进程
+    POINT ptDown = { startX, startY };
+    HWND hwndDown = WindowFromPoint(ptDown);
+    if (hwndDown) {
+        DWORD downPid = 0;
+        GetWindowThreadProcessId(hwndDown, &downPid);
+        if (downPid == currentPid) {
+            return true;
+        }
+    }
+
+    // 3. 检查当前前台聚焦窗口是否为自身进程
+    HWND hwndForeground = GetForegroundWindow();
+    if (hwndForeground) {
+        DWORD fgPid = 0;
+        GetWindowThreadProcessId(hwndForeground, &fgPid);
+        if (fgPid == currentPid) {
+            return true;
+        }
+    }
+
+    // 4. 检查非客户区操作（如拖拽标题栏移动窗体、滑动滚动条、拖拉边框调整大小等与文本选中无关的操作）
+    if (hwndDown) {
+        DWORD_PTR hitResult = 0;
+        // 使用安全超时调用（30ms），防止目标第三方宿主窗口无响应导致卡顿
+        if (SendMessageTimeoutW(hwndDown, WM_NCHITTEST, 0, MAKELPARAM(startX, startY),
+                                SMTO_ABORTIFHUNG | SMTO_NORMAL, 30, &hitResult)) {
+            switch (hitResult) {
+                case HTCAPTION:     // 标题栏（拖动窗口）
+                case HTVSCROLL:    // 垂直滚动条
+                case HTHSCROLL:    // 水平滚动条
+                case HTLEFT:       // 调整窗口左边框
+                case HTRIGHT:      // 调整窗口右边框
+                case HTTOP:        // 调整窗口上边框
+                case HTBOTTOM:     // 调整窗口下边框
+                case HTTOPLEFT:    // 调整窗口左上角
+                case HTTOPRIGHT:   // 调整窗口右上角
+                case HTBOTTOMLEFT: // 调整窗口左下角
+                case HTBOTTOMRIGHT:// 调整窗口右下角
+                case HTGROWBOX:    // 调整大小手柄
+                case HTMINBUTTON:  // 最小化按钮
+                case HTMAXBUTTON:  // 最大化按钮
+                case HTCLOSE:      // 关闭按钮
+                case HTMENU:       // 菜单栏
+                case HTSYSMENU:    // 系统菜单
+                    return true;
+                default:
+                    break;
+            }
+        }
+
+        // 5. 检查窗口类名（例如 Windows 原生滚动条控件等）
+        wchar_t className[64] = { 0 };
+        if (GetClassNameW(hwndDown, className, 64)) {
+            if (_wcsicmp(className, L"ScrollBar") == 0) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+#else
+    return false;
+#endif
+}
+
 void SelectionService::ProcessSelectionAsync(int startX, int startY, int endX, int endY) {
     bool preserve = m_preserveClipboard.load();
 
     std::thread([this, startX, startY, endX, endY, preserve]() {
         // 短暂延迟 30ms 确保被划词的宿主窗口完成 MouseUp 并进入选中高亮状态
         std::this_thread::sleep_for(std::chrono::milliseconds(30));
+
+#ifdef _WIN32
+        DWORD currentPid = GetCurrentProcessId();
+        HWND fgWnd = GetForegroundWindow();
+        if (fgWnd) {
+            DWORD fgPid = 0;
+            GetWindowThreadProcessId(fgWnd, &fgPid);
+            if (fgPid == currentPid) {
+                return;
+            }
+        }
+#endif
 
         ExtractedSelection extracted = ScreenTextExtractor::ExtractSelection(startX, startY, endX, endY, preserve);
 

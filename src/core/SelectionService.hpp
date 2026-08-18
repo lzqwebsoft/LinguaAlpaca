@@ -43,6 +43,9 @@ public:
 private:
     void ProcessSelectionAsync(int startX, int startY, int endX, int endY);
 
+    // 检查当前的鼠标操作是否应被忽略（如自身窗口、拖拽窗口标题栏、滑动滚动条、调节窗体尺寸等非文本选中操作）
+    bool ShouldIgnoreMouseEvent(int startX, int startY, int endX, int endY) const;
+
     std::shared_ptr<ConfigManager> m_configManager;
     std::atomic<bool> m_isRunning{false};
 

@@ -112,4 +112,4 @@ This file records project-scoped rules, developer guidelines, and architectural 
   - **Cross-Axis Expansion (`wxEXPAND`)**: Always specify `wxEXPAND` on primary body panels (e.g. `m_contentContainer`, log consoles, text views) so they fill 100% of the remaining client space on window maximize/resize.
 - **Multi-Monitor Boundary & Region Safety (`FloatingIconFrame` & `TranslationBubbleFrame`)**:
   - In floating tool frames, calculate screen boundary clamping against `MONITORINFO.rcWork` using `_dip` offsets (e.g. `10_dip` padding).
-  - When shaping Windows regions (`CreateEllipticRgn` / `SetWindowRgn`), always use `38_dip` to ensure rounded shapes scale synchronously with physical pixels on high-DPI screens.
+  - For smooth anti-aliased circular floating windows (`FloatingIconFrame`), avoid `SetWindowRgn` (which clips using a 1-bit binary mask causing jagged stair-step edges). Use Win32 Per-Pixel Alpha Layered Window (`WS_EX_LAYERED` + `UpdateLayeredWindow`) with GDI+ high-quality anti-aliasing (`PixelFormat32bppPARGB`), ensuring perfectly smooth, transparent blended edges across all DPI scaling levels.

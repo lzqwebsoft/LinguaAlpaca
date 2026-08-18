@@ -28,15 +28,21 @@ public:
 
 private:
     void InitUI();
+    void RenderLayeredWindow(int screenX, int screenY);
     void OnPaint(wxPaintEvent& event);
     void OnMouseEnter(wxMouseEvent& event);
     void OnMouseLeave(wxMouseEvent& event);
+    void OnLeftDown(wxMouseEvent& event);
+    void OnMouseMove(wxMouseEvent& event);
     void OnLeftUp(wxMouseEvent& event);
     void OnTimer(wxTimerEvent& event);
 
     wxPoint m_currentPos;
     std::string m_selectedText;
     bool m_isHovered{false};
+    bool m_isDragging{false};
+    wxPoint m_dragStartMousePos;
+    wxPoint m_dragStartFramePos;
 
     wxTimer m_autoHideTimer;
     FloatingIconClickCallback m_onClickCallback;

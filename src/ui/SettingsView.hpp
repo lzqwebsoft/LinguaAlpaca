@@ -7,6 +7,7 @@
 #include "core/Config.hpp"
 #include "core/Downloader.hpp"
 #include "widgets/CustomButton.hpp"
+#include "widgets/StatusBadge.hpp"
 
 namespace LinguaAlpaca::UI {
 
@@ -28,7 +29,6 @@ private:
     void OnTestModel(wxCommandEvent& event);
     void OnDownloadRecommended(wxCommandEvent& event);
     void OnTabChanged(int tabIndex);
-
     void OnBrowseOcrModel(wxCommandEvent& event);
     void OnBrowseOcrMmproj(wxCommandEvent& event);
     void OnSaveOcrConfig(wxCommandEvent& event);
@@ -43,8 +43,7 @@ private:
     wxStaticText* m_titleText{nullptr};
     wxPanel* m_modelCard{nullptr};
     wxStaticText* m_modelCardTitle{nullptr};
-    wxPanel* m_statusBadge{nullptr};
-    wxStaticText* m_statusText{nullptr};
+    StatusBadge* m_statusBadge{nullptr};
 
     CustomButton* m_localTabBtn{nullptr};
     CustomButton* m_recommendTabBtn{nullptr};
@@ -67,8 +66,7 @@ private:
     // UI Elements - 2. OCR 模型 Group
     wxPanel* m_ocrCard{nullptr};
     wxStaticText* m_ocrTitleText{nullptr};
-    wxPanel* m_ocrStatusBadge{nullptr};
-    wxStaticText* m_ocrStatusText{nullptr};
+    StatusBadge* m_ocrStatusBadge{nullptr};
 
     wxStaticText* m_ocrMainLabel{nullptr};
     wxTextCtrl* m_ocrModelPathCtrl{nullptr};

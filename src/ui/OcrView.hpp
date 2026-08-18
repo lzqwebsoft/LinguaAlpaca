@@ -6,9 +6,11 @@
 #include <thread>
 #include <atomic>
 #include "core/ModelManager.hpp"
+#include "widgets/CardPanel.hpp"
 #include "widgets/CustomButton.hpp"
 #include "widgets/ImagePreviewDialog.hpp"
 #include "widgets/TextCtrl.hpp"
+#include "widgets/StatusBadge.hpp"
 
 namespace LinguaAlpaca::UI {
 
@@ -16,6 +18,12 @@ enum class OcrTaskState {
     Idle,
     Recognizing,
     Translating
+};
+
+enum class DropzoneHoverAction {
+    None,
+    Preview,
+    Replace
 };
 
 class OcrView : public wxPanel {
@@ -33,15 +41,16 @@ public:
 private:
     void InitUI();
     void OpenImageDialog();
+    void OpenImagePreview();
     void OnSelectImageClicked(wxMouseEvent& event);
     void OnPreviewClicked(wxCommandEvent& event);
     void OnReplaceClicked(wxCommandEvent& event);
     void OnDropzoneMouseEnter(wxMouseEvent& event);
     void OnDropzoneMouseLeave(wxMouseEvent& event);
+    void OnDropzoneMouseMove(wxMouseEvent& event);
+    void OnDropzoneLeftDown(wxMouseEvent& event);
     void OnRecognizeClicked(wxCommandEvent& event);
     void OnStopClicked(wxCommandEvent& event);
-    void OnClearClicked(wxCommandEvent& event);
-    void OnCopyClicked(wxCommandEvent& event);
 
     void SetState(OcrTaskState state);
     void LoadImageFile(const wxString& filePath);
@@ -57,10 +66,15 @@ private:
     wxString m_imageFileName;
     wxImage m_loadedImage;
 
+    // Dropzone hover & action states
+    bool m_isDropzoneHovered{false};
+    DropzoneHoverAction m_hoveredAction{DropzoneHoverAction::None};
+    wxRect m_previewBtnRect;
+    wxRect m_centerBtnRect;
+
     // Header Controls
     wxStaticText* m_titleText{nullptr};
-    wxPanel* m_statusBadge{nullptr};
-    wxStaticText* m_badgeText{nullptr};
+    StatusBadge* m_statusBadge{nullptr};
 
     // Left Column Controls
     wxPanel* m_leftControlPanel{nullptr};
@@ -68,21 +82,12 @@ private:
     wxChoice* m_typeChoice{nullptr};
 
     wxPanel* m_dropzonePanel{nullptr};
-    wxPanel* m_topOverlayBar{nullptr};
-    CustomButton* m_previewBtn{nullptr};
-    CustomButton* m_replaceBtn{nullptr};
-    CustomButton* m_centerUploadBtn{nullptr};
     wxStaticBitmap* m_uploadIconBmp{nullptr};
     wxStaticText* m_dropTextPrimary{nullptr};
     wxStaticText* m_dropTextSecondary{nullptr};
 
     // Right Column Controls
-    wxPanel* m_resultCard{nullptr};
-    wxStaticText* m_resultTitle{nullptr};
-    TextCtrl* m_resultTextCtrl{nullptr};
-    wxStaticText* m_charCountText{nullptr};
-    CustomButton* m_copyBtn{nullptr};
-    CustomButton* m_clearBtn{nullptr};
+    CardPanel* m_resultCard{nullptr};
 
     // Bottom Action Bar Buttons
     CustomButton* m_recognizeBtn{nullptr};

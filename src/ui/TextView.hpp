@@ -6,6 +6,7 @@
 #include "widgets/LanguageBar.hpp"
 #include "widgets/CustomButton.hpp"
 #include "widgets/CardPanel.hpp"
+#include "widgets/StatusBadge.hpp"
 
 namespace LinguaAlpaca::UI {
 
@@ -37,8 +38,7 @@ private:
     CardPanel* m_targetCard{nullptr};
 
     wxStaticText* m_titleText{nullptr};
-    wxPanel* m_statusBadge{nullptr};
-    wxStaticText* m_badgeText{nullptr};
+    StatusBadge* m_statusBadge{nullptr};
 
     wxPanel* m_bannerPanel{nullptr};
     wxStaticText* m_bannerText{nullptr};

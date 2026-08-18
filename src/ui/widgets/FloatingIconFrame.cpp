@@ -148,31 +148,27 @@ namespace LinguaAlpaca::UI {
         std::unique_ptr<wxGraphicsContext> gc(wxGraphicsContext::Create(dc));
         if (!gc) return;
 
-        ThemePalette palette = ThemeManager::GetCurrentPalette();
-
         wxSize sz = GetClientSize();
         double w = sz.x;
         double h = sz.y;
         if (w <= 0 || h <= 0) return;
 
-        // 绘制高对比度圆形背景与高亮边框
-        wxColour bgColor = m_isHovered ? palette.accentHover : palette.accentPrimary;
-        wxColour borderColor = palette.cardBorderActive;
-
-        gc->SetBrush(wxBrush(bgColor));
-        gc->SetPen(wxPen(borderColor, 1.5));
-        gc->DrawEllipse(1, 1, w - 2, h - 2);
-
-        // 绘制居中翻译图标 (纯白高亮图标在各种背景下均极清晰)
-        wxColour iconColor(255, 255, 255);
-        int iconSize = static_cast<int>(w * 0.55);
-        if (iconSize < 16) iconSize = 16;
-        wxBitmapBundle iconBundle = IconManager::GetIconBundle(SVG::SWAP, wxSize(iconSize, iconSize), iconColor);
-        wxBitmap bmp = iconBundle.GetBitmap(wxSize(iconSize, iconSize));
+        // 获取 logo.png 图像资源 (完全静态链接嵌入)
+        wxBitmapBundle logoBundle = IconManager::GetAppLogoBundle(sz);
+        wxBitmap bmp = logoBundle.GetBitmap(sz);
         if (bmp.IsOk()) {
-            double ix = (w - bmp.GetScaledWidth()) / 2.0;
-            double iy = (h - bmp.GetScaledHeight()) / 2.0;
-            gc->DrawBitmap(bmp, ix, iy, bmp.GetScaledWidth(), bmp.GetScaledHeight());
+            if (m_isHovered) {
+                // 悬停反馈：绘制柔和高亮光晕边框与轻微内缩效果
+                ThemePalette palette = ThemeManager::GetCurrentPalette();
+                gc->SetBrush(wxBrush(wxColour(palette.accentPrimary.Red(), palette.accentPrimary.Green(), palette.accentPrimary.Blue(), 40)));
+                gc->SetPen(wxPen(palette.accentPrimary, 1.5));
+                gc->DrawEllipse(1, 1, w - 2, h - 2);
+
+                double pad = 1.0_dip;
+                gc->DrawBitmap(bmp, pad, pad, w - 2 * pad, h - 2 * pad);
+            } else {
+                gc->DrawBitmap(bmp, 0, 0, w, h);
+            }
         }
     }
 

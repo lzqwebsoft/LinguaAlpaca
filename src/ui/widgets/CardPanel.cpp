@@ -28,7 +28,11 @@ namespace LinguaAlpaca::UI {
 		m_textCtrl->SetBackgroundColour(palette.cardBg);
 		m_textCtrl->SetForegroundColour(m_isActiveBorder ? palette.accentPrimary : palette.textPrimary);
 
-		sizer->Add(m_textCtrl, 1, wxEXPAND | wxLEFT | wxRIGHT, 14_dip);
+		wxBoxSizer* textHBox = new wxBoxSizer(wxHORIZONTAL);
+		textHBox->AddSpacer(14_dip);
+		textHBox->Add(m_textCtrl, 1, wxEXPAND | wxRIGHT, 4_dip);
+
+		sizer->Add(textHBox, 1, wxEXPAND);
 		sizer->AddSpacer(32_dip);
 
 		SetSizer(sizer);
@@ -80,8 +84,7 @@ namespace LinguaAlpaca::UI {
 		double radius = 12.0_dip;
 		gc->SetBrush(gc->CreateBrush(wxBrush(palette.cardBg)));
 
-		wxColour borderColor =
-			m_isActiveBorder ? palette.cardBorderActive : palette.cardBorder;
+		wxColour borderColor = m_isActiveBorder ? palette.cardBorderActive : palette.cardBorder;
 		double borderWidth = m_isActiveBorder ? 1.5 : 1.0;
 		gc->SetPen(gc->CreatePen(wxPen(borderColor, borderWidth)));
 		gc->DrawRoundedRectangle(1, 1, size.x - 2, size.y - 2, radius);

@@ -1,4 +1,20 @@
-# LinguaAlpaca · 译灵驼
+<p align="center">
+  <img src="resources/logo.png" alt="LinguaAlpaca Logo" width="130" />
+</p>
+
+<h1 align="center">LinguaAlpaca · 译灵驼</h1>
+
+<p align="center">
+  <b>基于 C++17 & wxWidgets 打造的现代化、高颜值跨平台离线 AI 翻译与多模态 OCR 桌面工具</b>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/C%2B%2B-17-00599C?style=flat-square&logo=c%2B%2B" alt="C++17" />
+  <img src="https://img.shields.io/badge/wxWidgets-3.3+-007ACC?style=flat-square" alt="wxWidgets" />
+  <img src="https://img.shields.io/badge/llama.cpp-Embedded-7B1FA2?style=flat-square" alt="llama.cpp" />
+  <img src="https://img.shields.io/badge/Platform-Windows-0078D6?style=flat-square&logo=windows" alt="Platform" />
+  <!-- <img src="https://img.shields.io/badge/License-MIT-2E7D32?style=flat-square" alt="License" /> -->
+</p>
 
 **LinguaAlpaca (译灵驼)** 是一款使用 C++17 与 wxWidgets 打造的现代化、高颜值的跨平台桌面离线 AI 翻译与多模态 OCR 工具。项目基于 **llama.cpp** 内嵌服务（默认推荐腾讯 **Hy-MT2-1.8B-GGUF** 中英日韩高性能离线翻译模型 与 **PaddleOCR-VL-1.6** 视觉大模型），采用清晰扁平、高内聚低耦合的模块化设计，具备单一中枢调度、按需异步加载、实时健康探针及完整的自动化单元测试支持。
 

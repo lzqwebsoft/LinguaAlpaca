@@ -1,7 +1,35 @@
 #include "IconManager.hpp"
 #include <wx/mstream.h>
+#include <wx/image.h>
+#include <wx/iconbndl.h>
+#include <wx/stdpaths.h>
+#include <wx/filename.h>
 
 namespace LinguaAlpaca::UI {
+
+static wxString ResolveResourcePath(const wxString& relativePath) {
+    // 1. 尝试可执行文件所在目录
+    wxFileName exeDir(wxStandardPaths::Get().GetExecutablePath());
+    wxString dir = exeDir.GetPath();
+
+    wxString candidate1 = dir + wxFileName::GetPathSeparator() + relativePath;
+    if (wxFileExists(candidate1)) return candidate1;
+
+    // 2. 尝试上级目录 (例如 build/bin/Debug/ 对应根目录)
+    wxString candidate2 = dir + wxFileName::GetPathSeparator() + ".." + wxFileName::GetPathSeparator() + relativePath;
+    if (wxFileExists(candidate2)) return candidate2;
+
+    wxString candidate3 = dir + wxFileName::GetPathSeparator() + ".." + wxFileName::GetPathSeparator() + ".." + wxFileName::GetPathSeparator() + relativePath;
+    if (wxFileExists(candidate3)) return candidate3;
+
+    wxString candidate4 = dir + wxFileName::GetPathSeparator() + ".." + wxFileName::GetPathSeparator() + ".." + wxFileName::GetPathSeparator() + ".." + wxFileName::GetPathSeparator() + relativePath;
+    if (wxFileExists(candidate4)) return candidate4;
+
+    // 3. 尝试当前工作目录
+    if (wxFileExists(relativePath)) return relativePath;
+
+    return wxEmptyString;
+}
 
 wxBitmapBundle IconManager::GetIconBundle(
     const char* svgContent,
@@ -25,6 +53,111 @@ wxBitmapBundle IconManager::GetIconBundle(
     }
 
     return wxBitmapBundle::FromSVG(svgStr.c_str(), size);
+}
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
+wxImage IconManager::GetAppLogoImage() {
+#ifdef _WIN32
+    // 优先从可执行文件内静态链接的 Windows RCDATA 资源直接读取 logo.png (用于标题栏 Logo)
+    HRSRC hRes = ::FindResourceW(NULL, L"APP_LOGO_PNG", RT_RCDATA);
+    if (hRes) {
+        HGLOBAL hGlobal = ::LoadResource(NULL, hRes);
+        if (hGlobal) {
+            void* pData = ::LockResource(hGlobal);
+            DWORD dwSize = ::SizeofResource(NULL, hRes);
+            if (pData && dwSize > 0) {
+                wxMemoryInputStream stream(pData, dwSize);
+                wxImage img;
+                if (img.LoadFile(stream, wxBITMAP_TYPE_PNG)) {
+                    return img;
+                }
+            }
+        }
+    }
+#endif
+
+    // 回退机制：从文件路径解析加载 logo.png
+    wxString logoPath = ResolveResourcePath("resources/logo.png");
+    if (!logoPath.IsEmpty() && wxFileExists(logoPath)) {
+        wxImage img;
+        if (img.LoadFile(logoPath, wxBITMAP_TYPE_PNG)) {
+            return img;
+        }
+    }
+    return wxNullImage;
+}
+
+wxImage IconManager::GetAppWindowIconImage() {
+#ifdef _WIN32
+    // 优先从可执行文件内静态链接的 Windows RCDATA 资源直接读取 app_icon.png (用于窗体/任务栏图标)
+    HRSRC hRes = ::FindResourceW(NULL, L"APP_WINDOW_ICON_PNG", RT_RCDATA);
+    if (hRes) {
+        HGLOBAL hGlobal = ::LoadResource(NULL, hRes);
+        if (hGlobal) {
+            void* pData = ::LockResource(hGlobal);
+            DWORD dwSize = ::SizeofResource(NULL, hRes);
+            if (pData && dwSize > 0) {
+                wxMemoryInputStream stream(pData, dwSize);
+                wxImage img;
+                if (img.LoadFile(stream, wxBITMAP_TYPE_PNG)) {
+                    return img;
+                }
+            }
+        }
+    }
+#endif
+
+    // 回退机制：从文件路径解析加载 app_icon.png
+    wxString logoPath = ResolveResourcePath("resources/app_icon.png");
+    if (!logoPath.IsEmpty() && wxFileExists(logoPath)) {
+        wxImage img;
+        if (img.LoadFile(logoPath, wxBITMAP_TYPE_PNG)) {
+            return img;
+        }
+    }
+    return wxNullImage;
+}
+
+wxBitmapBundle IconManager::GetAppLogoBundle(const wxSize& targetSize) {
+    wxImage img = GetAppLogoImage();
+    if (!img.IsOk()) {
+        return wxBitmapBundle();
+    }
+    wxBitmap bmp(img.Scale(targetSize.x, targetSize.y, wxIMAGE_QUALITY_HIGH));
+    wxBitmap bmp2x(img.Scale(targetSize.x * 2, targetSize.y * 2, wxIMAGE_QUALITY_HIGH));
+    wxVector<wxBitmap> bitmaps;
+    bitmaps.push_back(bmp);
+    bitmaps.push_back(bmp2x);
+    return wxBitmapBundle::FromBitmaps(bitmaps);
+}
+
+wxIcon IconManager::GetAppIcon(const wxSize& targetSize) {
+    wxImage img = GetAppWindowIconImage();
+    if (!img.IsOk()) {
+        return wxNullIcon;
+    }
+    wxBitmap bmp(img.Scale(targetSize.x, targetSize.y, wxIMAGE_QUALITY_HIGH));
+    wxIcon icon;
+    icon.CopyFromBitmap(bmp);
+    return icon;
+}
+
+wxIconBundle IconManager::GetAppIconBundle() {
+    wxIconBundle bundle;
+    wxImage img = GetAppWindowIconImage();
+    if (img.IsOk()) {
+        const int sizes[] = { 16, 24, 32, 48, 64, 128, 256 };
+        for (int sz : sizes) {
+            wxBitmap bmp(img.Scale(sz, sz, wxIMAGE_QUALITY_HIGH));
+            wxIcon icon;
+            icon.CopyFromBitmap(bmp);
+            bundle.AddIcon(icon);
+        }
+    }
+    return bundle;
 }
 
 } // namespace LinguaAlpaca::UI

@@ -44,6 +44,7 @@ private:
     LogView* m_logView{nullptr};
     SettingsView* m_settingsView{nullptr};
 
+    wxStaticBitmap* m_logoIcon{nullptr};
     wxStaticText* m_appNameText{nullptr};
     wxButton* m_themeBtn{nullptr};
     wxButton* m_minBtn{nullptr};

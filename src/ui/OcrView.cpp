@@ -45,12 +45,7 @@ namespace LinguaAlpaca::UI {
 		m_titleText->SetFont(wxFont(18, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
 		m_titleText->SetForegroundColour(palette.textPrimary);
 
-		m_statusBadge = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxSize(-1, 28_dip), wxBORDER_NONE);
-		wxBoxSizer* badgeSizer = new wxBoxSizer(wxHORIZONTAL);
-		m_badgeText = new wxStaticText(m_statusBadge, wxID_ANY, L"●  OCR模型未配置");
-		m_badgeText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
-		badgeSizer->Add(m_badgeText, 0, wxALIGN_CENTER | wxLEFT | wxRIGHT, 10_dip);
-		m_statusBadge->SetSizer(badgeSizer);
+		m_statusBadge = new StatusBadge(this);
 
 		headerSizer->Add(titleIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10_dip);
 		headerSizer->Add(m_titleText, 0, wxALIGN_CENTER_VERTICAL);
@@ -70,11 +65,11 @@ namespace LinguaAlpaca::UI {
 		m_leftControlPanel->SetBackgroundColour(palette.cardBg);
 
 		wxBoxSizer* leftControlSizer = new wxBoxSizer(wxHORIZONTAL);
-		m_typeLabel = new wxStaticText(m_leftControlPanel, wxID_ANY, L"🏷 识别类型");
-		m_typeLabel->SetFont(wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
-		m_typeLabel->SetForegroundColour(palette.textPrimary);
+		m_typeLabel = new wxStaticText(m_leftControlPanel, wxID_ANY, L"识别类型");
+		m_typeLabel->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
+		m_typeLabel->SetForegroundColour(palette.textSecondary);
 
-		m_typeChoice = new wxChoice(m_leftControlPanel, wxID_ANY, wxDefaultPosition, wxSize(-1, 32_dip));
+		m_typeChoice = new wxChoice(m_leftControlPanel, wxID_ANY, wxDefaultPosition, wxDefaultSize);
 		m_typeChoice->Append(L"通识 OCR");
 		m_typeChoice->Append(L"表格识别 (Table)");
 		m_typeChoice->Append(L"公式识别 (Formula)");
@@ -83,9 +78,11 @@ namespace LinguaAlpaca::UI {
 		m_typeChoice->Append(L"印章识别 (Seal)");
 		m_typeChoice->SetSelection(0);
 		m_typeChoice->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+		m_typeChoice->SetBackgroundColour(palette.cardBg);
+		m_typeChoice->SetForegroundColour(palette.textPrimary);
 
-		leftControlSizer->Add(m_typeLabel, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 12_dip);
-		leftControlSizer->Add(m_typeChoice, 1, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, 12_dip);
+		leftControlSizer->Add(m_typeLabel, 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, 10_dip);
+		leftControlSizer->Add(m_typeChoice, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, 12_dip);
 		m_leftControlPanel->SetSizer(leftControlSizer);
 
 		leftColSizer->Add(m_leftControlPanel, 0, wxEXPAND | wxBOTTOM, 12_dip);
@@ -94,32 +91,9 @@ namespace LinguaAlpaca::UI {
 		m_dropzonePanel = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE);
 		m_dropzonePanel->SetBackgroundStyle(wxBG_STYLE_PAINT);
 		m_dropzonePanel->SetCursor(wxCursor(wxCURSOR_HAND));
+		m_dropzonePanel->SetBackgroundColour(palette.cardBg);
 
 		wxBoxSizer* dropSizer = new wxBoxSizer(wxVERTICAL);
-
-		m_topOverlayBar = new wxPanel(m_dropzonePanel, wxID_ANY, wxDefaultPosition, wxSize(-1, 42_dip));
-		m_topOverlayBar->SetBackgroundColour(wxColour(0, 0, 0, 128));
-
-		wxBoxSizer* topOverlaySizer = new wxBoxSizer(wxHORIZONTAL);
-		m_previewBtn = new CustomButton(m_topOverlayBar, wxID_ANY, L"预览", ButtonStyle::Secondary, wxDefaultPosition, dip(76, 30));
-		m_previewBtn->SetIcon(SVG::EYE, dip(14, 14), palette.textPrimary);
-
-		m_replaceBtn = new CustomButton(m_topOverlayBar, wxID_ANY, L"替换", ButtonStyle::Primary, wxDefaultPosition, dip(76, 30));
-		m_replaceBtn->SetIcon(SVG::REPLACE, dip(14, 14), *wxWHITE);
-
-		topOverlaySizer->AddStretchSpacer(1);
-		topOverlaySizer->Add(m_previewBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6_dip);
-		topOverlaySizer->Add(m_replaceBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10_dip);
-		m_topOverlayBar->SetSizer(topOverlaySizer);
-		m_topOverlayBar->Hide();
-
-		dropSizer->Add(m_topOverlayBar, 0, wxEXPAND | wxTOP, 0);
-		dropSizer->AddStretchSpacer(1);
-
-		m_centerUploadBtn = new CustomButton(m_dropzonePanel, wxID_ANY, L" 替换图片", ButtonStyle::Primary, wxDefaultPosition, dip(130, 38));
-		m_centerUploadBtn->SetIcon(SVG::CLOUD_UPLOAD, dip(16, 16), *wxWHITE);
-		m_centerUploadBtn->Hide();
-		dropSizer->Add(m_centerUploadBtn, 0, wxALIGN_CENTER_HORIZONTAL);
 
 		wxBitmapBundle uploadBundle = IconManager::GetIconBundle(SVG::CLOUD_UPLOAD, dip(44, 44), palette.accentPrimary);
 		m_uploadIconBmp = new wxStaticBitmap(m_dropzonePanel, wxID_ANY, uploadBundle);
@@ -132,6 +106,7 @@ namespace LinguaAlpaca::UI {
 		m_dropTextSecondary->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
 		m_dropTextSecondary->SetForegroundColour(palette.textSecondary);
 
+		dropSizer->AddStretchSpacer(1);
 		dropSizer->Add(m_uploadIconBmp, 0, wxALIGN_CENTER_HORIZONTAL | wxBOTTOM, 8_dip);
 		dropSizer->Add(m_dropTextPrimary, 0, wxALIGN_CENTER_HORIZONTAL | wxBOTTOM, 4_dip);
 		dropSizer->Add(m_dropTextSecondary, 0, wxALIGN_CENTER_HORIZONTAL);
@@ -147,12 +122,18 @@ namespace LinguaAlpaca::UI {
 				return;
 
 			auto p = ThemeColors::GetCurrentPalette();
-			dc.SetBackground(wxBrush(p.cardBg));
+			dc.SetBackground(wxBrush(p.windowBg));
 			dc.Clear();
 
 			std::unique_ptr<wxGraphicsContext> gc(wxGraphicsContext::Create(dc));
 			if (!gc)
 				return;
+
+			wxGraphicsPath path = gc->CreatePath();
+			path.AddRoundedRectangle(4_dip, 4_dip, size.x - 8_dip, size.y - 8_dip, 8_dip);
+
+			gc->SetBrush(gc->CreateBrush(wxBrush(p.cardBg)));
+			gc->FillPath(path);
 
 			if (m_loadedImage.IsOk() && !m_loadedImagePath.IsEmpty()) {
 				int pad = 6_dip;
@@ -174,19 +155,89 @@ namespace LinguaAlpaca::UI {
 
 					gc->Clip(4_dip, 4_dip, size.x - 8_dip, size.y - 8_dip);
 					gc->DrawBitmap(bmp, drawX, drawY, drawW, drawH);
+
+					// 悬浮在图片上且非识别中状态时，绘制半透明暗色遮罩与交互按钮
+					if (m_isDropzoneHovered && m_currentState != OcrTaskState::Recognizing) {
+						// 1. 半透明暗色遮罩
+						gc->SetBrush(gc->CreateBrush(wxBrush(wxColour(0, 0, 0, 85))));
+						gc->FillPath(path);
+
+						// 2. 右上角「预览」按钮 (次级毛玻璃样式)
+						int topBtnW = 76_dip;
+						int topBtnH = 30_dip;
+						int topBtnX = size.x - topBtnW - 14_dip;
+						int topBtnY = 12_dip;
+						m_previewBtnRect = wxRect(topBtnX, topBtnY, topBtnW, topBtnH);
+
+						bool isTopHovered = (m_hoveredAction == DropzoneHoverAction::Preview);
+						wxColour topBg = isTopHovered ? wxColour(255, 255, 255, 240) : wxColour(255, 255, 255, 190);
+						wxColour topText = wxColour(30, 41, 59);
+
+						gc->SetBrush(gc->CreateBrush(wxBrush(topBg)));
+						gc->SetPen(*wxTRANSPARENT_PEN);
+						gc->DrawRoundedRectangle(topBtnX, topBtnY, topBtnW, topBtnH, 6.0_dip);
+
+						wxSize topIconSz = dip(14, 14);
+						wxBitmapBundle eyeBundle = IconManager::GetIconBundle(SVG::EYE, topIconSz, topText);
+						wxBitmap eyeBmp = eyeBundle.GetBitmap(topIconSz);
+
+						wxFont topFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei");
+						gc->SetFont(topFont, topText);
+						double eyeTw = 0, eyeTh = 0;
+						gc->GetTextExtent(L"预览", &eyeTw, &eyeTh);
+
+						double topContentW = topIconSz.x + 4_dip + eyeTw;
+						double topStartX = topBtnX + (topBtnW - topContentW) / 2.0;
+						if (eyeBmp.IsOk()) {
+							gc->DrawBitmap(eyeBmp, topStartX, topBtnY + (topBtnH - topIconSz.y) / 2.0, topIconSz.x, topIconSz.y);
+						}
+						gc->DrawText(L"预览", topStartX + topIconSz.x + 4_dip, topBtnY + (topBtnH - eyeTh) / 2.0);
+
+						// 3. 居中「替换图片」按钮 (Primary 强调样式，无任何多余灰色背景)
+						int centerBtnW = 130_dip;
+						int centerBtnH = 38_dip;
+						int centerBtnX = (size.x - centerBtnW) / 2;
+						int centerBtnY = (size.y - centerBtnH) / 2;
+						m_centerBtnRect = wxRect(centerBtnX, centerBtnY, centerBtnW, centerBtnH);
+
+						bool isCenterHovered = (m_hoveredAction == DropzoneHoverAction::Replace);
+						wxColour centerBg = isCenterHovered ? p.accentHover : p.accentPrimary;
+
+						gc->SetBrush(gc->CreateBrush(wxBrush(centerBg)));
+						gc->SetPen(*wxTRANSPARENT_PEN);
+						gc->DrawRoundedRectangle(centerBtnX, centerBtnY, centerBtnW, centerBtnH, 10.0_dip);
+
+						wxSize centerIconSz = dip(16, 16);
+						wxBitmapBundle cloudBundle = IconManager::GetIconBundle(SVG::CLOUD_UPLOAD, centerIconSz, *wxWHITE);
+						wxBitmap cloudBmp = cloudBundle.GetBitmap(centerIconSz);
+
+						wxFont centerFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei");
+						gc->SetFont(centerFont, *wxWHITE);
+						double cTw = 0, cTh = 0;
+						gc->GetTextExtent(L" 替换图片", &cTw, &cTh);
+
+						double centerContentW = centerIconSz.x + 4_dip + cTw;
+						double centerStartX = centerBtnX + (centerBtnW - centerContentW) / 2.0;
+						if (cloudBmp.IsOk()) {
+							gc->DrawBitmap(cloudBmp, centerStartX, centerBtnY + (centerBtnH - centerIconSz.y) / 2.0, centerIconSz.x, centerIconSz.y);
+						}
+						gc->DrawText(L" 替换图片", centerStartX + centerIconSz.x + 4_dip, centerBtnY + (centerBtnH - cTh) / 2.0);
+					}
+					else {
+						m_previewBtnRect = wxRect();
+						m_centerBtnRect = wxRect();
+					}
+
 					gc->ResetClip();
 
-					wxGraphicsPath borderPath = gc->CreatePath();
-					borderPath.AddRoundedRectangle(4_dip, 4_dip, size.x - 8_dip, size.y - 8_dip, 8_dip);
 					wxPen pen(p.cardBorder, 1);
 					gc->SetPen(pen);
-					gc->StrokePath(borderPath);
+					gc->StrokePath(path);
 				}
 			}
 			else {
-				wxGraphicsPath path = gc->CreatePath();
-				path.AddRoundedRectangle(4_dip, 4_dip, size.x - 8_dip, size.y - 8_dip, 8_dip);
-
+				m_previewBtnRect = wxRect();
+				m_centerBtnRect = wxRect();
 				wxPen pen(p.cardBorder, 2, wxPENSTYLE_SHORT_DASH);
 				gc->SetPen(pen);
 				gc->StrokePath(path);
@@ -197,51 +248,31 @@ namespace LinguaAlpaca::UI {
 		contentSizer->Add(leftColSizer, 45, wxEXPAND | wxRIGHT, 12_dip);
 
 		// Right Column: Recognized Text Card (Ratio 55%)
-		m_resultCard = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-			wxBORDER_NONE);
-		m_resultCard->SetBackgroundColour(palette.cardBg);
+		m_resultCard = new CardPanel(this, L"识别文本", true);
+		m_resultCard->GetTextCtrl()->SetHint(L"上传图片后，识别结果将自动显示在这里...");
 
-		wxBoxSizer* resultSizer = new wxBoxSizer(wxVERTICAL);
+		m_resultCard->AddToolIcon(1, SVG::COPY, L"复制文本", [this]() {
+			if (!m_resultCard)
+				return;
+			wxString text = m_resultCard->GetTextCtrl()->GetValue();
+			if (text.IsEmpty())
+				return;
 
-		wxBoxSizer* resultHeader = new wxBoxSizer(wxHORIZONTAL);
-		m_resultTitle = new wxStaticText(m_resultCard, wxID_ANY, L"A 识别文本");
-		m_resultTitle->SetFont(wxFont(11, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL,
-			wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
-		m_resultTitle->SetForegroundColour(palette.textPrimary);
+			if (wxTheClipboard->Open()) {
+				wxTheClipboard->SetData(new wxTextDataObject(text));
+				wxTheClipboard->Close();
+				wxMessageBox(L"识别结果已复制到剪贴板！", L"提示",
+					wxOK | wxICON_INFORMATION, this);
+			}
+		});
 
-		m_copyBtn = new CustomButton(m_resultCard, wxID_ANY, L"", ButtonStyle::Secondary, wxDefaultPosition, dip(34, 34));
-		m_copyBtn->SetIcon(SVG::COPY, dip(16, 16), palette.textPrimary);
-		m_copyBtn->SetToolTip(L"复制文本");
+		m_resultCard->AddToolIcon(2, SVG::CLEAR, L"清空内容", [this]() {
+			if (!m_resultCard)
+				return;
+			m_resultCard->GetTextCtrl()->Clear();
+			m_resultCard->SetCharacterCount(0);
+		});
 
-		m_clearBtn = new CustomButton(m_resultCard, wxID_ANY, L"", ButtonStyle::Secondary, wxDefaultPosition, dip(34, 34));
-		m_clearBtn->SetIcon(SVG::CLEAR, dip(16, 16), palette.textPrimary);
-		m_clearBtn->SetToolTip(L"清空内容");
-
-		resultHeader->Add(m_resultTitle, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 16_dip);
-		resultHeader->AddStretchSpacer(1);
-		resultHeader->Add(m_copyBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6_dip);
-		resultHeader->Add(m_clearBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 16_dip);
-
-		resultSizer->Add(resultHeader, 0, wxEXPAND | wxTOP | wxBOTTOM, 10_dip);
-
-		m_resultTextCtrl = new TextCtrl(m_resultCard, wxID_ANY, L"", wxDefaultPosition, wxDefaultSize, wxTE_MULTILINE | wxBORDER_NONE);
-		m_resultTextCtrl->SetHint(L"上传图片后，识别结果将自动显示在这里...");
-		m_resultTextCtrl->SetFont(wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
-		m_resultTextCtrl->SetBackgroundColour(palette.windowBg);
-		m_resultTextCtrl->SetForegroundColour(palette.textPrimary);
-
-		resultSizer->Add(m_resultTextCtrl, 1, wxEXPAND | wxLEFT | wxRIGHT, 16_dip);
-
-		wxBoxSizer* resultFooter = new wxBoxSizer(wxHORIZONTAL);
-		m_charCountText = new wxStaticText(m_resultCard, wxID_ANY, L"0 字符");
-		m_charCountText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
-		m_charCountText->SetForegroundColour(palette.textSecondary);
-
-		resultFooter->AddStretchSpacer(1);
-		resultFooter->Add(m_charCountText, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 16_dip);
-		resultSizer->Add(resultFooter, 0, wxEXPAND | wxTOP | wxBOTTOM, 10_dip);
-
-		m_resultCard->SetSizer(resultSizer);
 		contentSizer->Add(m_resultCard, 55, wxEXPAND);
 
 		mainSizer->Add(contentSizer, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 20_dip);
@@ -268,43 +299,30 @@ namespace LinguaAlpaca::UI {
 		Layout();
 
 		// Event Bindings
-		m_dropzonePanel->Bind(wxEVT_LEFT_DOWN, &OcrView::OnSelectImageClicked, this);
+		m_dropzonePanel->Bind(wxEVT_LEFT_DOWN, &OcrView::OnDropzoneLeftDown, this);
+		m_dropzonePanel->Bind(wxEVT_ENTER_WINDOW, &OcrView::OnDropzoneMouseEnter, this);
+		m_dropzonePanel->Bind(wxEVT_LEAVE_WINDOW, &OcrView::OnDropzoneMouseLeave, this);
+		m_dropzonePanel->Bind(wxEVT_MOTION, &OcrView::OnDropzoneMouseMove, this);
+
 		m_uploadIconBmp->Bind(wxEVT_LEFT_DOWN, &OcrView::OnSelectImageClicked, this);
 		m_dropTextPrimary->Bind(wxEVT_LEFT_DOWN, &OcrView::OnSelectImageClicked, this);
 		m_dropTextSecondary->Bind(wxEVT_LEFT_DOWN, &OcrView::OnSelectImageClicked, this);
 
-		m_dropzonePanel->Bind(wxEVT_ENTER_WINDOW, &OcrView::OnDropzoneMouseEnter, this);
-		m_dropzonePanel->Bind(wxEVT_LEAVE_WINDOW, &OcrView::OnDropzoneMouseLeave, this);
-
-		m_topOverlayBar->Bind(wxEVT_ENTER_WINDOW, &OcrView::OnDropzoneMouseEnter, this);
-		m_topOverlayBar->Bind(wxEVT_LEAVE_WINDOW, &OcrView::OnDropzoneMouseLeave, this);
-
-		m_previewBtn->Bind(wxEVT_ENTER_WINDOW, &OcrView::OnDropzoneMouseEnter, this);
-		m_previewBtn->Bind(wxEVT_LEAVE_WINDOW, &OcrView::OnDropzoneMouseLeave, this);
-
-		m_replaceBtn->Bind(wxEVT_ENTER_WINDOW, &OcrView::OnDropzoneMouseEnter, this);
-		m_replaceBtn->Bind(wxEVT_LEAVE_WINDOW, &OcrView::OnDropzoneMouseLeave, this);
-
-		m_centerUploadBtn->Bind(wxEVT_ENTER_WINDOW, &OcrView::OnDropzoneMouseEnter, this);
-		m_centerUploadBtn->Bind(wxEVT_LEAVE_WINDOW, &OcrView::OnDropzoneMouseLeave, this);
-
-		m_previewBtn->Bind(wxEVT_BUTTON, &OcrView::OnPreviewClicked, this);
-		m_replaceBtn->Bind(wxEVT_BUTTON, &OcrView::OnReplaceClicked, this);
-		m_centerUploadBtn->Bind(wxEVT_BUTTON, &OcrView::OnReplaceClicked, this);
-
 		m_recognizeBtn->Bind(wxEVT_BUTTON, &OcrView::OnRecognizeClicked, this);
 		m_stopBtn->Bind(wxEVT_BUTTON, &OcrView::OnStopClicked, this);
-		m_clearBtn->Bind(wxEVT_BUTTON, &OcrView::OnClearClicked, this);
-		m_copyBtn->Bind(wxEVT_BUTTON, &OcrView::OnCopyClicked, this);
 
-		m_resultTextCtrl->Bind(wxEVT_TEXT, [this](wxCommandEvent&) {
-			wxString text = m_resultTextCtrl->GetValue();
-			m_charCountText->SetLabel(wxString::Format(L"%zu 字符", text.Length()));
+		if (m_resultCard && m_resultCard->GetTextCtrl()) {
+			m_resultCard->GetTextCtrl()->Bind(wxEVT_TEXT, [this](wxCommandEvent&) {
+				if (m_resultCard && m_resultCard->GetTextCtrl()) {
+					wxString text = m_resultCard->GetTextCtrl()->GetValue();
+					m_resultCard->SetCharacterCount(text.Length());
+				}
 			});
+		}
 	}
 
 	void OcrView::UpdateStatusBadge() {
-		if (!m_statusBadge || !m_badgeText)
+		if (!m_statusBadge)
 			return;
 
 		ServerStatusInfo info;
@@ -312,35 +330,27 @@ namespace LinguaAlpaca::UI {
 			info = m_modelManager->GetHealthStatus(TargetModelType::Ocr);
 		}
 
+		wxString label;
 		switch (info.state) {
 		case ServerHealthState::Ready:
-			m_statusBadge->SetBackgroundColour(wxColour(240, 253, 244));
-			m_badgeText->SetForegroundColour(wxColour(22, 101, 52));
-			m_badgeText->SetLabel(L"●  OCR模型已就绪");
+			label = L"●  OCR模型已就绪";
 			break;
 		case ServerHealthState::Loading:
-			m_statusBadge->SetBackgroundColour(wxColour(254, 249, 195));
-			m_badgeText->SetForegroundColour(wxColour(161, 98, 7));
-			m_badgeText->SetLabel(L"●  正在加载OCR模型...");
+			label = L"●  正在加载OCR模型...";
 			break;
 		case ServerHealthState::Unconfigured:
-			m_statusBadge->SetBackgroundColour(wxColour(254, 242, 242));
-			m_badgeText->SetForegroundColour(wxColour(220, 38, 38));
-			m_badgeText->SetLabel(L"●  OCR模型未配置");
+			label = L"●  OCR模型未配置";
 			break;
 		case ServerHealthState::Offline:
-			m_statusBadge->SetBackgroundColour(wxColour(241, 245, 249));
-			m_badgeText->SetForegroundColour(wxColour(100, 116, 139));
-			m_badgeText->SetLabel(L"●  服务离线");
+			label = L"●  服务离线";
 			break;
 		case ServerHealthState::Error:
 		default:
-			m_statusBadge->SetBackgroundColour(wxColour(254, 242, 242));
-			m_badgeText->SetForegroundColour(wxColour(220, 38, 38));
-			m_badgeText->SetLabel(L"●  服务异常");
+			label = L"●  服务异常";
 			break;
 		}
-		m_statusBadge->Layout();
+
+		m_statusBadge->SetStatus(info.state, label);
 	}
 
 	void OcrView::UpdateTheme() {
@@ -352,39 +362,32 @@ namespace LinguaAlpaca::UI {
 		if (m_leftControlPanel)
 			m_leftControlPanel->SetBackgroundColour(palette.cardBg);
 		if (m_typeLabel)
-			m_typeLabel->SetForegroundColour(palette.textPrimary);
+			m_typeLabel->SetForegroundColour(palette.textSecondary);
+		if (m_typeChoice) {
+			m_typeChoice->SetBackgroundColour(palette.cardBg);
+			m_typeChoice->SetForegroundColour(palette.textPrimary);
+		}
 		if (m_dropTextPrimary)
 			m_dropTextPrimary->SetForegroundColour(palette.textPrimary);
 		if (m_dropTextSecondary)
 			m_dropTextSecondary->SetForegroundColour(palette.textSecondary);
 		if (m_resultCard)
-			m_resultCard->SetBackgroundColour(palette.cardBg);
-		if (m_resultTitle)
-			m_resultTitle->SetForegroundColour(palette.textPrimary);
-		if (m_charCountText)
-			m_charCountText->SetForegroundColour(palette.textSecondary);
-
-		if (m_resultTextCtrl) {
-			m_resultTextCtrl->SetBackgroundColour(palette.windowBg);
-			m_resultTextCtrl->SetForegroundColour(palette.textPrimary);
-		}
+			m_resultCard->UpdateTheme();
 
 		if (m_uploadIconBmp) {
-			wxBitmapBundle uploadBundle = IconManager::GetIconBundle(SVG::CLOUD_UPLOAD, wxSize(44, 44), palette.accentPrimary);
-			m_uploadIconBmp->SetBitmap(uploadBundle.GetBitmap(wxSize(44, 44)));
+			wxBitmapBundle uploadBundle = IconManager::GetIconBundle(SVG::CLOUD_UPLOAD, dip(44, 44), palette.accentPrimary);
+			m_uploadIconBmp->SetBitmap(uploadBundle.GetBitmap(dip(44, 44)));
 		}
 
 		if (m_recognizeBtn)
 			m_recognizeBtn->Refresh();
 		if (m_stopBtn)
 			m_stopBtn->Refresh();
-		if (m_copyBtn)
-			m_copyBtn->Refresh();
-		if (m_clearBtn)
-			m_clearBtn->Refresh();
 
-		if (m_dropzonePanel)
+		if (m_dropzonePanel) {
+			m_dropzonePanel->SetBackgroundColour(palette.cardBg);
 			m_dropzonePanel->Refresh();
+		}
 		UpdateStatusBadge();
 		Refresh();
 	}
@@ -399,6 +402,14 @@ namespace LinguaAlpaca::UI {
 		}
 	}
 
+	void OcrView::OpenImagePreview() {
+		if (m_loadedImage.IsOk()) {
+			ImagePreviewDialog dialog(this, m_loadedImage,
+				L"图片预览 - " + m_imageFileName);
+			dialog.ShowModal();
+		}
+	}
+
 	void OcrView::OnSelectImageClicked(wxMouseEvent& WXUNUSED(event)) {
 		if (!m_loadedImage.IsOk()) {
 			OpenImageDialog();
@@ -406,11 +417,7 @@ namespace LinguaAlpaca::UI {
 	}
 
 	void OcrView::OnPreviewClicked(wxCommandEvent& WXUNUSED(event)) {
-		if (m_loadedImage.IsOk()) {
-			ImagePreviewDialog dialog(this, m_loadedImage,
-				L"图片预览 - " + m_imageFileName);
-			dialog.ShowModal();
-		}
+		OpenImagePreview();
 	}
 
 	void OcrView::OnReplaceClicked(wxCommandEvent& WXUNUSED(event)) {
@@ -425,38 +432,59 @@ namespace LinguaAlpaca::UI {
 			return;
 		}
 
-		if (m_loadedImage.IsOk() && !m_loadedImagePath.IsEmpty()) {
-			if (m_topOverlayBar)
-				m_topOverlayBar->Show();
-			if (m_centerUploadBtn)
-				m_centerUploadBtn->Show();
-			m_dropzonePanel->Layout();
+		m_isDropzoneHovered = true;
+		if (m_dropzonePanel) {
 			m_dropzonePanel->Refresh();
 		}
 		event.Skip();
 	}
 
 	void OcrView::OnDropzoneMouseLeave(wxMouseEvent& event) {
+		m_isDropzoneHovered = false;
+		m_hoveredAction = DropzoneHoverAction::None;
 		if (m_dropzonePanel) {
-			wxRect screenRect = m_dropzonePanel->GetScreenRect();
-			wxPoint mousePos = wxGetMousePosition();
-			if (screenRect.Contains(mousePos)) {
-				event.Skip();
-				return;
-			}
+			m_dropzonePanel->SetCursor(wxCursor(wxCURSOR_HAND));
+			m_dropzonePanel->Refresh();
+		}
+		event.Skip();
+	}
+
+	void OcrView::OnDropzoneMouseMove(wxMouseEvent& event) {
+		if (m_currentState == OcrTaskState::Recognizing || !m_loadedImage.IsOk() || m_loadedImagePath.IsEmpty()) {
+			event.Skip();
+			return;
 		}
 
-		if (m_loadedImage.IsOk() && !m_loadedImagePath.IsEmpty()) {
-			if (m_topOverlayBar)
-				m_topOverlayBar->Hide();
-			if (m_centerUploadBtn)
-				m_centerUploadBtn->Hide();
+		wxPoint pt = event.GetPosition();
+		DropzoneHoverAction newAction = DropzoneHoverAction::None;
+		if (m_previewBtnRect.Contains(pt)) {
+			newAction = DropzoneHoverAction::Preview;
+		}
+		else if (m_centerBtnRect.Contains(pt)) {
+			newAction = DropzoneHoverAction::Replace;
+		}
+
+		if (newAction != m_hoveredAction) {
+			m_hoveredAction = newAction;
 			if (m_dropzonePanel) {
-				m_dropzonePanel->Layout();
 				m_dropzonePanel->Refresh();
 			}
 		}
 		event.Skip();
+	}
+
+	void OcrView::OnDropzoneLeftDown(wxMouseEvent& event) {
+		if (m_currentState == OcrTaskState::Recognizing)
+			return;
+
+		if (m_loadedImage.IsOk() && !m_loadedImagePath.IsEmpty()) {
+			wxPoint pt = event.GetPosition();
+			if (m_previewBtnRect.Contains(pt)) {
+				OpenImagePreview();
+				return;
+			}
+		}
+		OpenImageDialog();
 	}
 
 	void OcrView::OnImageFileDropped(const wxString& filePath) {
@@ -484,10 +512,6 @@ namespace LinguaAlpaca::UI {
 				m_dropTextPrimary->Hide();
 			if (m_dropTextSecondary)
 				m_dropTextSecondary->Hide();
-			if (m_topOverlayBar)
-				m_topOverlayBar->Hide();
-			if (m_centerUploadBtn)
-				m_centerUploadBtn->Hide();
 		}
 		else {
 			if (m_uploadIconBmp)
@@ -496,11 +520,10 @@ namespace LinguaAlpaca::UI {
 				m_dropTextPrimary->Show();
 			if (m_dropTextSecondary)
 				m_dropTextSecondary->Show();
-			if (m_topOverlayBar)
-				m_topOverlayBar->Hide();
-			if (m_centerUploadBtn)
-				m_centerUploadBtn->Hide();
 		}
+
+		m_isDropzoneHovered = false;
+		m_hoveredAction = DropzoneHoverAction::None;
 
 		if (m_dropzonePanel) {
 			m_dropzonePanel->Layout();
@@ -513,14 +536,13 @@ namespace LinguaAlpaca::UI {
 		if (state == OcrTaskState::Recognizing) {
 			m_recognizeBtn->Hide();
 			m_stopBtn->Show();
-			if (m_topOverlayBar)
-				m_topOverlayBar->Hide();
-			if (m_centerUploadBtn)
-				m_centerUploadBtn->Hide();
 		}
 		else {
 			m_recognizeBtn->Show();
 			m_stopBtn->Hide();
+		}
+		if (m_dropzonePanel) {
+			m_dropzonePanel->Refresh();
 		}
 		GetSizer()->Layout();
 	}
@@ -565,8 +587,10 @@ namespace LinguaAlpaca::UI {
 			return;
 		}
 
-		m_resultTextCtrl->Clear();
-		m_charCountText->SetLabel(L"0 字符");
+		if (m_resultCard) {
+			m_resultCard->GetTextCtrl()->Clear();
+			m_resultCard->SetCharacterCount(0);
+		}
 		SetState(OcrTaskState::Recognizing);
 
 		std::string imgPath = m_loadedImagePath.ToUTF8().data();
@@ -580,14 +604,11 @@ namespace LinguaAlpaca::UI {
 				wxString wToken = wxString::FromUTF8(token);
 				if (wxTheApp) {
 					wxTheApp->CallAfter([weakSelf, wToken]() {
-						if (!weakSelf || !weakSelf->m_resultTextCtrl)
+						if (!weakSelf || !weakSelf->m_resultCard)
 							return;
-						weakSelf->m_resultTextCtrl->AppendText(wToken);
-						wxString current = weakSelf->m_resultTextCtrl->GetValue();
-						if (weakSelf->m_charCountText) {
-							weakSelf->m_charCountText->SetLabel(
-								wxString::Format(L"%zu 字符", current.Length()));
-						}
+						weakSelf->m_resultCard->GetTextCtrl()->AppendText(wToken);
+						wxString current = weakSelf->m_resultCard->GetTextCtrl()->GetValue();
+						weakSelf->m_resultCard->SetCharacterCount(current.Length());
 						});
 				}
 			},
@@ -599,24 +620,21 @@ namespace LinguaAlpaca::UI {
 								return;
 							weakSelf->SetState(OcrTaskState::Idle);
 
-							if (!weakSelf->m_resultTextCtrl)
+							if (!weakSelf->m_resultCard)
 								return;
 
 							if (success) {
 								wxString wClean = wxString::FromUTF8(fullText);
-								weakSelf->m_resultTextCtrl->SetValue(wClean);
-								if (weakSelf->m_charCountText) {
-									weakSelf->m_charCountText->SetLabel(
-										wxString::Format(L"%zu 字符", wClean.Length()));
-								}
+								weakSelf->m_resultCard->GetTextCtrl()->SetValue(wClean);
+								weakSelf->m_resultCard->SetCharacterCount(wClean.Length());
 							}
 							else if (!error.empty()) {
 								if (error == "已取消") {
-									weakSelf->m_resultTextCtrl->AppendText(
+									weakSelf->m_resultCard->GetTextCtrl()->AppendText(
 										L"\n\n[⏹ OCR 识别已被用户中断]");
 								}
 								else {
-									weakSelf->m_resultTextCtrl->SetValue(
+									weakSelf->m_resultCard->GetTextCtrl()->SetValue(
 										wxString::FromUTF8("识别出现提示/错误: " + error));
 								}
 							}
@@ -632,22 +650,5 @@ namespace LinguaAlpaca::UI {
 		SetState(OcrTaskState::Idle);
 	}
 
-	void OcrView::OnClearClicked(wxCommandEvent& WXUNUSED(event)) {
-		m_resultTextCtrl->Clear();
-		m_charCountText->SetLabel(L"0 字符");
-	}
-
-	void OcrView::OnCopyClicked(wxCommandEvent& WXUNUSED(event)) {
-		wxString text = m_resultTextCtrl->GetValue();
-		if (text.IsEmpty())
-			return;
-
-		if (wxTheClipboard->Open()) {
-			wxTheClipboard->SetData(new wxTextDataObject(text));
-			wxTheClipboard->Close();
-			wxMessageBox(L"识别结果已复制到剪贴板！", L"提示",
-				wxOK | wxICON_INFORMATION, this);
-		}
-	}
 
 } // namespace LinguaAlpaca::UI

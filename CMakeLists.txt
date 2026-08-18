@@ -97,6 +97,8 @@ set(UI_SOURCES
     src/ui/theme/IconManager.cpp
     src/ui/widgets/CustomButton.hpp
     src/ui/widgets/CustomButton.cpp
+    src/ui/widgets/StatusBadge.hpp
+    src/ui/widgets/StatusBadge.cpp
     src/ui/widgets/SidebarNav.hpp
     src/ui/widgets/SidebarNav.cpp
     src/ui/widgets/CardPanel.hpp
@@ -130,12 +132,19 @@ set(UI_SOURCES
     src/ui/MainFrame.cpp
 )
 
+# 平台资源文件
+set(APP_RESOURCES "")
+if(WIN32)
+    set(APP_RESOURCES resources/app.rc)
+endif()
+
 # 创建主可执行程序 (Windows GUI)
 add_executable(${PROJECT_NAME} WIN32
     src/main.cpp
     ${CORE_SOURCES}
     ${ENGINE_SOURCES}
     ${UI_SOURCES}
+    ${APP_RESOURCES}
 )
 
 # 包含头文件路径
@@ -163,11 +172,14 @@ if(WIN32)
     target_link_libraries(${PROJECT_NAME} PRIVATE ole32 oleaut32 windowsapp)
 endif()
 
-# 自动将第三方 DLL 复制到 output 目录
+# 自动将第三方 DLL 与 resources 资源目录复制到 output 目录
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_BINARY_DIR}/third_party/wxWidgets/lib/vc_x64_dll"
         "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_CURRENT_SOURCE_DIR}/resources"
+        "$<TARGET_FILE_DIR:${PROJECT_NAME}>/resources"
 )
 
 # 单元测试模块

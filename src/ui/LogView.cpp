@@ -134,7 +134,11 @@ void LogView::InitUI() {
     m_logTextCtrl->SetBackgroundColour(palette.cardBg);
     m_logTextCtrl->SetForegroundColour(palette.textPrimary);
 
-    cardSizer->Add(m_logTextCtrl, 1, wxEXPAND | wxALL, 8_dip);
+    wxBoxSizer* textHBox = new wxBoxSizer(wxHORIZONTAL);
+    textHBox->AddSpacer(8_dip);
+    textHBox->Add(m_logTextCtrl, 1, wxEXPAND | wxRIGHT, 4_dip);
+
+    cardSizer->Add(textHBox, 1, wxEXPAND | wxTOP | wxBOTTOM, 8_dip);
     m_cardContainer->SetSizer(cardSizer);
 
     mainSizer->Add(m_cardContainer, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 16_dip);

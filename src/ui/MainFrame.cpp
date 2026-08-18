@@ -14,6 +14,7 @@ namespace LinguaAlpaca::UI {
         : wxFrame(nullptr, wxID_ANY, L"译灵驼 · LinguaAlpaca", wxDefaultPosition,
             wxDefaultSize, wxBORDER_NONE),
         m_modelManager(std::move(modelManager)) {
+        SetIcons(IconManager::GetAppIconBundle());
         SetClientSize(dip(1080, 780));
         SetMinClientSize(dip(960, 680));
         InitUI();
@@ -35,17 +36,8 @@ namespace LinguaAlpaca::UI {
         wxBoxSizer* headerSizer = new wxBoxSizer(wxHORIZONTAL);
 
         // Logo & App Name
-        wxPanel* logoBadge =
-            new wxPanel(m_topHeaderPanel, wxID_ANY, wxDefaultPosition, dip(28, 28),
-                wxBORDER_NONE);
-        logoBadge->SetBackgroundColour(palette.accentPrimary);
-        wxBoxSizer* badgeSizer = new wxBoxSizer(wxHORIZONTAL);
-        wxStaticText* badgeText = new wxStaticText(logoBadge, wxID_ANY, L"译");
-        badgeText->SetFont(wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
-        badgeText->SetForegroundColour(*wxWHITE);
-        badgeText->SetBackgroundColour(palette.accentPrimary);
-        badgeSizer->Add(badgeText, 0, wxALIGN_CENTER);
-        logoBadge->SetSizer(badgeSizer);
+        wxBitmapBundle logoBundle = IconManager::GetAppLogoBundle(dip(28, 28));
+        m_logoIcon = new wxStaticBitmap(m_topHeaderPanel, wxID_ANY, logoBundle, wxDefaultPosition, dip(28, 28));
 
         m_appNameText = new wxStaticText(m_topHeaderPanel, wxID_ANY, L"译灵驼 · LinguaAlpaca");
         m_appNameText->SetFont(wxFont(13, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
@@ -75,7 +67,7 @@ namespace LinguaAlpaca::UI {
         m_closeBtn->SetBackgroundColour(palette.sidebarBg);
         m_closeBtn->SetToolTip(L"关闭");
 
-        headerSizer->Add(logoBadge, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 16_dip);
+        headerSizer->Add(m_logoIcon, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 16_dip);
         headerSizer->Add(m_appNameText, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 8_dip);
         headerSizer->AddStretchSpacer(1);
         headerSizer->Add(m_themeBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 16_dip);
@@ -103,20 +95,20 @@ namespace LinguaAlpaca::UI {
         m_logView = new LogView(m_contentContainer, m_modelManager ? m_modelManager->GetConfigManager() : nullptr);
         m_settingsView = new SettingsView(m_contentContainer, m_modelManager);
 
-        m_ocrView->Hide();
-        m_historyView->Hide();
-        m_logView->Hide();
-        m_settingsView->Hide();
-
         m_contentSizer->Add(m_textView, 1, wxEXPAND);
         m_contentSizer->Add(m_ocrView, 1, wxEXPAND);
         m_contentSizer->Add(m_historyView, 1, wxEXPAND);
         m_contentSizer->Add(m_logView, 1, wxEXPAND);
         m_contentSizer->Add(m_settingsView, 1, wxEXPAND);
 
+        // 默认显示文本翻译 (Tab 0)
+        m_ocrView->Hide();
+        m_historyView->Hide();
+        m_logView->Hide();
+        m_settingsView->Hide();
+
         bodySizer->Add(m_sidebar, 0, wxEXPAND);
         bodySizer->Add(m_contentContainer, 1, wxEXPAND);
-
         rootSizer->Add(bodySizer, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 1);
 
         SetSizer(rootSizer);
@@ -153,10 +145,10 @@ namespace LinguaAlpaca::UI {
         m_topHeaderPanel->Bind(wxEVT_MOTION, &MainFrame::OnHeaderMouseMove, this);
         m_topHeaderPanel->Bind(wxEVT_LEFT_DCLICK, &MainFrame::OnHeaderDoubleClick, this);
 
-        logoBadge->Bind(wxEVT_LEFT_DOWN, &MainFrame::OnHeaderLeftDown, this);
-        logoBadge->Bind(wxEVT_LEFT_UP, &MainFrame::OnHeaderLeftUp, this);
-        logoBadge->Bind(wxEVT_MOTION, &MainFrame::OnHeaderMouseMove, this);
-        logoBadge->Bind(wxEVT_LEFT_DCLICK, &MainFrame::OnHeaderDoubleClick, this);
+        m_logoIcon->Bind(wxEVT_LEFT_DOWN, &MainFrame::OnHeaderLeftDown, this);
+        m_logoIcon->Bind(wxEVT_LEFT_UP, &MainFrame::OnHeaderLeftUp, this);
+        m_logoIcon->Bind(wxEVT_MOTION, &MainFrame::OnHeaderMouseMove, this);
+        m_logoIcon->Bind(wxEVT_LEFT_DCLICK, &MainFrame::OnHeaderDoubleClick, this);
 
         m_appNameText->Bind(wxEVT_LEFT_DOWN, &MainFrame::OnHeaderLeftDown, this);
         m_appNameText->Bind(wxEVT_LEFT_UP, &MainFrame::OnHeaderLeftUp, this);

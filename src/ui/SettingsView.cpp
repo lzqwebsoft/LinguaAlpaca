@@ -84,16 +84,7 @@ void SettingsView::InitUI() {
                                    "Microsoft YaHei"));
   m_modelCardTitle->SetForegroundColour(palette.textPrimary);
 
-  m_statusBadge = new wxPanel(m_modelCard, wxID_ANY, wxDefaultPosition,
-                              wxSize(-1, 28_dip), wxBORDER_NONE);
-  m_statusBadge->SetBackgroundColour(wxColour(254, 242, 242));
-  wxBoxSizer *statusSizer = new wxBoxSizer(wxHORIZONTAL);
-  m_statusText = new wxStaticText(m_statusBadge, wxID_ANY, L"● 未配置模型");
-  m_statusText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL,
-                               wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
-  m_statusText->SetForegroundColour(wxColour(220, 38, 38));
-  statusSizer->Add(m_statusText, 0, wxALIGN_CENTER | wxLEFT | wxRIGHT, 10_dip);
-  m_statusBadge->SetSizer(statusSizer);
+  m_statusBadge = new StatusBadge(m_modelCard);
 
   cardTitleSizer->Add(cardTitleIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8_dip);
   cardTitleSizer->Add(m_modelCardTitle, 0, wxALIGN_CENTER_VERTICAL);
@@ -278,17 +269,7 @@ void SettingsView::InitUI() {
                                  wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
   m_ocrTitleText->SetForegroundColour(palette.textPrimary);
 
-  m_ocrStatusBadge = new wxPanel(m_ocrCard, wxID_ANY, wxDefaultPosition,
-                                 wxSize(-1, 28_dip), wxBORDER_NONE);
-  m_ocrStatusBadge->SetBackgroundColour(wxColour(254, 242, 242));
-  wxBoxSizer *ocrStatusSizer = new wxBoxSizer(wxHORIZONTAL);
-  m_ocrStatusText = new wxStaticText(m_ocrStatusBadge, wxID_ANY, L"● 未配置");
-  m_ocrStatusText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL,
-                                  wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
-  m_ocrStatusText->SetForegroundColour(wxColour(220, 38, 38));
-  ocrStatusSizer->Add(m_ocrStatusText, 0, wxALIGN_CENTER | wxLEFT | wxRIGHT,
-                      10_dip);
-  m_ocrStatusBadge->SetSizer(ocrStatusSizer);
+  m_ocrStatusBadge = new StatusBadge(m_ocrCard);
 
   ocrTitleSizer->Add(ocrTitleIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8_dip);
   ocrTitleSizer->Add(m_ocrTitleText, 0, wxALIGN_CENTER_VERTICAL);
@@ -629,16 +610,10 @@ void SettingsView::SetModelPath(const wxString &path) {
   }
 
   if (loaded || (!path.IsEmpty() && wxFileExists(path))) {
-    m_statusBadge->SetBackgroundColour(wxColour(240, 253, 244));
-    m_statusText->SetForegroundColour(wxColour(220, 38, 38)); // Will set to green
-    m_statusText->SetForegroundColour(wxColour(22, 101, 52));
-    m_statusText->SetLabel(L"● 已加载模型: " + wxFileName(path).GetFullName());
+    m_statusBadge->SetStatus(ServerHealthState::Ready, L"● 已配置: " + wxFileName(path).GetFullName());
   } else {
-    m_statusBadge->SetBackgroundColour(wxColour(254, 242, 242));
-    m_statusText->SetForegroundColour(wxColour(220, 38, 38));
-    m_statusText->SetLabel(L"● 未配置模型");
+    m_statusBadge->SetStatus(ServerHealthState::Unconfigured, L"● 未配置模型");
   }
-  m_statusBadge->Layout();
 }
 
 void SettingsView::SetOcrModelPath(const wxString &mainPath,
@@ -652,7 +627,7 @@ void SettingsView::SetOcrModelPath(const wxString &mainPath,
 }
 
 void SettingsView::UpdateOcrStatus() {
-  if (!m_ocrStatusBadge || !m_ocrStatusText)
+  if (!m_ocrStatusBadge)
     return;
 
   wxString mainPath = m_ocrModelPathCtrl ? m_ocrModelPathCtrl->GetValue() : L"";
@@ -669,16 +644,10 @@ void SettingsView::UpdateOcrStatus() {
   }
 
   if (loaded) {
-    m_ocrStatusBadge->SetBackgroundColour(wxColour(240, 253, 244));
-    m_ocrStatusText->SetForegroundColour(wxColour(22, 101, 52));
-    m_ocrStatusText->SetLabel(L"● 已加载模型: " +
-                              wxFileName(mainPath).GetFullName());
+    m_ocrStatusBadge->SetStatus(ServerHealthState::Ready, L"● 已配置: " + wxFileName(mainPath).GetFullName());
   } else {
-    m_ocrStatusBadge->SetBackgroundColour(wxColour(254, 242, 242));
-    m_ocrStatusText->SetForegroundColour(wxColour(220, 38, 38));
-    m_ocrStatusText->SetLabel(L"● 未配置");
+    m_ocrStatusBadge->SetStatus(ServerHealthState::Unconfigured, L"● 未配置");
   }
-  m_ocrStatusBadge->Layout();
 }
 
 void SettingsView::OnBrowseModel(wxCommandEvent &WXUNUSED(event)) {

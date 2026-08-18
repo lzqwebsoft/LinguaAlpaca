@@ -106,6 +106,7 @@ private:
     wxPoint m_pinnedPos;
     bool m_isDragging{false};
     wxPoint m_dragStartPos;
+    bool m_hasUserAdjustedSash{false};
     std::string m_lastSourceText;
     std::string m_currentFullText;
 

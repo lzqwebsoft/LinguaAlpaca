@@ -118,7 +118,7 @@ void TranslationBubbleFrame::InitUI() {
     // 平分窗体高度并设置最小 Pane 限制与等比缩放
     m_splitter->SetMinimumPaneSize(35_dip);
     m_splitter->SetSashGravity(0.5);
-    m_splitter->SplitHorizontally(m_sourcePanel, m_targetPanel, dip(110, 0).x);
+    m_splitter->SplitHorizontally(m_sourcePanel, m_targetPanel, 0);
 
     // 3. 底部状态栏与 Resize 手柄
     m_footerPanel = new wxPanel(m_mainPanel, wxID_ANY);
@@ -148,6 +148,19 @@ void TranslationBubbleFrame::InitUI() {
     frameSizer->Add(m_mainPanel, 1, wxEXPAND | wxALL, 1);
     SetSizer(frameSizer);
     Layout();
+
+    // 确保初始化时原文面板与译文面板精确各占 50% 高度
+    int splitterH = m_splitter->GetClientSize().y;
+    if (splitterH > 0) {
+        int sashSize = m_splitter->GetSashSize();
+        m_splitter->SetSashPosition((splitterH - sashSize) / 2);
+    }
+
+    // 监听用户手动调节分割条
+    m_splitter->Bind(wxEVT_SPLITTER_SASH_POS_CHANGED, [this](wxSplitterEvent& event) {
+        m_hasUserAdjustedSash = true;
+        event.Skip();
+    });
 
     // 绘制 Header Panel 底部的精细分隔线 (参考 MainFrame 样式)
     m_headerPanel->Bind(wxEVT_PAINT, [this](wxPaintEvent&) {
@@ -272,6 +285,16 @@ void TranslationBubbleFrame::ShowAndTranslate(const wxPoint& spawnPos, const std
 #endif
     Show(true);
     Raise();
+    Layout();
+
+    // 每次显示时若用户未手动调节过分割条，确保原文与译文面板精确各占 50% 高度
+    if (!m_hasUserAdjustedSash) {
+        int splitterH = m_splitter->GetClientSize().y;
+        if (splitterH > 0) {
+            int sashSize = m_splitter->GetSashSize();
+            m_splitter->SetSashPosition((splitterH - sashSize) / 2);
+        }
+    }
 
     if (!m_modelManager) {
         m_targetCtrl->SetValue(L"错误: ModelManager 未初始化");

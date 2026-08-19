@@ -27,6 +27,7 @@ private:
     void InitUI();
     void OnPaint(wxPaintEvent& event);
     void OnMouseMove(wxMouseEvent& event);
+    void OnMouseLeave(wxMouseEvent& event);
     void OnLeftDown(wxMouseEvent& event);
 
     wxString m_title;

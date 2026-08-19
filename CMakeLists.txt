@@ -80,6 +80,8 @@ set(CORE_SOURCES
     src/core/ModelManager.cpp
     src/core/Downloader.hpp
     src/core/Downloader.cpp
+    src/core/WinTtsHelper.hpp
+    src/core/WinTtsHelper.cpp
 )
 
 set(ENGINE_SOURCES

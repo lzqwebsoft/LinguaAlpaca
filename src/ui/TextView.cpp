@@ -1,4 +1,5 @@
 #include "TextView.hpp"
+#include "core/WinTtsHelper.hpp"
 #include "theme/IconManager.hpp"
 #include "theme/Theme.hpp"
 #include <wx/clipbrd.h>
@@ -23,6 +24,7 @@ namespace LinguaAlpaca::UI {
 		if (m_healthTimer.IsRunning()) {
 			m_healthTimer.Stop();
 		}
+		WinTtsHelper::GetInstance().Stop();
 	}
 
 	void TextView::InitUI() {
@@ -97,7 +99,14 @@ namespace LinguaAlpaca::UI {
 		// 4. 原文与译文卡片区
 		wxBoxSizer* cardsSizer = new wxBoxSizer(wxHORIZONTAL);
 		m_sourceCard = new CardPanel(this, L"原文", false);
-		m_sourceCard->AddToolIcon(1, SVG::PASTE, L"粘贴文本", [this]() {
+		m_sourceCard->AddToolIcon(1, SVG::SPEAKER, L"朗读原文", [this]() {
+			if (!m_sourceCard || !m_sourceCard->GetTextCtrl()) return;
+			wxString text = m_sourceCard->GetTextCtrl()->GetValue();
+			if (text.IsEmpty()) return;
+			LanguageCode srcLang = m_langSelector ? m_langSelector->GetSourceLanguage() : LanguageCode::AutoDetect;
+			WinTtsHelper::GetInstance().Speak(text.ToStdWstring(), srcLang);
+		});
+		m_sourceCard->AddToolIcon(2, SVG::PASTE, L"粘贴文本", [this]() {
 			if (wxTheClipboard->Open()) {
 				if (wxTheClipboard->IsSupported(wxDF_TEXT)) {
 					wxTextDataObject data;
@@ -107,7 +116,8 @@ namespace LinguaAlpaca::UI {
 				wxTheClipboard->Close();
 			}
 		});
-		m_sourceCard->AddToolIcon(2, SVG::CLEAR, L"清空原文", [this]() {
+		m_sourceCard->AddToolIcon(3, SVG::CLEAR, L"清空原文", [this]() {
+			WinTtsHelper::GetInstance().Stop();
 			m_sourceCard->GetTextCtrl()->Clear();
 			m_sourceCard->SetCharacterCount(0);
 		});
@@ -116,14 +126,20 @@ namespace LinguaAlpaca::UI {
 		m_sourceCard->SetCharacterCount(43);
 
 		m_targetCard = new CardPanel(this, L"译文", true);
-		m_targetCard->AddToolIcon(1, SVG::COPY, L"复制译文", [this]() {
+		m_targetCard->AddToolIcon(1, SVG::SPEAKER, L"朗读译文", [this]() {
+			if (!m_targetCard || !m_targetCard->GetTextCtrl()) return;
+			wxString text = m_targetCard->GetTextCtrl()->GetValue();
+			if (text.IsEmpty()) return;
+			LanguageCode tgtLang = m_langSelector ? m_langSelector->GetTargetLanguage() : LanguageCode::Chinese;
+			WinTtsHelper::GetInstance().Speak(text.ToStdWstring(), tgtLang);
+		});
+		m_targetCard->AddToolIcon(2, SVG::COPY, L"复制译文", [this]() {
 			wxString text = m_targetCard->GetTextCtrl()->GetValue();
 			if (!text.IsEmpty() && wxTheClipboard->Open()) {
 				wxTheClipboard->SetData(new wxTextDataObject(text));
 				wxTheClipboard->Close();
 			}
-			});
-		m_targetCard->AddToolIcon(2, SVG::SPEAKER, L"朗读", []() {});
+		});
 
 		m_targetCard->GetTextCtrl()->SetValue(L"你好，欢迎使用灵驼译！");
 		m_targetCard->SetCharacterCount(11);
@@ -321,6 +337,7 @@ namespace LinguaAlpaca::UI {
 		if (m_modelManager) {
 			m_modelManager->CancelInference();
 		}
+		WinTtsHelper::GetInstance().Stop();
 		m_stopBtn->Hide();
 		m_translateBtn->Enable();
 		Layout();
@@ -330,6 +347,7 @@ namespace LinguaAlpaca::UI {
 		if (m_modelManager) {
 			m_modelManager->CancelInference();
 		}
+		WinTtsHelper::GetInstance().Stop();
 		m_stopBtn->Hide();
 		m_translateBtn->Enable();
 		Layout();
@@ -354,6 +372,7 @@ namespace LinguaAlpaca::UI {
 	}
 
 	void TextView::OnSwapClicked(wxCommandEvent& WXUNUSED(event)) {
+		WinTtsHelper::GetInstance().Stop();
 		if (m_langSelector) {
 			m_langSelector->SwapLanguages();
 		}

@@ -14,6 +14,7 @@ add_executable(unit_tests
     ${CMAKE_SOURCE_DIR}/src/core/LlamaServer.cpp
     ${CMAKE_SOURCE_DIR}/src/core/ModelManager.cpp
     ${CMAKE_SOURCE_DIR}/src/core/Downloader.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/WinTtsHelper.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/LlamaCppTranslationEngine.cpp
 )
 

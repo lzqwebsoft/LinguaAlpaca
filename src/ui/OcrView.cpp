@@ -1,4 +1,5 @@
 #include "OcrView.hpp"
+#include "core/WinTtsHelper.hpp"
 #include "theme/IconManager.hpp"
 #include "theme/Theme.hpp"
 #include <wx/clipbrd.h>
@@ -26,6 +27,7 @@ namespace LinguaAlpaca::UI {
 		if (m_healthTimer.IsRunning()) {
 			m_healthTimer.Stop();
 		}
+		WinTtsHelper::GetInstance().Stop();
 	}
 
 	void OcrView::InitUI() {
@@ -251,7 +253,16 @@ namespace LinguaAlpaca::UI {
 		m_resultCard = new CardPanel(this, L"识别文本", true);
 		m_resultCard->GetTextCtrl()->SetHint(L"上传图片后，识别结果将自动显示在这里...");
 
-		m_resultCard->AddToolIcon(1, SVG::COPY, L"复制文本", [this]() {
+		m_resultCard->AddToolIcon(1, SVG::SPEAKER, L"朗读内容", [this]() {
+			if (!m_resultCard || !m_resultCard->GetTextCtrl())
+				return;
+			wxString text = m_resultCard->GetTextCtrl()->GetValue();
+			if (text.IsEmpty())
+				return;
+			WinTtsHelper::GetInstance().Speak(text.ToStdWstring(), LanguageCode::AutoDetect);
+		});
+
+		m_resultCard->AddToolIcon(2, SVG::COPY, L"复制文本", [this]() {
 			if (!m_resultCard)
 				return;
 			wxString text = m_resultCard->GetTextCtrl()->GetValue();
@@ -266,9 +277,10 @@ namespace LinguaAlpaca::UI {
 			}
 		});
 
-		m_resultCard->AddToolIcon(2, SVG::CLEAR, L"清空内容", [this]() {
+		m_resultCard->AddToolIcon(3, SVG::CLEAR, L"清空内容", [this]() {
 			if (!m_resultCard)
 				return;
+			WinTtsHelper::GetInstance().Stop();
 			m_resultCard->GetTextCtrl()->Clear();
 			m_resultCard->SetCharacterCount(0);
 		});
@@ -591,6 +603,7 @@ namespace LinguaAlpaca::UI {
 			m_resultCard->GetTextCtrl()->Clear();
 			m_resultCard->SetCharacterCount(0);
 		}
+		WinTtsHelper::GetInstance().Stop();
 		SetState(OcrTaskState::Recognizing);
 
 		std::string imgPath = m_loadedImagePath.ToUTF8().data();
@@ -630,6 +643,7 @@ namespace LinguaAlpaca::UI {
 		if (m_modelManager) {
 			m_modelManager->CancelInference();
 		}
+		WinTtsHelper::GetInstance().Stop();
 		SetState(OcrTaskState::Idle);
 	}
 

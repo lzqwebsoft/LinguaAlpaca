@@ -4,6 +4,7 @@
 #include "core/Logger.hpp"
 #include "core/ClipboardHelper.hpp"
 #include "core/ScreenTextExtractor.hpp"
+#include "core/WinTtsHelper.hpp"
 
 using namespace LinguaAlpaca;
 
@@ -76,11 +77,26 @@ TEST_CASE("Logger - Real-time notification and memory history", "[core][logger]"
 
 TEST_CASE("ScreenTextExtractor - Anchor coordinate calculation", "[core][extractor]") {
     SECTION("Calculates bottom-right anchor from selection points") {
-        // Reverse selection (drag from bottom-right to top-left)
         ExtractedSelection res = ScreenTextExtractor::ExtractSelection(500, 400, 200, 100, false);
         // Anchor should always be bottom-right (maxX + 6, maxY + 8)
         REQUIRE(res.anchorX >= 500);
         REQUIRE(res.anchorY >= 400);
+    }
+}
+
+TEST_CASE("WinTtsHelper - Basic TTS controls", "[core][tts]") {
+    SECTION("Empty text speak returns false") {
+        WinTtsHelper& tts = WinTtsHelper::GetInstance();
+        REQUIRE(tts.Speak("") == false);
+        REQUIRE(tts.Speak(L"") == false);
+    }
+
+    SECTION("Stop and volume rate adjustments") {
+        WinTtsHelper& tts = WinTtsHelper::GetInstance();
+        tts.SetRate(0);
+        tts.SetVolume(100);
+        tts.Stop();
+        REQUIRE(tts.IsSpeaking() == false);
     }
 }
 

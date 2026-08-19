@@ -39,6 +39,7 @@ namespace LinguaAlpaca::UI {
 
 		Bind(wxEVT_PAINT, &CardPanel::OnPaint, this);
 		Bind(wxEVT_MOTION, &CardPanel::OnMouseMove, this);
+		Bind(wxEVT_LEAVE_WINDOW, &CardPanel::OnMouseLeave, this);
 		Bind(wxEVT_LEFT_DOWN, &CardPanel::OnLeftDown, this);
 	}
 
@@ -143,6 +144,20 @@ namespace LinguaAlpaca::UI {
 		if (oldHover != m_hoverToolIndex) {
 			SetCursor(m_hoverToolIndex != -1 ? wxCursor(wxCURSOR_HAND)
 				: wxCursor(wxCURSOR_DEFAULT));
+			if (m_hoverToolIndex >= 0 && m_hoverToolIndex < (int)m_tools.size()) {
+				SetToolTip(m_tools[m_hoverToolIndex].tooltip);
+			} else {
+				UnsetToolTip();
+			}
+			Refresh();
+		}
+	}
+
+	void CardPanel::OnMouseLeave(wxMouseEvent& WXUNUSED(event)) {
+		if (m_hoverToolIndex != -1) {
+			m_hoverToolIndex = -1;
+			SetCursor(wxCursor(wxCURSOR_DEFAULT));
+			UnsetToolTip();
 			Refresh();
 		}
 	}

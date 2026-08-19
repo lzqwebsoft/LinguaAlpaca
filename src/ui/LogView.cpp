@@ -70,7 +70,12 @@ void LogView::InitUI() {
     filterLabel->SetForegroundColour(palette.textSecondary);
 
     m_filterChoice = new wxChoice(m_headerPanel, wxID_ANY, wxDefaultPosition, dip(100, 28), levels);
+    m_filterChoice->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
     m_filterChoice->SetSelection(0);
+
+    wxBoxSizer* filterSizer = new wxBoxSizer(wxHORIZONTAL);
+    filterSizer->Add(filterLabel, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4_dip);
+    filterSizer->Add(m_filterChoice, 0, wxALIGN_CENTER_VERTICAL);
 
     // 自动滚动 Checkbox
     m_autoScrollCheck = new wxCheckBox(m_headerPanel, wxID_ANY, L"自动滚动");
@@ -79,12 +84,11 @@ void LogView::InitUI() {
     m_autoScrollCheck->SetForegroundColour(palette.textPrimary);
 
     // 功能按钮
-    m_clearBtn = new CustomButton(m_headerPanel, wxID_ANY, L"清空", ButtonStyle::Secondary);
-    m_copyBtn = new CustomButton(m_headerPanel, wxID_ANY, L"复制全部", ButtonStyle::Secondary);
-    m_openDirBtn = new CustomButton(m_headerPanel, wxID_ANY, L"打开日志目录", ButtonStyle::Secondary);
+    m_clearBtn = new CustomButton(m_headerPanel, wxID_ANY, L"清空", ButtonStyle::Secondary, wxDefaultPosition, dip(64, 28));
+    m_copyBtn = new CustomButton(m_headerPanel, wxID_ANY, L"复制全部", ButtonStyle::Secondary, wxDefaultPosition, dip(88, 28));
+    m_openDirBtn = new CustomButton(m_headerPanel, wxID_ANY, L"打开日志目录", ButtonStyle::Secondary, wxDefaultPosition, dip(110, 28));
 
-    headerSizer->Add(filterLabel, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4_dip);
-    headerSizer->Add(m_filterChoice, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 12_dip);
+    headerSizer->Add(filterSizer, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 12_dip);
     headerSizer->Add(m_autoScrollCheck, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 12_dip);
     headerSizer->Add(m_clearBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8_dip);
     headerSizer->Add(m_copyBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8_dip);
@@ -190,12 +194,16 @@ void LogView::AppendLogMessage(const LogMessage& msg) {
 
 void LogView::ReloadLogs() {
     if (!m_logTextCtrl) return;
+
+     // 锁定控件重绘，批量处理完后一次性刷新
+    m_logTextCtrl->Freeze();
     m_logTextCtrl->Clear();
 
     auto history = Logger::GetInstance().GetRecentLogs();
     for (const auto& msg : history) {
         AppendLogMessage(msg);
     }
+    m_logTextCtrl->Thaw();
 }
 
 void LogView::OnClear(wxCommandEvent& WXUNUSED(event)) {

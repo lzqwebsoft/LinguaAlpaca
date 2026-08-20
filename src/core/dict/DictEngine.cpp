@@ -1,6 +1,7 @@
 #pragma execution_character_set("utf-8")
 #include "DictEngine.hpp"
-#include "Logger.hpp"
+#include "DictFormatter.hpp"
+#include "../Logger.hpp"
 
 #include <wx/file.h>
 #include <wx/filename.h>
@@ -96,126 +97,6 @@ inline uint64_t ReadUint64BE(const uint8_t* p) {
         val = (val << 8) | p[i];
     }
     return val;
-}
-
-// 清理去除 HTML / XDXF 标签并保留整洁的排版
-std::string CleanTagsAndFormat(const std::string& text) {
-    if (text.empty()) return "";
-
-    // 1. 转义字符还原 (\n, \r, \t, \\)
-    std::string unescaped;
-    unescaped.reserve(text.size());
-    for (size_t i = 0; i < text.size(); ++i) {
-        if (text[i] == '\\' && i + 1 < text.size()) {
-            char next = text[i + 1];
-            if (next == 'n') {
-                unescaped.push_back('\n');
-                i++;
-                continue;
-            } else if (next == 'r') {
-                i++;
-                continue;
-            } else if (next == 't') {
-                unescaped.push_back('\t');
-                i++;
-                continue;
-            } else if (next == '\\') {
-                unescaped.push_back('\\');
-                i++;
-                continue;
-            }
-        }
-        unescaped.push_back(text[i]);
-    }
-
-    // 2. 剥离 HTML / XDXF 标签并保留换行
-    std::string out;
-    out.reserve(unescaped.size());
-    bool inTag = false;
-    std::string currentTag;
-
-    for (size_t i = 0; i < unescaped.size(); ++i) {
-        char c = unescaped[i];
-        if (c == '<') {
-            inTag = true;
-            currentTag.clear();
-            continue;
-        }
-        if (c == '>') {
-            inTag = false;
-            std::string lowerTag = ToLowerUtf8(currentTag);
-            size_t sp = lowerTag.find_first_of(" \t\n\r/");
-            std::string tagName = (sp != std::string::npos) ? lowerTag.substr(0, sp) : lowerTag;
-            if (tagName == "br" || tagName == "p" || tagName == "div" ||
-                tagName == "tr" || tagName == "li" || tagName == "dtrn" ||
-                tagName == "dt" || tagName == "dd" || tagName == "blockquote") {
-                out.push_back('\n');
-            }
-            continue;
-        }
-        if (inTag) {
-            currentTag.push_back(c);
-        } else {
-            out.push_back(c);
-        }
-    }
-
-    // 3. 替换常见 HTML 实体
-    std::string decoded;
-    decoded.reserve(out.size());
-    for (size_t i = 0; i < out.size(); ++i) {
-        if (out[i] == '&') {
-            if (out.compare(i, 6, "&nbsp;") == 0) {
-                decoded.push_back(' ');
-                i += 5;
-                continue;
-            } else if (out.compare(i, 5, "&amp;") == 0) {
-                decoded.push_back('&');
-                i += 4;
-                continue;
-            } else if (out.compare(i, 4, "&lt;") == 0) {
-                decoded.push_back('<');
-                i += 3;
-                continue;
-            } else if (out.compare(i, 4, "&gt;") == 0) {
-                decoded.push_back('>');
-                i += 3;
-                continue;
-            } else if (out.compare(i, 6, "&quot;") == 0) {
-                decoded.push_back('"');
-                i += 5;
-                continue;
-            } else if (out.compare(i, 6, "&#39;") == 0 || out.compare(i, 6, "&apos;") == 0) {
-                decoded.push_back('\'');
-                i += 5;
-                continue;
-            }
-        }
-        decoded.push_back(out[i]);
-    }
-
-    // 4. 清理多余空行与格式规范化
-    std::string clean;
-    clean.reserve(decoded.size());
-    int consecutiveNewlines = 0;
-    for (char c : decoded) {
-        if (c == '\r') continue;
-        if (c == '\n') {
-            consecutiveNewlines++;
-            if (consecutiveNewlines <= 2) {
-                clean.push_back('\n');
-            }
-        } else {
-            consecutiveNewlines = 0;
-            clean.push_back(c);
-        }
-    }
-
-    // 5. 移除前导和后继空白
-    size_t start = clean.find_first_not_of(" \t\n\r");
-    if (start == std::string::npos) return "";
-    size_t end = clean.find_last_not_of(" \t\n\r");
-    return clean.substr(start, end - start + 1);
 }
 
 } // namespace
@@ -587,84 +468,7 @@ std::string StarDictBook::ReadDictData(uint64_t offset, uint32_t size) {
 
 void StarDictBook::FormatDefinition(const std::string& raw, DictSearchResult& result) {
     result.rawData = raw;
-    result.phonetic.clear();
-    result.definition.clear();
-
-    if (raw.empty()) return;
-
-    if (!m_info.sameTypeSequence.empty()) {
-        // 如果指定了统一序列类型
-        if (m_info.sameTypeSequence == "m" || m_info.sameTypeSequence == "g") {
-            result.definition = CleanTagsAndFormat(raw);
-        } else if (m_info.sameTypeSequence == "h" || m_info.sameTypeSequence == "x") {
-            result.definition = CleanTagsAndFormat(raw);
-        } else if (m_info.sameTypeSequence == "t") {
-            result.phonetic = raw;
-        } else if (m_info.sameTypeSequence == "tm") {
-            // 前半部分音标，后半部分释义
-            size_t nullPos = raw.find('\0');
-            if (nullPos != std::string::npos) {
-                result.phonetic = raw.substr(0, nullPos);
-                result.definition = CleanTagsAndFormat(raw.substr(nullPos + 1));
-            } else {
-                result.definition = CleanTagsAndFormat(raw);
-            }
-        } else {
-            result.definition = CleanTagsAndFormat(raw);
-        }
-    } else {
-        // 动态多类型解析
-        size_t pos = 0;
-        std::string defAcc;
-        while (pos < raw.size()) {
-            char type = raw[pos++];
-            if (std::islower(static_cast<unsigned char>(type))) {
-                // null 结尾字符串
-                size_t strEnd = raw.find('\0', pos);
-                std::string seg;
-                if (strEnd != std::string::npos) {
-                    seg = raw.substr(pos, strEnd - pos);
-                    pos = strEnd + 1;
-                } else {
-                    seg = raw.substr(pos);
-                    pos = raw.size();
-                }
-
-                if (type == 't') {
-                    if (result.phonetic.empty()) result.phonetic = seg;
-                } else if (type == 'm' || type == 'g' || type == 'h' || type == 'x') {
-                    if (!defAcc.empty()) defAcc.push_back('\n');
-                    defAcc += CleanTagsAndFormat(seg);
-                }
-            } else {
-                // 大写类型：4字节大端长度 + 数据
-                if (pos + 4 <= raw.size()) {
-                    uint32_t len = ReadUint32BE(reinterpret_cast<const uint8_t*>(&raw[pos]));
-                    pos += 4 + len;
-                } else {
-                    break;
-                }
-            }
-        }
-        result.definition = defAcc.empty() ? CleanTagsAndFormat(raw) : defAcc;
-    }
-
-    // 若未通过标签提取到音标，尝试在释义开头探测 [音标] 或 /音标/
-    if (result.phonetic.empty() && !result.definition.empty()) {
-        std::string& def = result.definition;
-        if (def.front() == '[' || def.front() == '/') {
-            char closeChar = (def.front() == '[') ? ']' : '/';
-            size_t endPos = def.find(closeChar, 1);
-            if (endPos != std::string::npos && endPos <= 40) {
-                result.phonetic = def.substr(0, endPos + 1);
-                // 剔除释义开头的音标部分以避免重复
-                size_t nextPos = def.find_first_not_of(" \t\n\r", endPos + 1);
-                if (nextPos != std::string::npos) {
-                    def = def.substr(nextPos);
-                }
-            }
-        }
-    }
+    DictFormatter::Format(raw, m_info.sameTypeSequence, result.phonetic, result.definition);
 }
 
 bool StarDictBook::Lookup(const std::string& word, DictSearchResult& result) {

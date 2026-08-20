@@ -12,7 +12,7 @@
 #include "Config.hpp"
 #include "LlamaServer.hpp"
 #include "LlamaClient.hpp"
-#include "DictEngine.hpp"
+#include "dict/DictEngine.hpp"
 
 namespace LinguaAlpaca {
 

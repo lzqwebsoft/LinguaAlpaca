@@ -6,7 +6,7 @@
 #include <string>
 
 #include "core/ModelManager.hpp"
-#include "core/DictEngine.hpp"
+#include "core/dict/DictEngine.hpp"
 #include "AsyncTrackable.hpp"
 #include "widgets/CustomButton.hpp"
 #include "widgets/TextCtrl.hpp"

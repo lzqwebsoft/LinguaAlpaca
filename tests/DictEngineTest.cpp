@@ -7,7 +7,7 @@
 #include <vector>
 #include <string>
 
-#include "core/DictEngine.hpp"
+#include "core/dict/DictEngine.hpp"
 
 using namespace LinguaAlpaca;
 

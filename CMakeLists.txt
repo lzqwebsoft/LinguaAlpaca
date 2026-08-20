@@ -82,8 +82,10 @@ set(CORE_SOURCES
     src/core/Downloader.cpp
     src/core/WinTtsHelper.hpp
     src/core/WinTtsHelper.cpp
-    src/core/DictEngine.hpp
-    src/core/DictEngine.cpp
+    src/core/dict/DictFormatter.hpp
+    src/core/dict/DictFormatter.cpp
+    src/core/dict/DictEngine.hpp
+    src/core/dict/DictEngine.cpp
 )
 
 set(ENGINE_SOURCES

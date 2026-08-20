@@ -5,6 +5,7 @@
 #include "theme/Theme.hpp"
 #include "core/WinTtsHelper.hpp"
 #include "core/ClipboardHelper.hpp"
+#include "core/dict/DictFormatter.hpp"
 
 #include <wx/clipbrd.h>
 
@@ -448,135 +449,59 @@ void DictView::RenderRichDictionaryResults(const std::vector<DictSearchResult>& 
 
     auto palette = ThemeColors::GetCurrentPalette();
 
-    // 字体规范定义
+    // 字体规范定义 (高DPI适配，层级清晰)
     wxFont defaultFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei");
     wxFont dictHeaderFont(11, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei");
-    wxFont posFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei");
+    wxFont posFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei");
     wxFont numFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei");
     wxFont phoneticFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_ITALIC, wxFONTWEIGHT_NORMAL, false, "Lucida Sans Unicode");
-    wxFont exampleFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_ITALIC, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei");
-    wxFont tagFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei");
+    wxFont exampleFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei");
+    wxFont tagFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei");
     wxFont dividerFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei");
 
-    // 样式属性定义
+    // 样式属性定义：针对各类语义元素应用专属的前景色、胶囊徽章背景与字重
+    // 1. 普通释义正文
     wxTextAttr defaultAttr(palette.textPrimary, palette.cardBg, defaultFont);
-    wxTextAttr dictHeaderAttr(palette.accentPrimary, palette.cardBg, dictHeaderFont);
-    wxTextAttr posAttr(palette.accentHover, palette.cardBg, posFont);
+
+    // 2. 词典来源标头 (轻量横幅徽章样式)
+    wxTextAttr dictHeaderAttr(palette.bannerText, palette.bannerBg, dictHeaderFont);
+
+    // 3. 词性徽章 (微蓝/高亮药丸徽章，与正文形成清晰对比)
+    wxTextAttr posAttr(palette.bannerText, palette.bannerBg, posFont);
+
+    // 4. 编号列表项 (强调色加粗)
     wxTextAttr numAttr(palette.accentPrimary, palette.cardBg, numFont);
+
+    // 5. 词典音标 (雅致翡翠绿倾斜)
     wxTextAttr phoneticAttr(palette.accentGreen, palette.cardBg, phoneticFont);
+
+    // 6. 例句与双语注释 (次级文字色)
     wxTextAttr exampleAttr(palette.textSecondary, palette.cardBg, exampleFont);
-    wxTextAttr tagAttr(palette.accentPrimary, palette.cardBg, tagFont);
+
+    // 7. 版块标签 (如【例】【用法】【短语】，微绿药丸徽章)
+    wxTextAttr tagAttr(palette.badgeText, palette.badgeBg, tagFont);
+
+    // 8. 词典间高雅分割线
     wxTextAttr dividerAttr(palette.cardBorderActive, palette.cardBg, dividerFont);
 
-    static const std::vector<wxString> posPrefixes = {
-        "[n.]", "[v.]", "[adj.]", "[adv.]", "[vt.]", "[vi.]", "[prep.]", "[conj.]", "[pron.]", "[num.]", "[art.]", "[int.]", "[abbr.]", "[pl.]", "[aux.]",
-        "n. ", "v. ", "adj. ", "adv. ", "vt. ", "vi. ", "prep. ", "conj. ", "pron. ", "abbr. ", "pl. ", "int. ", "aux. ", "art. ", "num. ",
-        "n.", "v.", "adj.", "adv.", "vt.", "vi.", "prep.", "conj.", "pron.", "abbr.", "pl.", "int.", "aux.", "art.", "num.",
-        "【名】", "【动】", "【形】", "【副】", "【介】", "【连】", "【代】", "【及物】", "【不及物】", "【缩】", "【口】"
+    auto getStyleAttr = [&](DictTextStyle style) -> const wxTextAttr& {
+        switch (style) {
+            case DictTextStyle::DictHeader:   return dictHeaderAttr;
+            case DictTextStyle::Phonetic:     return phoneticAttr;
+            case DictTextStyle::PartOfSpeech: return posAttr;
+            case DictTextStyle::Tag:          return tagAttr;
+            case DictTextStyle::Example:      return exampleAttr;
+            case DictTextStyle::NumberedItem: return numAttr;
+            case DictTextStyle::Divider:      return dividerAttr;
+            case DictTextStyle::Default:
+            default:                          return defaultAttr;
+        }
     };
 
-    static const std::vector<wxString> tagPrefixes = {
-        L"【例】", L"【短语】", L"【用法】", L"【同义词】", L"【反义词】", L"【派生】", L"【同】", L"【反】", L"【考点】", L"【记忆】", L"【词源】", L"【辨析】"
-    };
-
-    for (size_t d = 0; d < results.size(); ++d) {
-        const auto& r = results[d];
-
-        // 词典间高雅分割线与段落间距
-        if (d > 0) {
-            inner->SetDefaultStyle(dividerAttr);
-            inner->AppendText(L"\n\n────────────────────────────────────────────────\n\n");
-        }
-
-        // 1. 词典名称标头 (如: 📖 朗道英汉字典5.0)
-        inner->SetDefaultStyle(dictHeaderAttr);
-        inner->AppendText(wxString::Format(L"📖 %s\n", wxString::FromUTF8(r.dictName)));
-
-        // 2. 本词典附带的音标 (如果有)
-        if (!r.phonetic.empty()) {
-            inner->SetDefaultStyle(phoneticAttr);
-            inner->AppendText(wxString::Format(L"   %s\n", wxString::FromUTF8(r.phonetic)));
-        }
-
-        // 3. 逐行排版
-        wxString defStr = wxString::FromUTF8(r.definition);
-        wxArrayString lines = wxSplit(defStr, '\n');
-
-        for (size_t l = 0; l < lines.size(); ++l) {
-            wxString line = lines[l].Trim(true);
-            if (line.IsEmpty()) {
-                inner->SetDefaultStyle(defaultAttr);
-                inner->AppendText(L"\n");
-                continue;
-            }
-
-            // A. 检查词性前缀 (如: n. / [n.] / v. / adj. 等)
-            bool matchedPos = false;
-            for (const auto& posTag : posPrefixes) {
-                if (line.StartsWith(posTag)) {
-                    inner->SetDefaultStyle(posAttr);
-                    inner->AppendText(L" " + posTag);
-                    wxString rest = line.Mid(posTag.Length());
-                    inner->SetDefaultStyle(defaultAttr);
-                    inner->AppendText(rest + L"\n");
-                    matchedPos = true;
-                    break;
-                }
-            }
-            if (matchedPos) continue;
-
-            // B. 检查条目标签 (如: 【例】 / 【短语】 / 【用法】 / 【同义词】)
-            bool matchedTag = false;
-            for (const auto& tag : tagPrefixes) {
-                if (line.StartsWith(tag)) {
-                    inner->SetDefaultStyle(tagAttr);
-                    inner->AppendText(L" " + tag);
-                    wxString rest = line.Mid(tag.Length());
-                    inner->SetDefaultStyle(exampleAttr);
-                    inner->AppendText(rest + L"\n");
-                    matchedTag = true;
-                    break;
-                }
-            }
-            if (matchedTag) continue;
-
-            // C. 检查例句或参考 (如: e.g. / Ex. / eg.)
-            if (line.StartsWith("e.g.") || line.StartsWith("eg.") || line.StartsWith("Ex.") || line.StartsWith("ex.")) {
-                inner->SetDefaultStyle(exampleAttr);
-                inner->AppendText(L"   " + line + L"\n");
-                continue;
-            }
-
-            // D. 检查序号条目 (如: 1. / 2. / (1) / (2) / ① / ② / [1] / [2])
-            bool matchedNum = false;
-            if (line.Length() >= 2 && (wxIsdigit(line[0]) || line.StartsWith("(") || line.StartsWith("①") || line.StartsWith("②") || line.StartsWith("③") || line.StartsWith("④") || line.StartsWith("⑤") || line.StartsWith("["))) {
-                int splitIdx = -1;
-                if (line.Find('.') != wxNOT_FOUND && line.Find('.') <= 3) {
-                    splitIdx = line.Find('.') + 1;
-                } else if (line.Find(')') != wxNOT_FOUND && line.Find(')') <= 4) {
-                    splitIdx = line.Find(')') + 1;
-                } else if (line.Find(']') != wxNOT_FOUND && line.Find(']') <= 4) {
-                    splitIdx = line.Find(']') + 1;
-                } else if (line.StartsWith("①") || line.StartsWith("②") || line.StartsWith("③") || line.StartsWith("④") || line.StartsWith("⑤")) {
-                    splitIdx = 1;
-                }
-
-                if (splitIdx > 0) {
-                    wxString numPart = line.Left(splitIdx);
-                    wxString textPart = line.Mid(splitIdx);
-                    inner->SetDefaultStyle(numAttr);
-                    inner->AppendText(L" " + numPart);
-                    inner->SetDefaultStyle(defaultAttr);
-                    inner->AppendText(textPart + L"\n");
-                    matchedNum = true;
-                }
-            }
-            if (matchedNum) continue;
-
-            // E. 普通释义文本
-            inner->SetDefaultStyle(defaultAttr);
-            inner->AppendText(line + L"\n");
-        }
+    auto segments = DictFormatter::BuildRichTextSegments(results);
+    for (const auto& seg : segments) {
+        inner->SetDefaultStyle(getStyleAttr(seg.style));
+        inner->AppendText(wxString::FromUTF8(seg.text));
     }
 
     inner->Thaw();

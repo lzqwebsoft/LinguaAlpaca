@@ -72,10 +72,10 @@ set(CORE_SOURCES
     src/core/ScreenTextExtractor.cpp
     src/core/SelectionService.hpp
     src/core/SelectionService.cpp
-    src/core/LlamaServer.hpp
-    src/core/LlamaServer.cpp
-    src/core/LlamaClient.hpp
-    src/core/LlamaClient.cpp
+    src/core/llama/LlamaServer.hpp
+    src/core/llama/LlamaServer.cpp
+    src/core/llama/LlamaClient.hpp
+    src/core/llama/LlamaClient.cpp
     src/core/ModelManager.hpp
     src/core/ModelManager.cpp
     src/core/Downloader.hpp
@@ -159,13 +159,14 @@ add_executable(${PROJECT_NAME} WIN32
     ${APP_RESOURCES}
 )
 
+# 确保编译主程序前已构建 llama-server 可执行程序
+add_dependencies(${PROJECT_NAME} llama-server)
+
 # 包含头文件路径
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/llama.cpp/include
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/llama.cpp/common
-    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/llama.cpp/tools/server
-    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/llama.cpp/tools/cli
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/llama.cpp/tools/mtmd
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/wxWidgets/src/zlib
 )
@@ -177,8 +178,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     wxzlib
     llama
     llama-common
-    llama-server-impl
-    llama-cli-impl
+    cpp-httplib
     mtmd
 )
 

@@ -10,8 +10,8 @@
 
 #include "Types.hpp"
 #include "Config.hpp"
-#include "LlamaServer.hpp"
-#include "LlamaClient.hpp"
+#include "llama/LlamaServer.hpp"
+#include "llama/LlamaClient.hpp"
 #include "dict/DictEngine.hpp"
 
 namespace LinguaAlpaca {

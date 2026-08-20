@@ -8,7 +8,7 @@
 #include <string>
 #include <thread>
 
-#include "Types.hpp"
+#include "core/Types.hpp"
 #include "LlamaServer.hpp"
 
 namespace LinguaAlpaca {

@@ -1,6 +1,6 @@
 #include <catch2/catch.hpp>
-#include "core/LlamaClient.hpp"
-#include "core/LlamaServer.hpp"
+#include "core/llama/LlamaClient.hpp"
+#include "core/llama/LlamaServer.hpp"
 #include "core/ModelManager.hpp"
 #include "core/Config.hpp"
 

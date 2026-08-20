@@ -9,7 +9,6 @@
 #include <sstream>
 #include <vector>
 
-#include "cli-client.h"
 #include <http.h>
 
 using json = nlohmann::json;

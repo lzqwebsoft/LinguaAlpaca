@@ -12,8 +12,8 @@ add_executable(unit_tests
     ${CMAKE_SOURCE_DIR}/src/core/WinUIAutomationHelper.cpp
     ${CMAKE_SOURCE_DIR}/src/core/WinMediaOcrHelper.cpp
     ${CMAKE_SOURCE_DIR}/src/core/ScreenTextExtractor.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/LlamaClient.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/LlamaServer.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/llama/LlamaClient.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/llama/LlamaServer.cpp
     ${CMAKE_SOURCE_DIR}/src/core/ModelManager.cpp
     ${CMAKE_SOURCE_DIR}/src/core/Downloader.cpp
     ${CMAKE_SOURCE_DIR}/src/core/WinTtsHelper.cpp
@@ -22,12 +22,14 @@ add_executable(unit_tests
     ${CMAKE_SOURCE_DIR}/src/engine/LlamaCppTranslationEngine.cpp
 )
 
+# 确保编译测试前已构建 llama-server 可执行程序
+add_dependencies(unit_tests llama-server)
+
 target_include_directories(unit_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/third_party/llama.cpp/include
     ${CMAKE_SOURCE_DIR}/third_party/llama.cpp/common
-    ${CMAKE_SOURCE_DIR}/third_party/llama.cpp/tools/server
-    ${CMAKE_SOURCE_DIR}/third_party/llama.cpp/tools/cli
+    ${CMAKE_SOURCE_DIR}/third_party/llama.cpp/tools/mtmd
     ${CMAKE_SOURCE_DIR}/third_party/wxWidgets/src/zlib
     ${CMAKE_SOURCE_DIR}/third_party/wxWidgets/3rdparty/catch/single_include
 )
@@ -38,8 +40,8 @@ target_link_libraries(unit_tests PRIVATE
     wxzlib
     llama
     llama-common
-    llama-server-impl
-    llama-cli-impl
+    cpp-httplib
+    mtmd
 )
 
 if(WIN32)

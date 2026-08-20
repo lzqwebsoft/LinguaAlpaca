@@ -8,7 +8,14 @@
 #include <string>
 #include <thread>
 
-#include "Types.hpp"
+#include "core/Types.hpp"
+
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#endif
 
 namespace LinguaAlpaca {
 
@@ -46,15 +53,26 @@ public:
     std::string GetCurrentModelPath() const;
     std::string GetCurrentMmprojPath() const;
 
+    static std::string FindLlamaServerBinary();
+
 private:
+    void CleanupProcess();
+    void StartLogReader(HANDLE hReadPipe);
+
     std::atomic<bool> m_isAlive{false};
     std::atomic<bool> m_isStopping{false};
-    std::thread m_thread;
 
     mutable std::mutex m_configMutex;
     ServerConfig m_config;
     int m_port{0};
     std::string m_baseUrl;
+
+#ifdef _WIN32
+    HANDLE m_hProcess{NULL};
+    HANDLE m_hJob{NULL};
+    DWORD m_processId{0};
+#endif
+    std::thread m_logThread;
 };
 
 } // namespace LinguaAlpaca

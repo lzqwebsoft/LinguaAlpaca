@@ -100,13 +100,42 @@ inline uint64_t ReadUint64BE(const uint8_t* p) {
 
 // 清理去除 HTML / XDXF 标签并保留整洁的排版
 std::string CleanTagsAndFormat(const std::string& text) {
+    if (text.empty()) return "";
+
+    // 1. 转义字符还原 (\n, \r, \t, \\)
+    std::string unescaped;
+    unescaped.reserve(text.size());
+    for (size_t i = 0; i < text.size(); ++i) {
+        if (text[i] == '\\' && i + 1 < text.size()) {
+            char next = text[i + 1];
+            if (next == 'n') {
+                unescaped.push_back('\n');
+                i++;
+                continue;
+            } else if (next == 'r') {
+                i++;
+                continue;
+            } else if (next == 't') {
+                unescaped.push_back('\t');
+                i++;
+                continue;
+            } else if (next == '\\') {
+                unescaped.push_back('\\');
+                i++;
+                continue;
+            }
+        }
+        unescaped.push_back(text[i]);
+    }
+
+    // 2. 剥离 HTML / XDXF 标签并保留换行
     std::string out;
-    out.reserve(text.size());
+    out.reserve(unescaped.size());
     bool inTag = false;
     std::string currentTag;
 
-    for (size_t i = 0; i < text.size(); ++i) {
-        char c = text[i];
+    for (size_t i = 0; i < unescaped.size(); ++i) {
+        char c = unescaped[i];
         if (c == '<') {
             inTag = true;
             currentTag.clear();
@@ -115,8 +144,11 @@ std::string CleanTagsAndFormat(const std::string& text) {
         if (c == '>') {
             inTag = false;
             std::string lowerTag = ToLowerUtf8(currentTag);
-            if (lowerTag == "br" || lowerTag == "br/" || lowerTag == "/p" ||
-                lowerTag == "/div" || lowerTag == "/tr" || lowerTag == "/dtrn") {
+            size_t sp = lowerTag.find_first_of(" \t\n\r/");
+            std::string tagName = (sp != std::string::npos) ? lowerTag.substr(0, sp) : lowerTag;
+            if (tagName == "br" || tagName == "p" || tagName == "div" ||
+                tagName == "tr" || tagName == "li" || tagName == "dtrn" ||
+                tagName == "dt" || tagName == "dd" || tagName == "blockquote") {
                 out.push_back('\n');
             }
             continue;
@@ -128,11 +160,45 @@ std::string CleanTagsAndFormat(const std::string& text) {
         }
     }
 
-    // 清理多余空行与格式规范化
+    // 3. 替换常见 HTML 实体
+    std::string decoded;
+    decoded.reserve(out.size());
+    for (size_t i = 0; i < out.size(); ++i) {
+        if (out[i] == '&') {
+            if (out.compare(i, 6, "&nbsp;") == 0) {
+                decoded.push_back(' ');
+                i += 5;
+                continue;
+            } else if (out.compare(i, 5, "&amp;") == 0) {
+                decoded.push_back('&');
+                i += 4;
+                continue;
+            } else if (out.compare(i, 4, "&lt;") == 0) {
+                decoded.push_back('<');
+                i += 3;
+                continue;
+            } else if (out.compare(i, 4, "&gt;") == 0) {
+                decoded.push_back('>');
+                i += 3;
+                continue;
+            } else if (out.compare(i, 6, "&quot;") == 0) {
+                decoded.push_back('"');
+                i += 5;
+                continue;
+            } else if (out.compare(i, 6, "&#39;") == 0 || out.compare(i, 6, "&apos;") == 0) {
+                decoded.push_back('\'');
+                i += 5;
+                continue;
+            }
+        }
+        decoded.push_back(out[i]);
+    }
+
+    // 4. 清理多余空行与格式规范化
     std::string clean;
-    clean.reserve(out.size());
+    clean.reserve(decoded.size());
     int consecutiveNewlines = 0;
-    for (char c : out) {
+    for (char c : decoded) {
         if (c == '\r') continue;
         if (c == '\n') {
             consecutiveNewlines++;
@@ -145,7 +211,7 @@ std::string CleanTagsAndFormat(const std::string& text) {
         }
     }
 
-    // 移除前导和后继空白
+    // 5. 移除前导和后继空白
     size_t start = clean.find_first_not_of(" \t\n\r");
     if (start == std::string::npos) return "";
     size_t end = clean.find_last_not_of(" \t\n\r");

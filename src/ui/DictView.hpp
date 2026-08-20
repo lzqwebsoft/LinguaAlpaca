@@ -41,6 +41,7 @@ private:
     void OnGoToSettingsClicked(wxCommandEvent& event);
 
     void DoSearch(const std::string& word);
+    void RenderRichDictionaryResults(const std::vector<DictSearchResult>& results);
     void UpdateEmptyStateView(bool hasDictionaries, bool hasSearched, bool hasResults);
 
     std::shared_ptr<ModelManager> m_modelManager;
@@ -84,6 +85,7 @@ private:
     std::string m_currentWord;
     std::string m_currentSelectedDictId;
     std::vector<DictInfo> m_cachedDictInfos;
+    std::vector<DictSearchResult> m_lastSearchResults;
 };
 
 } // namespace LinguaAlpaca::UI

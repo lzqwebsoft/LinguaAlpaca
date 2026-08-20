@@ -197,8 +197,8 @@ void DictView::InitUI() {
     wordHeaderSizer->Add(m_copyBtn, 0, wxALIGN_CENTER_VERTICAL);
     m_wordHeaderBar->SetSizer(wordHeaderSizer);
 
-    // 释义内容文本展示框
-    m_definitionCtrl = new TextCtrl(m_rightResultCard, wxID_ANY, L"", wxDefaultPosition, wxDefaultSize, wxTE_MULTILINE | wxTE_READONLY | wxBORDER_NONE);
+    // 释义内容文本展示框 (启用 wxTE_RICH2 支持富文本样式)
+    m_definitionCtrl = new TextCtrl(m_rightResultCard, wxID_ANY, L"", wxDefaultPosition, wxDefaultSize, wxTE_MULTILINE | wxTE_READONLY | wxBORDER_NONE | wxTE_RICH2);
     m_definitionCtrl->SetFont(wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
     m_definitionCtrl->SetBackgroundColour(palette.cardBg);
     m_definitionCtrl->SetForegroundColour(palette.textPrimary);
@@ -359,6 +359,7 @@ void DictView::OnClearClicked(wxCommandEvent& WXUNUSED(event)) {
     if (m_speakBtn) m_speakBtn->Hide();
     if (m_copyBtn) m_copyBtn->Hide();
     m_currentWord.clear();
+    m_lastSearchResults.clear();
 
     UpdateEmptyStateView(m_dictEngine && m_dictEngine->HasDictionaries(), false, false);
 }
@@ -397,6 +398,7 @@ void DictView::DoSearch(const std::string& word) {
     m_currentWord = word;
 
     auto results = m_dictEngine->Lookup(word, m_currentSelectedDictId);
+    m_lastSearchResults = results;
 
     if (results.empty()) {
         m_headwordText->SetLabel(wxString::FromUTF8(word));
@@ -427,22 +429,158 @@ void DictView::DoSearch(const std::string& word) {
     m_speakBtn->Show();
     m_copyBtn->Show();
 
-    // 聚合多词典释义文本
-    wxString combinedDef;
-    for (size_t i = 0; i < results.size(); ++i) {
-        const auto& r = results[i];
-        if (i > 0) {
-            combinedDef += L"\n\n═══════════════════════════════════════════\n\n";
-        }
-        combinedDef += wxString::Format(L"【 %s 】\n", wxString::FromUTF8(r.dictName));
-        combinedDef += wxString::FromUTF8(r.definition);
-    }
+    // 结构化富文本分词典释义渲染
+    RenderRichDictionaryResults(results);
 
-    m_definitionCtrl->SetValue(combinedDef);
     m_wordHeaderBar->Layout();
     m_rightResultCard->Layout();
 
     UpdateEmptyStateView(true, true, true);
+}
+
+void DictView::RenderRichDictionaryResults(const std::vector<DictSearchResult>& results) {
+    if (!m_definitionCtrl) return;
+    wxTextCtrl* inner = m_definitionCtrl->GetInnerCtrl();
+    if (!inner) return;
+
+    inner->Freeze();
+    inner->Clear();
+
+    auto palette = ThemeColors::GetCurrentPalette();
+
+    // 字体规范定义
+    wxFont defaultFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei");
+    wxFont dictHeaderFont(11, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei");
+    wxFont posFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei");
+    wxFont numFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei");
+    wxFont phoneticFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_ITALIC, wxFONTWEIGHT_NORMAL, false, "Lucida Sans Unicode");
+    wxFont exampleFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_ITALIC, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei");
+    wxFont tagFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei");
+    wxFont dividerFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei");
+
+    // 样式属性定义
+    wxTextAttr defaultAttr(palette.textPrimary, palette.cardBg, defaultFont);
+    wxTextAttr dictHeaderAttr(palette.accentPrimary, palette.cardBg, dictHeaderFont);
+    wxTextAttr posAttr(palette.accentHover, palette.cardBg, posFont);
+    wxTextAttr numAttr(palette.accentPrimary, palette.cardBg, numFont);
+    wxTextAttr phoneticAttr(palette.accentGreen, palette.cardBg, phoneticFont);
+    wxTextAttr exampleAttr(palette.textSecondary, palette.cardBg, exampleFont);
+    wxTextAttr tagAttr(palette.accentPrimary, palette.cardBg, tagFont);
+    wxTextAttr dividerAttr(palette.cardBorderActive, palette.cardBg, dividerFont);
+
+    static const std::vector<wxString> posPrefixes = {
+        "[n.]", "[v.]", "[adj.]", "[adv.]", "[vt.]", "[vi.]", "[prep.]", "[conj.]", "[pron.]", "[num.]", "[art.]", "[int.]", "[abbr.]", "[pl.]", "[aux.]",
+        "n. ", "v. ", "adj. ", "adv. ", "vt. ", "vi. ", "prep. ", "conj. ", "pron. ", "abbr. ", "pl. ", "int. ", "aux. ", "art. ", "num. ",
+        "n.", "v.", "adj.", "adv.", "vt.", "vi.", "prep.", "conj.", "pron.", "abbr.", "pl.", "int.", "aux.", "art.", "num.",
+        "【名】", "【动】", "【形】", "【副】", "【介】", "【连】", "【代】", "【及物】", "【不及物】", "【缩】", "【口】"
+    };
+
+    static const std::vector<wxString> tagPrefixes = {
+        L"【例】", L"【短语】", L"【用法】", L"【同义词】", L"【反义词】", L"【派生】", L"【同】", L"【反】", L"【考点】", L"【记忆】", L"【词源】", L"【辨析】"
+    };
+
+    for (size_t d = 0; d < results.size(); ++d) {
+        const auto& r = results[d];
+
+        // 词典间高雅分割线与段落间距
+        if (d > 0) {
+            inner->SetDefaultStyle(dividerAttr);
+            inner->AppendText(L"\n\n────────────────────────────────────────────────\n\n");
+        }
+
+        // 1. 词典名称标头 (如: 📖 朗道英汉字典5.0)
+        inner->SetDefaultStyle(dictHeaderAttr);
+        inner->AppendText(wxString::Format(L"📖 %s\n", wxString::FromUTF8(r.dictName)));
+
+        // 2. 本词典附带的音标 (如果有)
+        if (!r.phonetic.empty()) {
+            inner->SetDefaultStyle(phoneticAttr);
+            inner->AppendText(wxString::Format(L"   %s\n", wxString::FromUTF8(r.phonetic)));
+        }
+
+        // 3. 逐行排版
+        wxString defStr = wxString::FromUTF8(r.definition);
+        wxArrayString lines = wxSplit(defStr, '\n');
+
+        for (size_t l = 0; l < lines.size(); ++l) {
+            wxString line = lines[l].Trim(true);
+            if (line.IsEmpty()) {
+                inner->SetDefaultStyle(defaultAttr);
+                inner->AppendText(L"\n");
+                continue;
+            }
+
+            // A. 检查词性前缀 (如: n. / [n.] / v. / adj. 等)
+            bool matchedPos = false;
+            for (const auto& posTag : posPrefixes) {
+                if (line.StartsWith(posTag)) {
+                    inner->SetDefaultStyle(posAttr);
+                    inner->AppendText(L" " + posTag);
+                    wxString rest = line.Mid(posTag.Length());
+                    inner->SetDefaultStyle(defaultAttr);
+                    inner->AppendText(rest + L"\n");
+                    matchedPos = true;
+                    break;
+                }
+            }
+            if (matchedPos) continue;
+
+            // B. 检查条目标签 (如: 【例】 / 【短语】 / 【用法】 / 【同义词】)
+            bool matchedTag = false;
+            for (const auto& tag : tagPrefixes) {
+                if (line.StartsWith(tag)) {
+                    inner->SetDefaultStyle(tagAttr);
+                    inner->AppendText(L" " + tag);
+                    wxString rest = line.Mid(tag.Length());
+                    inner->SetDefaultStyle(exampleAttr);
+                    inner->AppendText(rest + L"\n");
+                    matchedTag = true;
+                    break;
+                }
+            }
+            if (matchedTag) continue;
+
+            // C. 检查例句或参考 (如: e.g. / Ex. / eg.)
+            if (line.StartsWith("e.g.") || line.StartsWith("eg.") || line.StartsWith("Ex.") || line.StartsWith("ex.")) {
+                inner->SetDefaultStyle(exampleAttr);
+                inner->AppendText(L"   " + line + L"\n");
+                continue;
+            }
+
+            // D. 检查序号条目 (如: 1. / 2. / (1) / (2) / ① / ② / [1] / [2])
+            bool matchedNum = false;
+            if (line.Length() >= 2 && (wxIsdigit(line[0]) || line.StartsWith("(") || line.StartsWith("①") || line.StartsWith("②") || line.StartsWith("③") || line.StartsWith("④") || line.StartsWith("⑤") || line.StartsWith("["))) {
+                int splitIdx = -1;
+                if (line.Find('.') != wxNOT_FOUND && line.Find('.') <= 3) {
+                    splitIdx = line.Find('.') + 1;
+                } else if (line.Find(')') != wxNOT_FOUND && line.Find(')') <= 4) {
+                    splitIdx = line.Find(')') + 1;
+                } else if (line.Find(']') != wxNOT_FOUND && line.Find(']') <= 4) {
+                    splitIdx = line.Find(']') + 1;
+                } else if (line.StartsWith("①") || line.StartsWith("②") || line.StartsWith("③") || line.StartsWith("④") || line.StartsWith("⑤")) {
+                    splitIdx = 1;
+                }
+
+                if (splitIdx > 0) {
+                    wxString numPart = line.Left(splitIdx);
+                    wxString textPart = line.Mid(splitIdx);
+                    inner->SetDefaultStyle(numAttr);
+                    inner->AppendText(L" " + numPart);
+                    inner->SetDefaultStyle(defaultAttr);
+                    inner->AppendText(textPart + L"\n");
+                    matchedNum = true;
+                }
+            }
+            if (matchedNum) continue;
+
+            // E. 普通释义文本
+            inner->SetDefaultStyle(defaultAttr);
+            inner->AppendText(line + L"\n");
+        }
+    }
+
+    inner->Thaw();
+    m_definitionCtrl->ScrollToLine(0);
 }
 
 void DictView::UpdateEmptyStateView(bool hasDictionaries, bool hasSearched, bool hasResults) {
@@ -496,6 +634,9 @@ void DictView::UpdateTheme() {
     if (m_definitionCtrl) {
         m_definitionCtrl->SetBackgroundColour(palette.cardBg);
         m_definitionCtrl->SetForegroundColour(palette.textPrimary);
+        if (!m_lastSearchResults.empty()) {
+            RenderRichDictionaryResults(m_lastSearchResults);
+        }
     }
 
     if (m_emptyStateCard) m_emptyStateCard->SetBackgroundColour(palette.cardBg);

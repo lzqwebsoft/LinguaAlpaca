@@ -82,6 +82,8 @@ set(CORE_SOURCES
     src/core/Downloader.cpp
     src/core/WinTtsHelper.hpp
     src/core/WinTtsHelper.cpp
+    src/core/DictEngine.hpp
+    src/core/DictEngine.cpp
 )
 
 set(ENGINE_SOURCES
@@ -121,10 +123,16 @@ set(UI_SOURCES
     src/ui/widgets/TextCtrl.cpp
     src/ui/widgets/ScrollBar.hpp
     src/ui/widgets/ScrollBar.cpp
+    src/ui/widgets/SearchInputBox.hpp
+    src/ui/widgets/SearchInputBox.cpp
+    src/ui/widgets/SuggestListBox.hpp
+    src/ui/widgets/SuggestListBox.cpp
     src/ui/TextView.hpp
     src/ui/TextView.cpp
     src/ui/OcrView.hpp
     src/ui/OcrView.cpp
+    src/ui/DictView.hpp
+    src/ui/DictView.cpp
     src/ui/LogView.hpp
     src/ui/LogView.cpp
     src/ui/SettingsView.hpp
@@ -157,12 +165,14 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/llama.cpp/tools/server
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/llama.cpp/tools/cli
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/llama.cpp/tools/mtmd
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/wxWidgets/src/zlib
 )
 
 # 链接 wxWidgets 与核心库
 target_link_libraries(${PROJECT_NAME} PRIVATE
     wx::core
     wx::base
+    wxzlib
     llama
     llama-common
     llama-server-impl

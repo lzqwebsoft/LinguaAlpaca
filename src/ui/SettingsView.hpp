@@ -97,7 +97,28 @@ private:
     void OnSelectionModeChanged(wxCommandEvent& event);
     void SetSelectionConfig(const AppConfig& cfg);
 
-    // UI Elements - 4. 日志与诊断设置 Group
+    // UI Elements - 4. 词典设置 Group
+    wxPanel* m_dictCard{nullptr};
+    wxStaticText* m_dictTitleText{nullptr};
+    StatusBadge* m_dictStatusBadge{nullptr};
+    wxStaticText* m_dictDirLabel{nullptr};
+    wxTextCtrl* m_dictDirPathCtrl{nullptr};
+    CustomButton* m_dictBrowseBtn{nullptr};
+    CustomButton* m_dictOpenDirBtn{nullptr};
+    CustomButton* m_dictSaveBtn{nullptr};
+    CustomButton* m_dictReloadBtn{nullptr};
+    wxStaticText* m_dictStatusText{nullptr};
+    wxStaticText* m_dictListTitleText{nullptr};
+    wxTextCtrl* m_dictListInfoCtrl{nullptr};
+
+    void OnBrowseDictDir(wxCommandEvent& event);
+    void OnOpenDictDir(wxCommandEvent& event);
+    void OnSaveDictConfig(wxCommandEvent& event);
+    void OnReloadDicts(wxCommandEvent& event);
+    void UpdateDictListSummary();
+    void SetDictConfig(const AppConfig& cfg);
+
+    // UI Elements - 5. 日志与诊断设置 Group
     wxPanel* m_logCard{nullptr};
     wxStaticText* m_logTitleText{nullptr};
     wxCheckBox* m_saveLogToFileCheck{nullptr};
@@ -110,7 +131,7 @@ private:
     void OnOpenLogDirFromSettings(wxCommandEvent& event);
     void SetLogConfig(const AppConfig& cfg);
 
-    // UI Elements - 5. 偏好设置 Group
+    // UI Elements - 6. 偏好设置 Group
     wxPanel* m_prefCard{nullptr};
     wxStaticText* m_prefTitle{nullptr};
 

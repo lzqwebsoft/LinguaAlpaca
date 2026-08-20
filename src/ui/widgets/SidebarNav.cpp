@@ -15,7 +15,7 @@ SidebarNav::SidebarNav(wxWindow* parent, wxWindowID id)
     m_items = {
         { 0, L"文本", SVG::TEXT },
         { 1, L"OCR", SVG::OCR },
-        { 2, L"历史", SVG::HISTORY },
+        { 2, L"词典", SVG::DICTIONARY },
         { 3, L"日志", SVG::LOG }
     };
     m_bottomItem = { 4, L"设置", SVG::SETTINGS };

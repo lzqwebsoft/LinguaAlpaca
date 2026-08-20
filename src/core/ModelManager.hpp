@@ -12,6 +12,7 @@
 #include "Config.hpp"
 #include "LlamaServer.hpp"
 #include "LlamaClient.hpp"
+#include "DictEngine.hpp"
 
 namespace LinguaAlpaca {
 
@@ -67,11 +68,13 @@ public:
     std::shared_ptr<LlamaClient> GetClient() const { return m_client; }
     std::shared_ptr<LlamaServer> GetServer() const { return m_server; }
     std::shared_ptr<ConfigManager> GetConfigManager() const { return m_configManager; }
+    std::shared_ptr<DictEngine> GetDictEngine() const { return m_dictEngine; }
 
 private:
     std::shared_ptr<ConfigManager> m_configManager;
     std::shared_ptr<LlamaServer> m_server;
     std::shared_ptr<LlamaClient> m_client;
+    std::shared_ptr<DictEngine> m_dictEngine;
 
     std::atomic<TargetModelType> m_activeModelType{TargetModelType::None};
     std::atomic<bool> m_isSwitching{false};

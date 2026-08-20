@@ -151,12 +151,6 @@ namespace LinguaAlpaca::UI {
 		SetSizer(frameSizer);
 		Layout();
 
-		// 监听用户手动调节分割条
-		m_splitter->Bind(wxEVT_SPLITTER_SASH_POS_CHANGED, [this](wxSplitterEvent& event) {
-			m_hasUserAdjustedSash = true;
-			event.Skip();
-		});
-
 		// 绘制 Header Panel 底部的精细分隔线 (参考 MainFrame 样式)
 		m_headerPanel->Bind(wxEVT_PAINT, [this](wxPaintEvent&) {
 			wxAutoBufferedPaintDC dc(m_headerPanel);
@@ -282,15 +276,6 @@ namespace LinguaAlpaca::UI {
 		Show(true);
 		Raise();
 		Layout();
-
-		// 每次显示时若用户未手动调节过分割条，确保原文与译文面板精确各占 50% 高度
-		if (!m_hasUserAdjustedSash) {
-			int splitterH = m_splitter->GetClientSize().y;
-			if (splitterH > 0) {
-				int sashSize = m_splitter->GetSashSize();
-				m_splitter->SetSashPosition((splitterH - sashSize) / 2);
-			}
-		}
 
 		if (!m_modelManager) {
 			m_targetCtrl->SetValue(L"错误: ModelManager 未初始化");

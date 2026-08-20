@@ -5,9 +5,9 @@
 #include "widgets/SidebarNav.hpp"
 #include "TextView.hpp"
 #include "OcrView.hpp"
+#include "DictView.hpp"
 #include "LogView.hpp"
 #include "SettingsView.hpp"
-#include "PlaceholderView.hpp"
 
 namespace LinguaAlpaca::UI {
 
@@ -40,7 +40,7 @@ private:
 
     TextView* m_textView{nullptr};
     OcrView* m_ocrView{nullptr};
-    PlaceholderView* m_historyView{nullptr};
+    DictView* m_dictView{nullptr};
     LogView* m_logView{nullptr};
     SettingsView* m_settingsView{nullptr};
 

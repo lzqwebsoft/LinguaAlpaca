@@ -30,6 +30,9 @@ struct AppConfig {
 
     // 日志配置
     bool saveLogToFile{false};
+
+    // 词典配置
+    std::string dictDirPath;
 };
 
 class ConfigManager {
@@ -41,6 +44,7 @@ public:
     static std::string GetDefaultModelDir();
     static std::string GetDefaultLogDir();
     static std::string GetDefaultLogFilePath();
+    static std::string GetDefaultDictDir();
 
     AppConfig GetConfig() const;
     void UpdateConfig(const AppConfig& newConfig);
@@ -50,6 +54,7 @@ public:
     void SaveThemeMode(const std::string& themeMode);
     void SaveSelectionConfig(bool enabled, int mode, int modifierKey, bool preserveClip);
     void SaveLogConfig(bool saveLogToFile);
+    void SaveDictDir(const std::string& path);
 
     bool Load();
     bool Save();

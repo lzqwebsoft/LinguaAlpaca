@@ -4,6 +4,7 @@ add_executable(unit_tests
     LlamaCppEngineTest.cpp
     LlamaSseClientTest.cpp
     SelectionTranslateTest.cpp
+    DictEngineTest.cpp
     ${CMAKE_SOURCE_DIR}/src/core/Logger.cpp
     ${CMAKE_SOURCE_DIR}/src/core/Config.cpp
     ${CMAKE_SOURCE_DIR}/src/core/ClipboardHelper.cpp
@@ -15,6 +16,7 @@ add_executable(unit_tests
     ${CMAKE_SOURCE_DIR}/src/core/ModelManager.cpp
     ${CMAKE_SOURCE_DIR}/src/core/Downloader.cpp
     ${CMAKE_SOURCE_DIR}/src/core/WinTtsHelper.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/DictEngine.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/LlamaCppTranslationEngine.cpp
 )
 
@@ -24,12 +26,14 @@ target_include_directories(unit_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/third_party/llama.cpp/common
     ${CMAKE_SOURCE_DIR}/third_party/llama.cpp/tools/server
     ${CMAKE_SOURCE_DIR}/third_party/llama.cpp/tools/cli
+    ${CMAKE_SOURCE_DIR}/third_party/wxWidgets/src/zlib
     ${CMAKE_SOURCE_DIR}/third_party/wxWidgets/3rdparty/catch/single_include
 )
 
 target_link_libraries(unit_tests PRIVATE
     wx::core
     wx::base
+    wxzlib
     llama
     llama-common
     llama-server-impl

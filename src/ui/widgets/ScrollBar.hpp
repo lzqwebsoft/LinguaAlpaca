@@ -18,6 +18,9 @@ class TextCtrl;
  */
 class ScrollBar : public wxWindow {
 public:
+    using ScrollCallback = std::function<void(int line)>;
+
+    explicit ScrollBar(wxWindow* parent, ScrollCallback onScroll);
     explicit ScrollBar(TextCtrl* parentTextCtrl);
     ~ScrollBar() override;
 
@@ -33,8 +36,10 @@ private:
     void OnMouseMove(wxMouseEvent& event);
     void OnMouseWheel(wxMouseEvent& event);
     void OnTimer(wxTimerEvent& event);
+    void DoScrollToLine(int line);
 
     TextCtrl* m_parentTextCtrl{nullptr};
+    ScrollCallback m_scrollCallback;
     wxTimer m_hideTimer;
 
     int m_firstVisibleLine{0};

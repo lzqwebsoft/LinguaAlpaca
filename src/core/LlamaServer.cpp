@@ -105,6 +105,7 @@ bool LlamaServer::Start(const ServerConfig& config) {
     }
     if (!config.mmprojPath.empty()) {
         server_params.mmproj.path = config.mmprojPath;
+        server_params.mmproj_use_gpu = (config.ngl > 0);
     }
     server_params.use_jinja = true;
     server_params.ui = false; // 禁用 UI
@@ -112,7 +113,9 @@ bool LlamaServer::Start(const ServerConfig& config) {
     m_thread = std::thread([this, server_params]() mutable {
         LOG_INFO("LlamaServer", "Starting server thread at " + m_baseUrl +
                  " with model=" + server_params.model.path +
-                 ", mmproj=" + server_params.mmproj.path);
+                 ", mmproj=" + server_params.mmproj.path +
+                 ", ngl=" + std::to_string(server_params.n_gpu_layers) +
+                 ", mmproj_use_gpu=" + (server_params.mmproj_use_gpu ? "true" : "false"));
 
         try {
             int res = llama_server(server_params, 0, nullptr);
@@ -231,7 +234,9 @@ bool LlamaServer::EnsureModelRunning(
     bool sameConfig = false;
     {
         std::lock_guard<std::mutex> lock(m_configMutex);
-        sameConfig = (m_config.modelPath == config.modelPath && m_config.mmprojPath == config.mmprojPath);
+        sameConfig = (m_config.modelPath == config.modelPath &&
+                      m_config.mmprojPath == config.mmprojPath &&
+                      m_config.ngl == config.ngl);
     }
 
     if (IsAlive() && sameConfig) {

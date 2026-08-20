@@ -46,6 +46,15 @@ namespace LinguaAlpaca {
         return logPath.ToUTF8().data();
     }
 
+    std::string ConfigManager::GetDefaultDictDir() {
+        wxString userDir = wxStandardPaths::Get().GetUserDataDir();
+        wxString dictDir = userDir + wxFileName::GetPathSeparator() + "dicts";
+        if (!wxDirExists(dictDir)) {
+            wxFileName::Mkdir(dictDir, 0777, wxPATH_MKDIR_FULL);
+        }
+        return dictDir.ToUTF8().data();
+    }
+
     AppConfig ConfigManager::GetConfig() const {
         std::lock_guard<std::mutex> lock(m_mutex);
         return m_config;
@@ -105,6 +114,14 @@ namespace LinguaAlpaca {
         Save();
     }
 
+    void ConfigManager::SaveDictDir(const std::string& path) {
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            m_config.dictDirPath = path;
+        }
+        Save();
+    }
+
     bool ConfigManager::Load() {
         std::lock_guard<std::mutex> lock(m_mutex);
         wxString path = wxString::FromUTF8(GetConfigFilePath());
@@ -119,7 +136,7 @@ namespace LinguaAlpaca {
         m_config.sourceLang = fileConfig.Read("/Language/SourceLang", "en").ToUTF8().data();
         m_config.targetLang = fileConfig.Read("/Language/TargetLang", "zh").ToUTF8().data();
         m_config.gpuLayers = fileConfig.ReadLong("/Model/GpuLayers", 99);       // 99 表示全部是GPU
-        m_config.ocrGpuLayers = fileConfig.ReadLong("/OCRModel/GpuLayers", -1); // 这里-1改为自动
+        m_config.ocrGpuLayers = fileConfig.ReadLong("/OCRModel/GpuLayers", 0);  // 默认 0 (CPU 模式)，避免多模态 Vulkan 显存/TDR 崩溃
 
         // 划词翻译配置
         m_config.selectionTranslateEnabled = fileConfig.ReadBool("/Selection/Enabled", true);
@@ -131,6 +148,13 @@ namespace LinguaAlpaca {
         // 日志配置
         m_config.saveLogToFile = fileConfig.ReadBool("/Log/SaveToFile", false);
         Logger::GetInstance().SetFileLogging(m_config.saveLogToFile, GetDefaultLogFilePath());
+
+        // 词典配置
+        std::string defaultDictDir = GetDefaultDictDir();
+        m_config.dictDirPath = fileConfig.Read("/Dictionary/Path", wxString::FromUTF8(defaultDictDir)).ToUTF8().data();
+        if (m_config.dictDirPath.empty()) {
+            m_config.dictDirPath = defaultDictDir;
+        }
 
         return true;
     }
@@ -160,6 +184,9 @@ namespace LinguaAlpaca {
 
         // 日志配置
         fileConfig.Write("/Log/SaveToFile", m_config.saveLogToFile);
+
+        // 词典配置
+        fileConfig.Write("/Dictionary/Path", wxString::FromUTF8(m_config.dictDirPath));
 
         return fileConfig.Flush();
     }

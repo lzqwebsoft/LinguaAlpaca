@@ -92,19 +92,19 @@ namespace LinguaAlpaca::UI {
         // 实例化各子视图并注入 ModelManager
         m_textView = new TextView(m_contentContainer, m_modelManager);
         m_ocrView = new OcrView(m_contentContainer, m_modelManager);
-        m_historyView = new PlaceholderView(m_contentContainer, L"翻译历史记录");
+        m_dictView = new DictView(m_contentContainer, m_modelManager);
         m_logView = new LogView(m_contentContainer, m_modelManager ? m_modelManager->GetConfigManager() : nullptr);
         m_settingsView = new SettingsView(m_contentContainer, m_modelManager);
 
         m_contentSizer->Add(m_textView, 1, wxEXPAND);
         m_contentSizer->Add(m_ocrView, 1, wxEXPAND);
-        m_contentSizer->Add(m_historyView, 1, wxEXPAND);
+        m_contentSizer->Add(m_dictView, 1, wxEXPAND);
         m_contentSizer->Add(m_logView, 1, wxEXPAND);
         m_contentSizer->Add(m_settingsView, 1, wxEXPAND);
 
         // 默认显示文本翻译 (Tab 0)
         m_ocrView->Hide();
-        m_historyView->Hide();
+        m_dictView->Hide();
         m_logView->Hide();
         m_settingsView->Hide();
 
@@ -262,6 +262,8 @@ namespace LinguaAlpaca::UI {
             m_textView->UpdateTheme();
         if (m_ocrView)
             m_ocrView->UpdateTheme();
+        if (m_dictView)
+            m_dictView->UpdateTheme();
         if (m_logView)
             m_logView->UpdateTheme();
         if (m_settingsView)
@@ -276,7 +278,7 @@ namespace LinguaAlpaca::UI {
 
         m_textView->Hide();
         m_ocrView->Hide();
-        m_historyView->Hide();
+        m_dictView->Hide();
         m_logView->Hide();
         m_settingsView->Hide();
 
@@ -294,7 +296,8 @@ namespace LinguaAlpaca::UI {
             }
             break;
         case 2:
-            m_historyView->Show();
+            m_dictView->Show();
+            m_dictView->RefreshDictList();
             break;
         case 3:
             m_logView->Show();

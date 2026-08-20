@@ -455,7 +455,85 @@ void SettingsView::InitUI() {
   m_selectionCard->SetSizer(selSizer);
   mainSizer->Add(m_selectionCard, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 20_dip);
 
-  // Group 4: 日志与诊断设置卡片
+  // Group 4: StarDict 词典设置卡片
+  m_dictCard = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE);
+  m_dictCard->SetBackgroundColour(palette.cardBg);
+  wxBoxSizer* dictSizer = new wxBoxSizer(wxVERTICAL);
+
+  wxBoxSizer* dictTitleSizer = new wxBoxSizer(wxHORIZONTAL);
+  wxBitmapBundle dictBundle = IconManager::GetIconBundle(SVG::DICTIONARY, dip(18, 18), palette.accentPrimary);
+  wxStaticBitmap* dictIcon = new wxStaticBitmap(m_dictCard, wxID_ANY, dictBundle);
+
+  m_dictTitleText = new wxStaticText(m_dictCard, wxID_ANY, L"本地 StarDict 词典设置");
+  m_dictTitleText->SetFont(wxFont(12, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
+  m_dictTitleText->SetForegroundColour(palette.textPrimary);
+
+  m_dictStatusBadge = new StatusBadge(m_dictCard);
+
+  dictTitleSizer->Add(dictIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8_dip);
+  dictTitleSizer->Add(m_dictTitleText, 0, wxALIGN_CENTER_VERTICAL);
+  dictTitleSizer->AddStretchSpacer(1);
+  dictTitleSizer->Add(m_dictStatusBadge, 0, wxALIGN_CENTER_VERTICAL);
+  dictSizer->Add(dictTitleSizer, 0, wxEXPAND | wxALL, 16_dip);
+
+  // 目录选择行
+  wxBoxSizer* dictDirRow = new wxBoxSizer(wxHORIZONTAL);
+  m_dictDirLabel = new wxStaticText(m_dictCard, wxID_ANY, L"词典目录", wxDefaultPosition, wxSize(70_dip, -1));
+  m_dictDirLabel->SetFont(wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+  m_dictDirLabel->SetForegroundColour(palette.textPrimary);
+
+  m_dictDirPathCtrl = new wxTextCtrl(m_dictCard, wxID_ANY, L"", wxDefaultPosition, wxSize(-1, 38_dip), wxBORDER_NONE);
+  m_dictDirPathCtrl->SetHint(L"指定包含 StarDict 词典 (.ifo / .idx / .dict) 的文件夹路径");
+  m_dictDirPathCtrl->SetFont(wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+  m_dictDirPathCtrl->SetBackgroundColour(palette.windowBg);
+  m_dictDirPathCtrl->SetForegroundColour(palette.textPrimary);
+
+  m_dictBrowseBtn = new CustomButton(m_dictCard, wxID_ANY, L"浏览", ButtonStyle::Secondary, wxDefaultPosition, dip(90, 38));
+  m_dictBrowseBtn->SetIcon(SVG::BROWSE, dip(16, 16));
+
+  m_dictOpenDirBtn = new CustomButton(m_dictCard, wxID_ANY, L"打开目录", ButtonStyle::Secondary, wxDefaultPosition, dip(110, 38));
+  m_dictOpenDirBtn->SetIcon(SVG::FOLDER_OPEN, dip(16, 16));
+
+  dictDirRow->Add(m_dictDirLabel, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 16_dip);
+  dictDirRow->Add(m_dictDirPathCtrl, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8_dip);
+  dictDirRow->Add(m_dictBrowseBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8_dip);
+  dictDirRow->Add(m_dictOpenDirBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 16_dip);
+  dictSizer->Add(dictDirRow, 0, wxEXPAND | wxBOTTOM, 12_dip);
+
+  // 操作按钮行
+  wxBoxSizer* dictActionRow = new wxBoxSizer(wxHORIZONTAL);
+  m_dictSaveBtn = new CustomButton(m_dictCard, wxID_ANY, L"保存词典设置", ButtonStyle::Primary, wxDefaultPosition, dip(145, 40));
+  m_dictSaveBtn->SetIcon(SVG::COPY, dip(16, 16), *wxWHITE);
+
+  m_dictReloadBtn = new CustomButton(m_dictCard, wxID_ANY, L"重新扫描词典", ButtonStyle::Secondary, wxDefaultPosition, dip(145, 40));
+  m_dictReloadBtn->SetIcon(SVG::REPLACE, dip(16, 16));
+
+  m_dictStatusText = new wxStaticText(m_dictCard, wxID_ANY, "");
+  m_dictStatusText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+  m_dictStatusText->SetForegroundColour(palette.accentGreen);
+
+  dictActionRow->Add(m_dictSaveBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10_dip);
+  dictActionRow->Add(m_dictReloadBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 12_dip);
+  dictActionRow->Add(m_dictStatusText, 0, wxALIGN_CENTER_VERTICAL);
+  dictSizer->Add(dictActionRow, 0, wxLEFT | wxRIGHT | wxBOTTOM, 16_dip);
+
+  // 已识别词典摘要展示框
+  m_dictListTitleText = new wxStaticText(m_dictCard, wxID_ANY, L"当前已识别加载的词典：");
+  m_dictListTitleText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
+  m_dictListTitleText->SetForegroundColour(palette.textSecondary);
+  dictSizer->Add(m_dictListTitleText, 0, wxLEFT | wxRIGHT | wxBOTTOM, 6_dip);
+
+  m_dictListInfoCtrl = new wxTextCtrl(m_dictCard, wxID_ANY, L"", wxDefaultPosition, wxSize(-1, 90_dip),
+                                      wxTE_MULTILINE | wxTE_READONLY | wxBORDER_NONE);
+  m_dictListInfoCtrl->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Consolas, Microsoft YaHei"));
+  m_dictListInfoCtrl->SetBackgroundColour(palette.windowBg);
+  m_dictListInfoCtrl->SetForegroundColour(palette.textPrimary);
+  dictSizer->Add(m_dictListInfoCtrl, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 16_dip);
+
+  m_dictCard->SetSizer(dictSizer);
+  mainSizer->Add(m_dictCard, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 20_dip);
+
+  // Group 5: 日志与诊断设置卡片
   m_logCard = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE);
   m_logCard->SetBackgroundColour(palette.cardBg);
   wxBoxSizer* logSizer = new wxBoxSizer(wxVERTICAL);
@@ -501,7 +579,7 @@ void SettingsView::InitUI() {
   m_logCard->SetSizer(logSizer);
   mainSizer->Add(m_logCard, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 20_dip);
 
-  // Group 5: 偏好设置卡片
+  // Group 6: 偏好设置卡片
   m_prefCard = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
                            wxBORDER_NONE);
   m_prefCard->SetBackgroundColour(palette.cardBg);
@@ -535,6 +613,7 @@ void SettingsView::InitUI() {
     SetOcrModelPath(wxString::FromUTF8(cfg.ocrModelPath),
                     wxString::FromUTF8(cfg.ocrMmprojPath));
     SetSelectionConfig(cfg);
+    SetDictConfig(cfg);
     SetLogConfig(cfg);
   }
 
@@ -560,6 +639,12 @@ void SettingsView::InitUI() {
   // 事件绑定 - 划词翻译 Group
   m_selectionModeRadio->Bind(wxEVT_RADIOBOX, &SettingsView::OnSelectionModeChanged, this);
   m_selectionSaveBtn->Bind(wxEVT_BUTTON, &SettingsView::OnSaveSelectionConfig, this);
+
+  // 事件绑定 - 词典设置 Group
+  m_dictBrowseBtn->Bind(wxEVT_BUTTON, &SettingsView::OnBrowseDictDir, this);
+  m_dictOpenDirBtn->Bind(wxEVT_BUTTON, &SettingsView::OnOpenDictDir, this);
+  m_dictSaveBtn->Bind(wxEVT_BUTTON, &SettingsView::OnSaveDictConfig, this);
+  m_dictReloadBtn->Bind(wxEVT_BUTTON, &SettingsView::OnReloadDicts, this);
 
   // 事件绑定 - 日志与诊断 Group
   m_logSaveBtn->Bind(wxEVT_BUTTON, &SettingsView::OnSaveLogConfig, this);
@@ -847,6 +932,31 @@ void SettingsView::UpdateTheme() {
   if (m_selectionSaveBtn)
     m_selectionSaveBtn->Refresh();
 
+  if (m_dictCard)
+    m_dictCard->SetBackgroundColour(palette.cardBg);
+  if (m_dictTitleText)
+    m_dictTitleText->SetForegroundColour(palette.textPrimary);
+  if (m_dictDirLabel)
+    m_dictDirLabel->SetForegroundColour(palette.textPrimary);
+  if (m_dictDirPathCtrl) {
+    m_dictDirPathCtrl->SetBackgroundColour(palette.windowBg);
+    m_dictDirPathCtrl->SetForegroundColour(palette.textPrimary);
+  }
+  if (m_dictListTitleText)
+    m_dictListTitleText->SetForegroundColour(palette.textSecondary);
+  if (m_dictListInfoCtrl) {
+    m_dictListInfoCtrl->SetBackgroundColour(palette.windowBg);
+    m_dictListInfoCtrl->SetForegroundColour(palette.textPrimary);
+  }
+  if (m_dictBrowseBtn)
+    m_dictBrowseBtn->Refresh();
+  if (m_dictOpenDirBtn)
+    m_dictOpenDirBtn->Refresh();
+  if (m_dictSaveBtn)
+    m_dictSaveBtn->Refresh();
+  if (m_dictReloadBtn)
+    m_dictReloadBtn->Refresh();
+
   if (m_logCard)
     m_logCard->SetBackgroundColour(palette.cardBg);
   if (m_logTitleText)
@@ -884,6 +994,7 @@ void SettingsView::UpdateTheme() {
 
   OnTabChanged(m_activeTab);
   UpdateOcrStatus();
+  UpdateDictListSummary();
   Refresh();
 }
 
@@ -922,6 +1033,101 @@ void SettingsView::OnSaveSelectionConfig(wxCommandEvent& WXUNUSED(event)) {
 
   if (m_selectionStatusText) {
     m_selectionStatusText->SetLabel(L"划词配置已保存并即时生效！");
+  }
+}
+
+void SettingsView::SetDictConfig(const AppConfig& cfg) {
+  if (m_dictDirPathCtrl) {
+    m_dictDirPathCtrl->SetValue(wxString::FromUTF8(cfg.dictDirPath));
+  }
+  UpdateDictListSummary();
+}
+
+void SettingsView::OnBrowseDictDir(wxCommandEvent& WXUNUSED(event)) {
+  wxString defaultDir = m_dictDirPathCtrl ? m_dictDirPathCtrl->GetValue() : wxString::FromUTF8(ConfigManager::GetDefaultDictDir());
+  wxDirDialog dirDialog(this, L"选择 StarDict 词典存放目录", defaultDir, wxDD_DEFAULT_STYLE | wxDD_DIR_MUST_EXIST);
+
+  if (dirDialog.ShowModal() == wxID_OK) {
+    wxString path = dirDialog.GetPath();
+    if (m_dictDirPathCtrl) {
+      m_dictDirPathCtrl->SetValue(path);
+    }
+  }
+}
+
+void SettingsView::OnOpenDictDir(wxCommandEvent& WXUNUSED(event)) {
+  wxString dirPath = m_dictDirPathCtrl ? m_dictDirPathCtrl->GetValue() : wxString::FromUTF8(ConfigManager::GetDefaultDictDir());
+  if (dirPath.IsEmpty() || !wxDirExists(dirPath)) {
+    dirPath = wxString::FromUTF8(ConfigManager::GetDefaultDictDir());
+  }
+  if (!wxDirExists(dirPath)) {
+    wxFileName::Mkdir(dirPath, 0777, wxPATH_MKDIR_FULL);
+  }
+  wxLaunchDefaultApplication(dirPath);
+}
+
+void SettingsView::OnSaveDictConfig(wxCommandEvent& WXUNUSED(event)) {
+  if (!m_configManager) return;
+
+  wxString dirPath = m_dictDirPathCtrl ? m_dictDirPathCtrl->GetValue() : "";
+  m_configManager->SaveDictDir(dirPath.ToUTF8().data());
+
+  if (m_modelManager && m_modelManager->GetDictEngine()) {
+    m_modelManager->GetDictEngine()->LoadDictionaries(dirPath.ToUTF8().data());
+  }
+
+  UpdateDictListSummary();
+
+  if (m_dictStatusText) {
+    m_dictStatusText->SetLabel(L"词典目录设置已保存并重新扫描！");
+  }
+}
+
+void SettingsView::OnReloadDicts(wxCommandEvent& WXUNUSED(event)) {
+  wxString dirPath = m_dictDirPathCtrl ? m_dictDirPathCtrl->GetValue() : "";
+  if (m_modelManager && m_modelManager->GetDictEngine()) {
+    size_t count = m_modelManager->GetDictEngine()->LoadDictionaries(dirPath.ToUTF8().data());
+    UpdateDictListSummary();
+    if (m_dictStatusText) {
+      m_dictStatusText->SetLabel(wxString::Format(L"扫描完成，已加载 %zu 本词典！", count));
+    }
+  }
+}
+
+void SettingsView::UpdateDictListSummary() {
+  if (!m_modelManager || !m_modelManager->GetDictEngine()) return;
+
+  auto dictEngine = m_modelManager->GetDictEngine();
+  auto dicts = dictEngine->GetLoadedDictionaries();
+  size_t totalWords = dictEngine->GetTotalWordCount();
+
+  if (m_dictStatusBadge) {
+    if (dicts.empty()) {
+      m_dictStatusBadge->SetStatus(ServerHealthState::Unconfigured, L"● 未加载词典");
+    } else {
+      m_dictStatusBadge->SetStatus(ServerHealthState::Ready,
+        wxString::Format(L"● 已就绪: %zu 本词典 (%zu 词)", dicts.size(), totalWords));
+    }
+  }
+
+  if (m_dictListInfoCtrl) {
+    if (dicts.empty()) {
+      m_dictListInfoCtrl->SetValue(L"（暂无已加载词典，请将 StarDict 格式的 .ifo / .idx / .dict 文件放入词典目录中）");
+    } else {
+      wxString summary;
+      for (size_t i = 0; i < dicts.size(); ++i) {
+        const auto& d = dicts[i];
+        summary += wxString::Format(L"%zu. %s\n   词条数: %u | 版本: %s | 格式: %s\n   路径: %s\n\n",
+          i + 1,
+          wxString::FromUTF8(d.bookName),
+          d.wordCount,
+          wxString::FromUTF8(d.version.empty() ? "N/A" : d.version),
+          wxString::FromUTF8(d.isDz ? "DictZip 压缩 (.dict.dz)" : "纯文本 (.dict)"),
+          wxString::FromUTF8(d.ifoPath)
+        );
+      }
+      m_dictListInfoCtrl->SetValue(summary.Trim());
+    }
   }
 }
 

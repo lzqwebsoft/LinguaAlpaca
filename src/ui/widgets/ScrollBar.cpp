@@ -7,11 +7,14 @@
 
 namespace LinguaAlpaca::UI {
 
-ScrollBar::ScrollBar(TextCtrl* parentTextCtrl)
-    : wxWindow(parentTextCtrl, wxID_ANY, wxDefaultPosition, wxSize(8_dip, -1),
+ScrollBar::ScrollBar(wxWindow* parent, ScrollCallback onScroll)
+    : wxWindow(parent, wxID_ANY, wxDefaultPosition, wxSize(8_dip, -1),
                wxBORDER_NONE | wxFULL_REPAINT_ON_RESIZE),
-      m_parentTextCtrl(parentTextCtrl) {
+      m_scrollCallback(std::move(onScroll)) {
     SetBackgroundStyle(wxBG_STYLE_PAINT);
+
+    auto palette = ThemeColors::GetCurrentPalette();
+    SetBackgroundColour(parent ? parent->GetBackgroundColour() : palette.cardBg);
 
     Bind(wxEVT_PAINT, &ScrollBar::OnPaint, this);
     Bind(wxEVT_ENTER_WINDOW, &ScrollBar::OnMouseEnter, this);
@@ -22,6 +25,14 @@ ScrollBar::ScrollBar(TextCtrl* parentTextCtrl)
     Bind(wxEVT_MOUSEWHEEL, &ScrollBar::OnMouseWheel, this);
 
     m_hideTimer.Bind(wxEVT_TIMER, &ScrollBar::OnTimer, this);
+}
+
+ScrollBar::ScrollBar(TextCtrl* parentTextCtrl)
+    : ScrollBar(static_cast<wxWindow*>(parentTextCtrl),
+                [parentTextCtrl](int line) {
+                    if (parentTextCtrl) parentTextCtrl->ScrollToLine(line);
+                }) {
+    m_parentTextCtrl = parentTextCtrl;
 }
 
 ScrollBar::~ScrollBar() {
@@ -35,12 +46,10 @@ void ScrollBar::SetScrollParams(int firstVisibleLine, int visibleLines, int tota
     m_visibleLines = visibleLines;
     m_totalLines = totalLines;
     m_needed = (m_totalLines > m_visibleLines);
-    if (m_needed) {
-        NotifyActivity();
-    } else {
+    if (!m_needed) {
         m_isVisible = false;
-        Refresh();
     }
+    Refresh();
 }
 
 void ScrollBar::NotifyActivity() {
@@ -64,23 +73,29 @@ void ScrollBar::OnTimer(wxTimerEvent& WXUNUSED(event)) {
 
 void ScrollBar::OnPaint(wxPaintEvent& WXUNUSED(event)) {
     wxAutoBufferedPaintDC dc(this);
-    dc.SetBackground(wxBrush(GetBackgroundColour()));
+    wxSize size = GetClientSize();
+    if (size.x <= 0 || size.y <= 0) return;
+
+    auto palette = ThemeColors::GetCurrentPalette();
+    wxColour bg = GetParent() ? GetParent()->GetBackgroundColour() : palette.cardBg;
+    dc.SetBackground(wxBrush(bg));
     dc.Clear();
 
     if (!m_needed || (!m_isVisible && !m_isHovered && !m_isDragging)) {
         return;
     }
 
-    int clientH = GetClientSize().GetHeight();
+    int topMargin = 4_dip;
+    int bottomMargin = 4_dip;
+    int clientH = size.y - topMargin - bottomMargin;
     if (clientH <= 0) return;
 
-    int thumbH = std::clamp((clientH * m_visibleLines) / m_totalLines, 20_dip, clientH - 4_dip);
+    int thumbH = std::clamp((clientH * m_visibleLines) / m_totalLines, 20_dip, clientH);
     int availableTrack = clientH - thumbH;
     int maxScroll = m_totalLines - m_visibleLines;
-    int thumbY = (maxScroll > 0) ? (availableTrack * m_firstVisibleLine / maxScroll) : 0;
-    thumbY = std::clamp(thumbY, 0, availableTrack);
+    int thumbY = topMargin + ((maxScroll > 0) ? (availableTrack * m_firstVisibleLine / maxScroll) : 0);
+    thumbY = std::clamp(thumbY, topMargin, topMargin + availableTrack);
 
-    ThemePalette palette = ThemeManager::GetCurrentPalette();
     wxColour thumbColor;
     if (m_isDragging) {
         thumbColor = palette.accentHover;
@@ -115,12 +130,16 @@ void ScrollBar::OnLeftDown(wxMouseEvent& event) {
 
     NotifyActivity();
 
-    int clientH = GetClientSize().GetHeight();
-    int thumbH = std::clamp((clientH * m_visibleLines) / m_totalLines, 20_dip, clientH - 4_dip);
+    int topMargin = 4_dip;
+    int bottomMargin = 4_dip;
+    int clientH = GetClientSize().GetHeight() - topMargin - bottomMargin;
+    if (clientH <= 0) return;
+
+    int thumbH = std::clamp((clientH * m_visibleLines) / m_totalLines, 20_dip, clientH);
     int availableTrack = clientH - thumbH;
     int maxScroll = m_totalLines - m_visibleLines;
-    int thumbY = (maxScroll > 0) ? (availableTrack * m_firstVisibleLine / maxScroll) : 0;
-    thumbY = std::clamp(thumbY, 0, availableTrack);
+    int thumbY = topMargin + ((maxScroll > 0) ? (availableTrack * m_firstVisibleLine / maxScroll) : 0);
+    thumbY = std::clamp(thumbY, topMargin, topMargin + availableTrack);
 
     int mouseY = event.GetPosition().y;
     if (mouseY >= thumbY && mouseY <= thumbY + thumbH) {
@@ -132,15 +151,11 @@ void ScrollBar::OnLeftDown(wxMouseEvent& event) {
     } else if (mouseY < thumbY) {
         // Page Up
         int newFirst = std::max(0, m_firstVisibleLine - m_visibleLines);
-        if (m_parentTextCtrl) {
-            m_parentTextCtrl->ScrollToLine(newFirst);
-        }
+        DoScrollToLine(newFirst);
     } else {
         // Page Down
         int newFirst = std::min(maxScroll, m_firstVisibleLine + m_visibleLines);
-        if (m_parentTextCtrl) {
-            m_parentTextCtrl->ScrollToLine(newFirst);
-        }
+        DoScrollToLine(newFirst);
     }
 }
 
@@ -159,16 +174,18 @@ void ScrollBar::OnMouseMove(wxMouseEvent& event) {
     if (m_isDragging && m_needed) {
         NotifyActivity();
         int deltaY = event.GetPosition().y - m_dragStartMouseY;
-        int clientH = GetClientSize().GetHeight();
-        int thumbH = std::clamp((clientH * m_visibleLines) / m_totalLines, 20_dip, clientH - 4_dip);
+        int topMargin = 4_dip;
+        int bottomMargin = 4_dip;
+        int clientH = GetClientSize().GetHeight() - topMargin - bottomMargin;
+        if (clientH <= 0) return;
+
+        int thumbH = std::clamp((clientH * m_visibleLines) / m_totalLines, 20_dip, clientH);
         int availableTrack = clientH - thumbH;
         int maxScroll = m_totalLines - m_visibleLines;
         if (availableTrack > 0 && maxScroll > 0) {
             int deltaLines = (deltaY * maxScroll) / availableTrack;
             int targetLine = std::clamp(m_dragStartFirstLine + deltaLines, 0, maxScroll);
-            if (m_parentTextCtrl) {
-                m_parentTextCtrl->ScrollToLine(targetLine);
-            }
+            DoScrollToLine(targetLine);
         }
     }
 }
@@ -178,8 +195,14 @@ void ScrollBar::OnMouseWheel(wxMouseEvent& event) {
     NotifyActivity();
     int rotation = event.GetWheelRotation();
     int lines = (rotation > 0) ? -3 : 3;
-    if (m_parentTextCtrl) {
-        m_parentTextCtrl->ScrollToLine(m_firstVisibleLine + lines);
+    DoScrollToLine(m_firstVisibleLine + lines);
+}
+
+void ScrollBar::DoScrollToLine(int line) {
+    if (m_scrollCallback) {
+        m_scrollCallback(line);
+    } else if (m_parentTextCtrl) {
+        m_parentTextCtrl->ScrollToLine(line);
     }
 }
 

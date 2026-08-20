@@ -21,6 +21,14 @@ namespace LinguaAlpaca {
 		: m_configManager(std::move(configManager)) {
 		m_server = std::make_shared<LlamaServer>();
 		m_client = std::make_shared<LlamaClient>(m_server);
+		m_dictEngine = std::make_shared<DictEngine>();
+
+		if (m_configManager) {
+			std::string dictDir = m_configManager->GetConfig().dictDirPath;
+			if (!dictDir.empty()) {
+				m_dictEngine->LoadDictionaries(dictDir);
+			}
+		}
 	}
 
 	ModelManager::~ModelManager() {

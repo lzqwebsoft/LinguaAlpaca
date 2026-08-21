@@ -51,7 +51,8 @@ endif()
 add_test(NAME CoreAndEngineTests COMMAND unit_tests)
 
 add_custom_command(TARGET unit_tests POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${CMAKE_BINARY_DIR}/third_party/wxWidgets/lib/vc_x64_dll"
-        "$<TARGET_FILE_DIR:unit_tests>"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        $<TARGET_RUNTIME_DLLS:unit_tests>
+        $<TARGET_FILE_DIR:unit_tests>
+    COMMAND_EXPAND_LISTS
 )

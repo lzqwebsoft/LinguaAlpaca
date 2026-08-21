@@ -7,6 +7,9 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 if(MSVC)
     add_compile_options(/utf-8 /FS)
+    # Release 模式编译优化、字符串合并与函数级链接，配合链接器死代码消除
+    add_compile_options("$<$<CONFIG:Release>:/Gy;/GF;/O2>")
+    add_link_options("$<$<CONFIG:Release>:/OPT:REF;/OPT:ICF>")
 endif()
 
 # 统一二进制与库输出目录
@@ -14,7 +17,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
-# 禁用 wxWidgets 自动构建示例
+# 禁用 wxWidgets 示例与测试
 set(wxBUILD_SAMPLES OFF CACHE BOOL "" FORCE)
 set(wxBUILD_DEMOS OFF CACHE BOOL "" FORCE)
 set(wxBUILD_TESTS OFF CACHE BOOL "" FORCE)
@@ -22,37 +25,41 @@ set(wxBUILD_TESTS OFF CACHE BOOL "" FORCE)
 # 引入第三方依赖
 add_subdirectory(third_party/wxWidgets)
 
-# 自动为 third_party/llama.cpp 应用本地补丁 (PR #19357)
+# 自动为 third_party/llama.cpp 应用本地补丁 (patches/*.patch)
 find_package(Git QUIET)
-set(LLAMA_PATCH_FILE "${CMAKE_CURRENT_SOURCE_DIR}/patches/llama-pr-19357.patch")
+file(GLOB LLAMA_PATCH_FILES "${CMAKE_CURRENT_SOURCE_DIR}/patches/*.patch")
 
-if(GIT_FOUND AND EXISTS "${LLAMA_PATCH_FILE}")
-    execute_process(
-        COMMAND ${GIT_EXECUTABLE} apply --check "${LLAMA_PATCH_FILE}"
-        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/third_party/llama.cpp"
-        RESULT_VARIABLE PATCH_CHECK_RES
-        OUTPUT_QUIET ERROR_QUIET
-    )
-
-    if(PATCH_CHECK_RES EQUAL 0)
-        message(STATUS "[LinguaAlpaca] Applying llama.cpp PR #19357 patch...")
+if(GIT_FOUND)
+    foreach(PATCH_FILE ${LLAMA_PATCH_FILES})
+        get_filename_component(PATCH_NAME "${PATCH_FILE}" NAME)
         execute_process(
-            COMMAND ${GIT_EXECUTABLE} apply "${LLAMA_PATCH_FILE}"
+            COMMAND ${GIT_EXECUTABLE} apply --check "${PATCH_FILE}"
             WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/third_party/llama.cpp"
-            RESULT_VARIABLE PATCH_APPLY_RES
+            RESULT_VARIABLE PATCH_CHECK_RES
+            OUTPUT_QUIET ERROR_QUIET
         )
-        if(NOT PATCH_APPLY_RES EQUAL 0)
-            message(WARNING "[LinguaAlpaca] Failed to apply llama.cpp patch!")
+
+        if(PATCH_CHECK_RES EQUAL 0)
+            message(STATUS "[LinguaAlpaca] Applying llama.cpp patch: ${PATCH_NAME}...")
+            execute_process(
+                COMMAND ${GIT_EXECUTABLE} apply "${PATCH_FILE}"
+                WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/third_party/llama.cpp"
+                RESULT_VARIABLE PATCH_APPLY_RES
+            )
+            if(NOT PATCH_APPLY_RES EQUAL 0)
+                message(WARNING "[LinguaAlpaca] Failed to apply ${PATCH_NAME}!")
+            endif()
         endif()
-    endif()
+    endforeach()
 endif()
 
 set(LLAMA_BUILD_COMMON ON CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_TOOLS ON CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_SERVER ON CACHE BOOL "" FORCE)
+set(LLAMA_BUILD_EXTRA_TOOLS OFF CACHE BOOL "" FORCE) # 仅构建必要的 server 和 mtmd，精简跳过 18+ 个 CLI 压测与量化工具
 set(LLAMA_BUILD_UI OFF CACHE BOOL "" FORCE)
 set(LLAMA_USE_PREBUILT_UI OFF CACHE BOOL "" FORCE)
-set(GGML_VULKAN ON CACHE BOOL "" FORCE)  # 默认开始Vulkan SDK加速
+set(GGML_VULKAN ON CACHE BOOL "" FORCE)  # 默认开启Vulkan SDK加速
 add_subdirectory(third_party/llama.cpp)
 
 # 模块化源码组织
@@ -103,6 +110,8 @@ set(UI_SOURCES
     src/ui/theme/IconManager.cpp
     src/ui/widgets/CustomButton.hpp
     src/ui/widgets/CustomButton.cpp
+    src/ui/widgets/CustomChoice.hpp
+    src/ui/widgets/CustomChoice.cpp
     src/ui/widgets/StatusBadge.hpp
     src/ui/widgets/StatusBadge.cpp
     src/ui/widgets/SidebarNav.hpp
@@ -186,11 +195,12 @@ if(WIN32)
     target_link_libraries(${PROJECT_NAME} PRIVATE ole32 oleaut32 windowsapp)
 endif()
 
-# 自动将第三方 DLL 与 resources 资源目录复制到 output 目录
+# 自动仅复制程序实际依赖的动态链接库 (Runtime DLLs)、llama-server 及 resources 资源目录
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${CMAKE_BINARY_DIR}/third_party/wxWidgets/lib/vc_x64_dll"
-        "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+    COMMAND ${CMAKE_COMMAND}
+        -DDEST_DIR=$<TARGET_FILE_DIR:${PROJECT_NAME}>
+        "-DDLLS=$<TARGET_RUNTIME_DLLS:${PROJECT_NAME}>;$<TARGET_RUNTIME_DLLS:llama-server>"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_runtime_deps.cmake"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_CURRENT_SOURCE_DIR}/resources"
         "$<TARGET_FILE_DIR:${PROJECT_NAME}>/resources"

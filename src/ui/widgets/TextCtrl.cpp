@@ -298,7 +298,7 @@ void TextCtrl::ScrollToLine(int targetLine) {
     }
 #else
     int totalLines = std::max(1, m_textCtrl->GetNumberOfLines());
-    targetLine = std::clamp(targetLine, 0, totalLines - 1);
+    targetLine = std::clamp(targetLine, 0, std::max(0, totalLines - 1));
     long charPos = m_textCtrl->XYToPosition(0, targetLine);
     if (charPos != -1) {
         m_textCtrl->ShowPosition(charPos);

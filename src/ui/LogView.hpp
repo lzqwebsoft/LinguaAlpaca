@@ -5,6 +5,7 @@
 #include "core/Logger.hpp"
 #include "core/Config.hpp"
 #include "widgets/CustomButton.hpp"
+#include "widgets/CustomChoice.hpp"
 #include "widgets/TextCtrl.hpp"
 
 namespace LinguaAlpaca::UI {
@@ -37,7 +38,7 @@ private:
     wxPanel* m_headerPanel{nullptr};
     wxStaticBitmap* m_titleIcon{nullptr};
     wxStaticText* m_titleText{nullptr};
-    wxChoice* m_filterChoice{nullptr};
+    CustomChoice* m_filterChoice{nullptr};
     wxCheckBox* m_autoScrollCheck{nullptr};
     CustomButton* m_clearBtn{nullptr};
     CustomButton* m_copyBtn{nullptr};

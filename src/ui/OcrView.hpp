@@ -9,6 +9,7 @@
 #include "core/ModelManager.hpp"
 #include "widgets/CardPanel.hpp"
 #include "widgets/CustomButton.hpp"
+#include "widgets/CustomChoice.hpp"
 #include "widgets/ImagePreviewDialog.hpp"
 #include "widgets/TextCtrl.hpp"
 #include "widgets/StatusBadge.hpp"
@@ -80,7 +81,7 @@ private:
     // Left Column Controls
     wxPanel* m_leftControlPanel{nullptr};
     wxStaticText* m_typeLabel{nullptr};
-    wxChoice* m_typeChoice{nullptr};
+    CustomChoice* m_typeChoice{nullptr};
 
     wxPanel* m_dropzonePanel{nullptr};
     wxStaticBitmap* m_uploadIconBmp{nullptr};

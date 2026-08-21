@@ -7,6 +7,7 @@
 #include "core/Config.hpp"
 #include "core/Downloader.hpp"
 #include "widgets/CustomButton.hpp"
+#include "widgets/CustomChoice.hpp"
 #include "widgets/StatusBadge.hpp"
 
 namespace LinguaAlpaca::UI {
@@ -88,7 +89,7 @@ private:
     wxCheckBox* m_selectionEnableCheck{nullptr};
     wxRadioBox* m_selectionModeRadio{nullptr};
     wxStaticText* m_modifierKeyLabel{nullptr};
-    wxChoice* m_modifierKeyChoice{nullptr};
+    CustomChoice* m_modifierKeyChoice{nullptr};
     wxCheckBox* m_preserveClipCheck{nullptr};
     CustomButton* m_selectionSaveBtn{nullptr};
     wxStaticText* m_selectionStatusText{nullptr};

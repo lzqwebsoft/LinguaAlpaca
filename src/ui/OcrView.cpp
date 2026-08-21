@@ -71,7 +71,7 @@ namespace LinguaAlpaca::UI {
 		m_typeLabel->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
 		m_typeLabel->SetForegroundColour(palette.textSecondary);
 
-		m_typeChoice = new wxChoice(m_leftControlPanel, wxID_ANY, wxDefaultPosition, wxDefaultSize);
+		m_typeChoice = new CustomChoice(m_leftControlPanel, wxID_ANY, wxDefaultPosition, dip(180, 32));
 		m_typeChoice->Append(L"通识 OCR");
 		m_typeChoice->Append(L"表格识别 (Table)");
 		m_typeChoice->Append(L"公式识别 (Formula)");
@@ -79,9 +79,6 @@ namespace LinguaAlpaca::UI {
 		m_typeChoice->Append(L"文本定位 (Spotting)");
 		m_typeChoice->Append(L"印章识别 (Seal)");
 		m_typeChoice->SetSelection(0);
-		m_typeChoice->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
-		m_typeChoice->SetBackgroundColour(palette.cardBg);
-		m_typeChoice->SetForegroundColour(palette.textPrimary);
 
 		leftControlSizer->Add(m_typeLabel, 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, 10_dip);
 		leftControlSizer->Add(m_typeChoice, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, 12_dip);
@@ -376,8 +373,7 @@ namespace LinguaAlpaca::UI {
 		if (m_typeLabel)
 			m_typeLabel->SetForegroundColour(palette.textSecondary);
 		if (m_typeChoice) {
-			m_typeChoice->SetBackgroundColour(palette.cardBg);
-			m_typeChoice->SetForegroundColour(palette.textPrimary);
+			m_typeChoice->UpdateTheme();
 		}
 		if (m_dropTextPrimary)
 			m_dropTextPrimary->SetForegroundColour(palette.textPrimary);

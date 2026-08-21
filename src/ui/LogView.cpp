@@ -69,8 +69,7 @@ void LogView::InitUI() {
     filterLabel->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
     filterLabel->SetForegroundColour(palette.textSecondary);
 
-    m_filterChoice = new wxChoice(m_headerPanel, wxID_ANY, wxDefaultPosition, dip(100, 28), levels);
-    m_filterChoice->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+    m_filterChoice = new CustomChoice(m_headerPanel, wxID_ANY, wxDefaultPosition, dip(110, 28), levels);
     m_filterChoice->SetSelection(0);
 
     wxBoxSizer* filterSizer = new wxBoxSizer(wxHORIZONTAL);
@@ -265,6 +264,9 @@ void LogView::UpdateTheme() {
 
     if (m_titleText) {
         m_titleText->SetForegroundColour(palette.textPrimary);
+    }
+    if (m_filterChoice) {
+        m_filterChoice->UpdateTheme();
     }
     if (m_autoScrollCheck) {
         m_autoScrollCheck->SetForegroundColour(palette.textPrimary);

@@ -60,7 +60,7 @@ void SuggestListBox::UpdateScrollParams() {
     int totalCount = static_cast<int>(m_items.size());
 
     int maxFirst = std::max(0, totalCount - visibleCount);
-    m_firstVisibleIndex = std::clamp(m_firstVisibleIndex, 0, maxFirst);
+    m_firstVisibleIndex = std::clamp(m_firstVisibleIndex, 0, std::max(0, maxFirst));
 
     if (m_scrollBar) {
         m_scrollBar->SetScrollParams(m_firstVisibleIndex, visibleCount, totalCount);
@@ -76,7 +76,7 @@ void SuggestListBox::ScrollToItem(int targetIndex) {
     int totalCount = static_cast<int>(m_items.size());
     int maxFirst = std::max(0, totalCount - visibleCount);
 
-    int newFirst = std::clamp(targetIndex, 0, maxFirst);
+    int newFirst = std::clamp(targetIndex, 0, std::max(0, maxFirst));
     if (newFirst != m_firstVisibleIndex) {
         m_firstVisibleIndex = newFirst;
         UpdateScrollParams();

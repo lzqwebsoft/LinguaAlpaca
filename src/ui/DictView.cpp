@@ -66,8 +66,7 @@ void DictView::InitUI() {
     wxBoxSizer* searchRowSizer = new wxBoxSizer(wxHORIZONTAL);
 
     // 词典切换下拉框
-    m_dictChoice = new wxChoice(m_headerPanel, wxID_ANY, wxDefaultPosition, dip(180, -1));
-    m_dictChoice->SetFont(wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+    m_dictChoice = new CustomChoice(m_headerPanel, wxID_ANY, wxDefaultPosition, dip(180, 38));
     m_dictChoice->Append(L"全部已加载词典");
     m_dictChoice->SetSelection(0);
     m_dictChoice->Bind(wxEVT_CHOICE, &DictView::OnDictChoiceSelected, this);
@@ -541,6 +540,9 @@ void DictView::UpdateTheme() {
 
     if (m_headerPanel) m_headerPanel->SetBackgroundColour(palette.windowBg);
     if (m_titleText) m_titleText->SetForegroundColour(palette.textPrimary);
+    if (m_dictChoice) {
+        m_dictChoice->UpdateTheme();
+    }
     if (m_searchBox) {
         m_searchBox->UpdateTheme();
     }

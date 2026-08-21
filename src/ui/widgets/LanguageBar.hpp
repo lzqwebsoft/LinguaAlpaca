@@ -1,5 +1,6 @@
 #pragma once
 #include <wx/wx.h>
+#include "CustomChoice.hpp"
 #include "core/Types.hpp"
 
 namespace LinguaAlpaca::UI {
@@ -23,8 +24,8 @@ private:
     void OnSwapClicked(wxCommandEvent& event);
     void OnChoiceSelected(wxCommandEvent& event);
 
-    wxChoice* m_sourceChoice{nullptr};
-    wxChoice* m_targetChoice{nullptr};
+    CustomChoice* m_sourceChoice{nullptr};
+    CustomChoice* m_targetChoice{nullptr};
     wxButton* m_swapBtn{nullptr};
 
     wxStaticText* m_srcLabel{nullptr};

@@ -428,7 +428,7 @@ void SettingsView::InitUI() {
   keys.Add(L"Ctrl 键 (推荐)");
   keys.Add(L"Alt 键");
   keys.Add(L"Shift 键");
-  m_modifierKeyChoice = new wxChoice(m_selectionCard, wxID_ANY, wxDefaultPosition, dip(140, 28), keys);
+  m_modifierKeyChoice = new CustomChoice(m_selectionCard, wxID_ANY, wxDefaultPosition, dip(150, 32), keys);
   m_modifierKeyChoice->SetSelection(0);
 
   modKeySizer->Add(m_modifierKeyLabel, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8_dip);

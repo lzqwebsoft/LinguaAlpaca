@@ -22,14 +22,14 @@ void LanguageBar::InitUI() {
     m_srcLabel->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
     m_srcLabel->SetForegroundColour(palette.textSecondary);
 
-    m_sourceChoice = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxDefaultSize);
+    m_sourceChoice = new CustomChoice(this, wxID_ANY, wxDefaultPosition, dip(120, 32));
     
     // 目标语言标签与下拉框
     m_targetLabel = new wxStaticText(this, wxID_ANY, L"目标语言");
     m_targetLabel->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
     m_targetLabel->SetForegroundColour(palette.textSecondary);
 
-    m_targetChoice = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxDefaultSize);
+    m_targetChoice = new CustomChoice(this, wxID_ANY, wxDefaultPosition, dip(120, 32));
 
     // 填充语言列表
     const auto& languages = LanguageHelper::GetSupportedLanguages();
@@ -43,11 +43,6 @@ void LanguageBar::InitUI() {
 
     m_sourceChoice->SetStringSelection(L"英语");
     m_targetChoice->SetStringSelection(L"中文");
-
-    m_sourceChoice->SetBackgroundColour(palette.cardBg);
-    m_sourceChoice->SetForegroundColour(palette.textPrimary);
-    m_targetChoice->SetBackgroundColour(palette.cardBg);
-    m_targetChoice->SetForegroundColour(palette.textPrimary);
 
     // 交换按钮 (SVG Swap)
     wxBitmapBundle swapBundle = IconManager::GetIconBundle(SVG::SWAP, dip(16, 16), palette.textPrimary);
@@ -77,15 +72,11 @@ void LanguageBar::UpdateTheme() {
     if (m_targetLabel) m_targetLabel->SetForegroundColour(palette.textSecondary);
 
     if (m_sourceChoice) {
-        m_sourceChoice->SetBackgroundColour(palette.cardBg);
-        m_sourceChoice->SetForegroundColour(palette.textPrimary);
-        m_sourceChoice->Refresh();
+        m_sourceChoice->UpdateTheme();
     }
 
     if (m_targetChoice) {
-        m_targetChoice->SetBackgroundColour(palette.cardBg);
-        m_targetChoice->SetForegroundColour(palette.textPrimary);
-        m_targetChoice->Refresh();
+        m_targetChoice->UpdateTheme();
     }
 
     if (m_swapBtn) {

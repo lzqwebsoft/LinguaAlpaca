@@ -9,6 +9,7 @@
 #include "core/dict/DictEngine.hpp"
 #include "AsyncTrackable.hpp"
 #include "widgets/CustomButton.hpp"
+#include "widgets/CustomChoice.hpp"
 #include "widgets/TextCtrl.hpp"
 #include "widgets/StatusBadge.hpp"
 #include "widgets/SearchInputBox.hpp"
@@ -52,7 +53,7 @@ private:
     wxPanel* m_headerPanel{nullptr};
     wxStaticText* m_titleText{nullptr};
     StatusBadge* m_dictCountBadge{nullptr};
-    wxChoice* m_dictChoice{nullptr};
+    CustomChoice* m_dictChoice{nullptr};
 
     SearchInputBox* m_searchBox{nullptr};
     CustomButton* m_searchBtn{nullptr};

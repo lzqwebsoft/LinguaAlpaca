@@ -90,11 +90,13 @@ void ScrollBar::OnPaint(wxPaintEvent& WXUNUSED(event)) {
     int clientH = size.y - topMargin - bottomMargin;
     if (clientH <= 0) return;
 
-    int thumbH = std::clamp((clientH * m_visibleLines) / m_totalLines, 20_dip, clientH);
-    int availableTrack = clientH - thumbH;
-    int maxScroll = m_totalLines - m_visibleLines;
+    int minThumbH = std::min(20_dip, clientH);
+    int calcThumbH = (m_totalLines > 0) ? (clientH * m_visibleLines) / m_totalLines : clientH;
+    int thumbH = std::clamp(calcThumbH, minThumbH, clientH);
+    int availableTrack = std::max(0, clientH - thumbH);
+    int maxScroll = std::max(0, m_totalLines - m_visibleLines);
     int thumbY = topMargin + ((maxScroll > 0) ? (availableTrack * m_firstVisibleLine / maxScroll) : 0);
-    thumbY = std::clamp(thumbY, topMargin, topMargin + availableTrack);
+    thumbY = std::clamp(thumbY, topMargin, std::max(topMargin, topMargin + availableTrack));
 
     wxColour thumbColor;
     if (m_isDragging) {
@@ -135,11 +137,13 @@ void ScrollBar::OnLeftDown(wxMouseEvent& event) {
     int clientH = GetClientSize().GetHeight() - topMargin - bottomMargin;
     if (clientH <= 0) return;
 
-    int thumbH = std::clamp((clientH * m_visibleLines) / m_totalLines, 20_dip, clientH);
-    int availableTrack = clientH - thumbH;
-    int maxScroll = m_totalLines - m_visibleLines;
+    int minThumbH = std::min(20_dip, clientH);
+    int calcThumbH = (m_totalLines > 0) ? (clientH * m_visibleLines) / m_totalLines : clientH;
+    int thumbH = std::clamp(calcThumbH, minThumbH, clientH);
+    int availableTrack = std::max(0, clientH - thumbH);
+    int maxScroll = std::max(0, m_totalLines - m_visibleLines);
     int thumbY = topMargin + ((maxScroll > 0) ? (availableTrack * m_firstVisibleLine / maxScroll) : 0);
-    thumbY = std::clamp(thumbY, topMargin, topMargin + availableTrack);
+    thumbY = std::clamp(thumbY, topMargin, std::max(topMargin, topMargin + availableTrack));
 
     int mouseY = event.GetPosition().y;
     if (mouseY >= thumbY && mouseY <= thumbY + thumbH) {
@@ -179,9 +183,11 @@ void ScrollBar::OnMouseMove(wxMouseEvent& event) {
         int clientH = GetClientSize().GetHeight() - topMargin - bottomMargin;
         if (clientH <= 0) return;
 
-        int thumbH = std::clamp((clientH * m_visibleLines) / m_totalLines, 20_dip, clientH);
-        int availableTrack = clientH - thumbH;
-        int maxScroll = m_totalLines - m_visibleLines;
+        int minThumbH = std::min(20_dip, clientH);
+        int calcThumbH = (m_totalLines > 0) ? (clientH * m_visibleLines) / m_totalLines : clientH;
+        int thumbH = std::clamp(calcThumbH, minThumbH, clientH);
+        int availableTrack = std::max(0, clientH - thumbH);
+        int maxScroll = std::max(0, m_totalLines - m_visibleLines);
         if (availableTrack > 0 && maxScroll > 0) {
             int deltaLines = (deltaY * maxScroll) / availableTrack;
             int targetLine = std::clamp(m_dragStartFirstLine + deltaLines, 0, maxScroll);

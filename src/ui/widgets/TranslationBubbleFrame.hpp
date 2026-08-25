@@ -7,6 +7,7 @@
 #include "../../core/ModelManager.hpp"
 #include "../../core/Config.hpp"
 #include "CustomButton.hpp"
+#include "StatusBadge.hpp"
 #include "SplitterWindow.hpp"
 #include "TextCtrl.hpp"
 #include "../AsyncTrackable.hpp"
@@ -38,6 +39,9 @@ public:
 
     // 更新深浅色主题
     void UpdateTheme();
+
+    // 同步刷新语言胶囊标签
+    void UpdateLanguageBadge();
 
 private:
     void InitUI();
@@ -86,7 +90,7 @@ private:
     wxPanel* m_mainPanel{nullptr};
     wxPanel* m_headerPanel{nullptr};
     wxStaticText* m_titleText{nullptr};
-    wxStaticText* m_langBadge{nullptr};
+    StatusBadge* m_langBadge{nullptr};
     wxBitmapButton* m_pinBtn{nullptr};
     wxBitmapButton* m_retryBtn{nullptr};
     wxBitmapButton* m_copyBtn{nullptr};

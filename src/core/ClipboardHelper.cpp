@@ -121,76 +121,128 @@ bool ClipboardHelper::SendCtrlC() {
     return sent == 4;
 }
 
-std::string ClipboardHelper::GetSelectedTextViaSendInput(bool preserveClipboard) {
-    std::wstring originalText;
-    bool hasOriginalText = false;
-    DWORD origSeq = GetClipboardSequenceNumber();
+struct ClipboardFormatData {
+    UINT format{0};
+    std::vector<uint8_t> buffer;
+};
 
-    // 1. 如果需要保护剪贴板，先备份原剪贴板内容
-    if (preserveClipboard) {
-        if (OpenClipboardWithRetry(nullptr, 4, 8)) {
-            HANDLE hData = GetClipboardData(CF_UNICODETEXT);
-            if (hData) {
-                LPCWSTR pText = static_cast<LPCWSTR>(GlobalLock(hData));
-                if (pText) {
-                    originalText = pText;
-                    hasOriginalText = true;
+struct ClipboardBackup {
+    std::vector<ClipboardFormatData> items;
+    bool isValid{false};
+};
+
+static ClipboardBackup BackupEntireClipboard() {
+    ClipboardBackup backup;
+    if (!OpenClipboardWithRetry(nullptr, 4, 8)) {
+        return backup;
+    }
+
+    UINT format = 0;
+    while ((format = EnumClipboardFormats(format)) != 0) {
+        // GDI 句柄（如 CF_BITMAP）不能直接当作内存块复制，CF_DIB / CF_DIBV5 包含完整的位图数据，支持直接全局内存复制
+        if (format == CF_BITMAP || format == CF_PALETTE || format == CF_METAFILEPICT || format == CF_ENHMETAFILE) {
+            continue;
+        }
+
+        HANDLE hData = GetClipboardData(format);
+        if (hData) {
+            SIZE_T size = GlobalSize(hData);
+            if (size > 0 && size <= 32 * 1024 * 1024) { // 32MB 安全上限
+                void* pData = GlobalLock(hData);
+                if (pData) {
+                    ClipboardFormatData item;
+                    item.format = format;
+                    item.buffer.resize(size);
+                    memcpy(item.buffer.data(), pData, size);
                     GlobalUnlock(hData);
+                    backup.items.push_back(std::move(item));
                 }
             }
-            CloseClipboard();
         }
+    }
+
+    CloseClipboard();
+    backup.isValid = !backup.items.empty();
+    return backup;
+}
+
+static bool RestoreEntireClipboard(const ClipboardBackup& backup) {
+    if (!backup.isValid || backup.items.empty()) {
+        return false;
+    }
+
+    if (!OpenClipboardWithRetry(nullptr, 5, 10)) {
+        return false;
+    }
+
+    EmptyClipboard();
+
+    for (const auto& item : backup.items) {
+        if (item.buffer.empty()) continue;
+        HGLOBAL hGlob = GlobalAlloc(GMEM_MOVEABLE, item.buffer.size());
+        if (hGlob) {
+            void* pBuf = GlobalLock(hGlob);
+            if (pBuf) {
+                memcpy(pBuf, item.buffer.data(), item.buffer.size());
+                GlobalUnlock(hGlob);
+                SetClipboardData(item.format, hGlob);
+            } else {
+                GlobalFree(hGlob);
+            }
+        }
+    }
+
+    CloseClipboard();
+    return true;
+}
+
+std::string ClipboardHelper::GetSelectedTextViaSendInput(bool preserveClipboard) {
+    ClipboardBackup backup;
+    DWORD origSeq = GetClipboardSequenceNumber();
+
+    // 1. 如果需要保护剪贴板，完整备份当前剪贴板中所有格式的数据（包括文字、图片/截图 CF_DIB、文件、富文本等）
+    if (preserveClipboard) {
+        backup = BackupEntireClipboard();
     }
 
     // 2. 发送 Ctrl+C 模拟按键
     SendCtrlC();
 
-    // 3. 等待目标程序响应复制并更新剪贴板（最多等待 120ms）
+    // 3. 等待目标程序响应复制并更新剪贴板（必须检测到剪贴板序列号变化，证明有真实选中的文本被复制）
     std::string selectedText;
-    for (int i = 0; i < 12; ++i) {
+    bool newContentCopied = false;
+
+    for (int i = 0; i < 15; ++i) {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
         DWORD currentSeq = GetClipboardSequenceNumber();
-        if (currentSeq != origSeq || i >= 4) {
-            // 尝试读取剪贴板
-            if (OpenClipboardWithRetry(nullptr, 3, 5)) {
+        if (currentSeq != origSeq) {
+            newContentCopied = true;
+            // 尝试读取新复制到剪贴板的内容
+            if (OpenClipboardWithRetry(nullptr, 4, 6)) {
                 HANDLE hData = GetClipboardData(CF_UNICODETEXT);
                 if (hData) {
                     LPCWSTR pText = static_cast<LPCWSTR>(GlobalLock(hData));
                     if (pText && wcslen(pText) > 0) {
                         selectedText = WideToUtf8(std::wstring(pText));
-                        GlobalUnlock(hData);
-                        CloseClipboard();
-                        break;
                     }
                     GlobalUnlock(hData);
                 }
                 CloseClipboard();
             }
+            break;
         }
     }
 
-    // 4. 如果开启保护剪贴板，恢复原始剪贴板数据
-    if (preserveClipboard) {
-        // 短暂延迟确保当前读取完成
+    // 如果未成功复制到新文本（例如用户在截图、拖拽窗口或未选中任何文本）：
+    // 绝对不触碰剪贴板，绝对不执行 EmptyClipboard()，确保用户现有的截图/图片/文件完全不受污染！
+    if (!newContentCopied) {
+        return "";
+    }
+
+    // 4. 只有在确实成功复制了新文本且开启了剪贴板保护时，才恢复原本的所有格式数据
+    if (preserveClipboard && backup.isValid) {
         std::this_thread::sleep_for(std::chrono::milliseconds(15));
-        if (OpenClipboardWithRetry(nullptr, 5, 10)) {
-            EmptyClipboard();
-            if (hasOriginalText && !originalText.empty()) {
-                size_t byteSize = (originalText.size() + 1) * sizeof(wchar_t);
-                HGLOBAL hGlob = GlobalAlloc(GMEM_MOVEABLE, byteSize);
-                if (hGlob) {
-                    void* pBuf = GlobalLock(hGlob);
-                    if (pBuf) {
-                        memcpy(pBuf, originalText.c_str(), byteSize);
-                        GlobalUnlock(hGlob);
-                        SetClipboardData(CF_UNICODETEXT, hGlob);
-                    } else {
-                        GlobalFree(hGlob);
-                    }
-                }
-            }
-            CloseClipboard();
-        }
+        RestoreEntireClipboard(backup);
     }
 
     // 去除首尾空白字符

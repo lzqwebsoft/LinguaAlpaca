@@ -133,7 +133,7 @@ namespace LinguaAlpaca {
         m_config.themeMode = fileConfig.Read("/UI/Theme", "Light").ToUTF8().data();
         m_config.autoRead = fileConfig.ReadBool("/UI/AutoRead", false);
         m_config.selectionAutoTranslate = fileConfig.ReadBool("/UI/SelectionAutoTranslate", true);
-        m_config.sourceLang = fileConfig.Read("/Language/SourceLang", "en").ToUTF8().data();
+        m_config.sourceLang = fileConfig.Read("/Language/SourceLang", "auto").ToUTF8().data();
         m_config.targetLang = fileConfig.Read("/Language/TargetLang", "zh").ToUTF8().data();
         m_config.gpuLayers = fileConfig.ReadLong("/Model/GpuLayers", 99);       // 99 表示全部是GPU
         m_config.ocrGpuLayers = fileConfig.ReadLong("/OCRModel/GpuLayers", -1);  // 默认 0 (CPU 模式)，避免多模态 Vulkan 显存/TDR 崩溃

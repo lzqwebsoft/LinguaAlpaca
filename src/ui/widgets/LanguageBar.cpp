@@ -41,7 +41,7 @@ void LanguageBar::InitUI() {
         }
     }
 
-    m_sourceChoice->SetStringSelection(L"英语");
+    m_sourceChoice->SetStringSelection(L"自动检测");
     m_targetChoice->SetStringSelection(L"中文");
 
     // 交换按钮 (SVG Swap)

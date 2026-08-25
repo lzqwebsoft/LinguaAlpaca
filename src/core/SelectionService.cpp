@@ -194,21 +194,49 @@ bool SelectionService::ShouldIgnoreMouseEvent(int startX, int startY, int endX, 
         }
     }
 
-    // 3. 检查当前前台聚焦窗口是否为自身进程
+    // 3. 检查窗口类名（截图工具、任务栏、桌面、原生滚动条等非文本区域）
+    auto isIgnoredClass = [](HWND hwnd) -> bool {
+        if (!hwnd) return false;
+        wchar_t className[128] = { 0 };
+        if (GetClassNameW(hwnd, className, 128)) {
+            // Windows 自带截图 / 任务栏 / 桌面 / 常见第三方截图工具 (Snipaste, PixPin, 微信/QQ截图等)
+            if (_wcsicmp(className, L"ScreenClippingHost") == 0 ||
+                _wcsicmp(className, L"Microsoft.ScreenSketch") == 0 ||
+                _wcsicmp(className, L"SnippingTool") == 0 ||
+                _wcsicmp(className, L"Shell_TrayWnd") == 0 ||
+                _wcsicmp(className, L"Progman") == 0 ||
+                _wcsicmp(className, L"WorkerW") == 0 ||
+                _wcsicmp(className, L"SnipasteClass") == 0 ||
+                _wcsicmp(className, L"SnipasteWnd") == 0 ||
+                _wcsicmp(className, L"PixPin") == 0 ||
+                _wcsicmp(className, L"FLT_SCREENSHOT") == 0 ||
+                _wcsicmp(className, L"ChatWnd_Screenshot") == 0 ||
+                _wcsicmp(className, L"ScrollBar") == 0) {
+                return true;
+            }
+        }
+        return false;
+    };
+
     HWND hwndForeground = GetForegroundWindow();
     if (hwndForeground) {
         DWORD fgPid = 0;
         GetWindowThreadProcessId(hwndForeground, &fgPid);
-        if (fgPid == currentPid) {
+        if (fgPid == currentPid || isIgnoredClass(hwndForeground)) {
             return true;
         }
     }
 
-    // 4. 检查非客户区操作（如拖拽标题栏移动窗体、滑动滚动条、拖拉边框调整大小等与文本选中无关的操作）
-    if (hwndDown) {
+    if (isIgnoredClass(hwndDown) || isIgnoredClass(hwndUp)) {
+        return true;
+    }
+
+    // 5. 检查非客户区操作（如拖拽标题栏移动窗体、滑动滚动条、拖拉边框调整大小等与文本选中无关的操作）
+    auto checkNcHit = [](HWND hwnd, int px, int py) -> bool {
+        if (!hwnd) return false;
         DWORD_PTR hitResult = 0;
         // 使用安全超时调用（30ms），防止目标第三方宿主窗口无响应导致卡顿
-        if (SendMessageTimeoutW(hwndDown, WM_NCHITTEST, 0, MAKELPARAM(startX, startY),
+        if (SendMessageTimeoutW(hwnd, WM_NCHITTEST, 0, MAKELPARAM(px, py),
                                 SMTO_ABORTIFHUNG | SMTO_NORMAL, 30, &hitResult)) {
             switch (hitResult) {
                 case HTCAPTION:     // 标题栏（拖动窗口）
@@ -233,14 +261,11 @@ bool SelectionService::ShouldIgnoreMouseEvent(int startX, int startY, int endX, 
                     break;
             }
         }
+        return false;
+    };
 
-        // 5. 检查窗口类名（例如 Windows 原生滚动条控件等）
-        wchar_t className[64] = { 0 };
-        if (GetClassNameW(hwndDown, className, 64)) {
-            if (_wcsicmp(className, L"ScrollBar") == 0) {
-                return true;
-            }
-        }
+    if (checkNcHit(hwndDown, startX, startY) || checkNcHit(hwndUp, endX, endY)) {
+        return true;
     }
 
     return false;

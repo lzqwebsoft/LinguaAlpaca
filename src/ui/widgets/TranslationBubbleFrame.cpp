@@ -53,10 +53,8 @@ namespace LinguaAlpaca::UI {
 		m_titleText->SetFont(wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
 		m_titleText->SetForegroundColour(palette.textPrimary);
 
-		m_langBadge = new wxStaticText(m_headerPanel, wxID_ANY, L" 自动 -> 中文 ");
-		m_langBadge->SetFont(wxFont(8, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
-		m_langBadge->SetForegroundColour(palette.accentPrimary);
-		m_langBadge->SetBackgroundColour(palette.bannerBg);
+		m_langBadge = new StatusBadge(m_headerPanel, wxID_ANY);
+		UpdateLanguageBadge();
 
 		// 按钮：Pin、重试、复制、关闭 (统一使用 wxBitmapButton / wxBORDER_NONE 扁平无边框风格，贴合 MainFrame)
 		wxBitmapBundle pinBundle = IconManager::GetIconBundle(SVG::PIN, wxSize(15, 15), palette.textSecondary);
@@ -96,16 +94,29 @@ namespace LinguaAlpaca::UI {
 
 		wxBitmapBundle speakBundle = IconManager::GetIconBundle(SVG::SPEAKER, wxSize(14, 14), palette.textSecondary);
 
-		// 原文展示区
+		// 原文展示与编辑区
 		m_sourcePanel = new wxPanel(m_splitter, wxID_ANY);
 		m_sourcePanel->SetBackgroundColour(palette.windowBg);
 		wxBoxSizer* sourceSizer = new wxBoxSizer(wxVERTICAL);
 
 		m_sourceCtrl = new TextCtrl(m_sourcePanel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize,
-			wxTE_MULTILINE | wxTE_READONLY | wxBORDER_NONE);
+			wxTE_MULTILINE | wxBORDER_NONE | wxTE_RICH2);
 		m_sourceCtrl->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
 		m_sourceCtrl->SetBackgroundColour(palette.windowBg);
-		m_sourceCtrl->SetForegroundColour(palette.textSecondary);
+		m_sourceCtrl->SetForegroundColour(palette.textPrimary);
+		m_sourceCtrl->SetHint(L"输入或编辑待翻译文本 (Ctrl+Enter 翻译)...");
+
+		if (m_sourceCtrl->GetInnerCtrl()) {
+			m_sourceCtrl->GetInnerCtrl()->Bind(wxEVT_KEY_DOWN, [this](wxKeyEvent& evt) {
+				if (evt.GetKeyCode() == WXK_RETURN && evt.ControlDown()) {
+					wxCommandEvent dummy;
+					OnRetry(dummy);
+				} else {
+					evt.Skip();
+				}
+			});
+		}
+
 		sourceSizer->Add(m_sourceCtrl, 1, wxEXPAND);
 		m_sourcePanel->SetSizer(sourceSizer);
 
@@ -157,14 +168,22 @@ namespace LinguaAlpaca::UI {
 			if (!m_sourceCtrl) return;
 			wxString text = m_sourceCtrl->GetValue();
 			if (text.IsEmpty()) return;
-			WinTtsHelper::GetInstance().Speak(text.ToStdWstring(), LanguageCode::AutoDetect);
+			LanguageCode srcCode = LanguageCode::AutoDetect;
+			if (m_modelManager && m_modelManager->GetConfigManager()) {
+				srcCode = LanguageHelper::FromCodeName(m_modelManager->GetConfigManager()->GetConfig().sourceLang);
+			}
+			WinTtsHelper::GetInstance().Speak(text.ToStdWstring(), srcCode);
 		});
 
 		m_targetSpeakBtn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
 			if (!m_targetCtrl) return;
 			wxString text = m_targetCtrl->GetValue();
 			if (text.IsEmpty()) return;
-			WinTtsHelper::GetInstance().Speak(text.ToStdWstring(), LanguageCode::Chinese);
+			LanguageCode tgtCode = LanguageCode::Chinese;
+			if (m_modelManager && m_modelManager->GetConfigManager()) {
+				tgtCode = LanguageHelper::FromCodeName(m_modelManager->GetConfigManager()->GetConfig().targetLang);
+			}
+			WinTtsHelper::GetInstance().Speak(text.ToStdWstring(), tgtCode);
 		});
 
 		// 平分窗体高度并设置最小 Pane 限制与等比缩放
@@ -255,6 +274,7 @@ namespace LinguaAlpaca::UI {
 	void TranslationBubbleFrame::ShowAndTranslate(const wxPoint& spawnPos, const std::string& sourceText) {
 		WinTtsHelper::GetInstance().Stop();
 		m_lastSourceText = sourceText;
+		UpdateLanguageBadge();
 		m_sourceCtrl->SetValue(wxString::FromUTF8(sourceText));
 		m_targetCtrl->SetValue(L"正在启动翻译引擎...");
 		m_statusText->SetLabel(L"正在翻译...");
@@ -365,10 +385,18 @@ namespace LinguaAlpaca::UI {
 			return;
 		}
 
+		LanguageCode srcCode = LanguageCode::AutoDetect;
+		LanguageCode tgtCode = LanguageCode::Chinese;
+		if (m_modelManager && m_modelManager->GetConfigManager()) {
+			auto cfg = m_modelManager->GetConfigManager()->GetConfig();
+			srcCode = LanguageHelper::FromCodeName(cfg.sourceLang);
+			tgtCode = LanguageHelper::FromCodeName(cfg.targetLang);
+		}
+
 		TranslationTask task(
 			sourceText,
-			LanguageCode::AutoDetect,
-			LanguageCode::Chinese
+			srcCode,
+			tgtCode
 		);
 
 		if (m_targetCtrl) m_targetCtrl->Clear();
@@ -415,16 +443,13 @@ namespace LinguaAlpaca::UI {
 		if (m_mainPanel) m_mainPanel->SetBackgroundColour(palette.cardBg);
 		if (m_headerPanel) m_headerPanel->SetBackgroundColour(palette.sidebarBg);
 		if (m_titleText) m_titleText->SetForegroundColour(palette.textPrimary);
-		if (m_langBadge) {
-			m_langBadge->SetForegroundColour(palette.accentPrimary);
-			m_langBadge->SetBackgroundColour(palette.bannerBg);
-		}
+		UpdateLanguageBadge();
 		if (m_splitter) m_splitter->SetBackgroundColour(palette.cardBg);
 		if (m_sourcePanel) m_sourcePanel->SetBackgroundColour(palette.windowBg);
 		if (m_targetPanel) m_targetPanel->SetBackgroundColour(palette.cardBg);
 		if (m_sourceCtrl) {
 			m_sourceCtrl->SetBackgroundColour(palette.windowBg);
-			m_sourceCtrl->SetForegroundColour(palette.textSecondary);
+			m_sourceCtrl->SetForegroundColour(palette.textPrimary);
 		}
 		if (m_targetCtrl) {
 			m_targetCtrl->SetBackgroundColour(palette.cardBg);
@@ -829,13 +854,17 @@ namespace LinguaAlpaca::UI {
 
 	void TranslationBubbleFrame::OnRetry(wxCommandEvent& WXUNUSED(event)) {
 		WinTtsHelper::GetInstance().Stop();
-		std::string textToTranslate = m_lastSourceText;
-		if (textToTranslate.empty() && m_sourceCtrl) {
+		std::string textToTranslate;
+		if (m_sourceCtrl) {
 			textToTranslate = m_sourceCtrl->GetValue().ToStdString();
+		}
+		if (textToTranslate.empty()) {
+			textToTranslate = m_lastSourceText;
 		}
 		if (textToTranslate.empty()) {
 			return;
 		}
+		m_lastSourceText = textToTranslate;
 
 		if (m_targetCtrl) {
 			m_targetCtrl->SetValue(L"正在重新连接模型并翻译...");
@@ -871,6 +900,26 @@ namespace LinguaAlpaca::UI {
 				}
 			})
 		);
+	}
+
+	void TranslationBubbleFrame::UpdateLanguageBadge() {
+		LanguageCode srcCode = LanguageCode::AutoDetect;
+		LanguageCode tgtCode = LanguageCode::Chinese;
+
+		if (m_modelManager && m_modelManager->GetConfigManager()) {
+			auto cfg = m_modelManager->GetConfigManager()->GetConfig();
+			srcCode = LanguageHelper::FromCodeName(cfg.sourceLang);
+			tgtCode = LanguageHelper::FromCodeName(cfg.targetLang);
+		}
+
+		std::string srcName = LanguageHelper::GetDisplayName(srcCode);
+		std::string tgtName = LanguageHelper::GetDisplayName(tgtCode);
+		wxString badgeText = wxString::Format(L"%s → %s", wxString::FromUTF8(srcName), wxString::FromUTF8(tgtName));
+
+		ThemePalette palette = ThemeManager::GetCurrentPalette();
+		if (m_langBadge) {
+			m_langBadge->SetStatus(badgeText, palette.accentPrimary, palette.bannerBg, palette.bannerBorder);
+		}
 	}
 
 	void TranslationBubbleFrame::OnCloseBtn(wxCommandEvent& WXUNUSED(event)) {

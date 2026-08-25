@@ -16,7 +16,7 @@ struct AppConfig {
     std::string themeMode{"Light"}; // "Light" or "Dark"
     bool autoRead{false};
     bool selectionAutoTranslate{true};
-    std::string sourceLang{"en"};
+    std::string sourceLang{"auto"};
     std::string targetLang{"zh"};
     int gpuLayers{99};
     int ocrGpuLayers{0}; // 默认 OCR 使用 0 层（CPU模式），避免 Vulkan 显存分配超限

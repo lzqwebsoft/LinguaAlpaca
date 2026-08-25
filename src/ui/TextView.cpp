@@ -58,6 +58,23 @@ namespace LinguaAlpaca::UI {
 
 		wxBoxSizer* langSizer = new wxBoxSizer(wxHORIZONTAL);
 		m_langSelector = new LanguageBar(m_langPanel);
+
+		if (m_modelManager && m_modelManager->GetConfigManager()) {
+			auto cfg = m_modelManager->GetConfigManager()->GetConfig();
+			m_langSelector->SetSourceLanguage(LanguageHelper::FromCodeName(cfg.sourceLang));
+			m_langSelector->SetTargetLanguage(LanguageHelper::FromCodeName(cfg.targetLang));
+		}
+
+		m_langSelector->Bind(EVT_LANGUAGE_CHANGED, [this](wxCommandEvent& event) {
+			event.Skip();
+			if (m_modelManager && m_modelManager->GetConfigManager() && m_langSelector) {
+				AppConfig cfg = m_modelManager->GetConfigManager()->GetConfig();
+				cfg.sourceLang = LanguageHelper::GetCodeName(m_langSelector->GetSourceLanguage());
+				cfg.targetLang = LanguageHelper::GetCodeName(m_langSelector->GetTargetLanguage());
+				m_modelManager->GetConfigManager()->UpdateConfig(cfg);
+			}
+		});
+
 		langSizer->Add(m_langSelector, 1, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, 12_dip);
 		m_langPanel->SetSizer(langSizer);
 

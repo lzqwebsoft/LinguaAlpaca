@@ -31,40 +31,32 @@ ExtractedSelection ScreenTextExtractor::ExtractSelection(
     result.anchorX = maxX + 6;
     result.anchorY = maxY + 8;
 
-    // 阶段 1：首选高速剪贴板提取 (SendInput)
-    std::string text = ClipboardHelper::GetSelectedTextViaSendInput(preserveClipboard);
+    // 阶段 1：首选 Windows UI Automation 无障碍选区精准查询 (非侵入式，完全不触碰/不污染剪贴板)
+    // (macOS 对应实现 TODO: AXUIElementCopyAttributeValue with kAXSelectedTextAttribute)
+    int uiaAnchorX = result.anchorX;
+    int uiaAnchorY = result.anchorY;
+    std::string text;
+    if (ExtractViaUIAutomation(endX, endY, text, uiaAnchorX, uiaAnchorY)) {
+        if (!text.empty() && text.size() <= 8000) {
+            result.text = text;
+            result.anchorX = uiaAnchorX;
+            result.anchorY = uiaAnchorY;
+            result.source = "UIAutomation";
+            LOG_INFO("ScreenTextExtractor", "Extracted via UIAutomation: \"" + text + "\"");
+            return result;
+        }
+    }
+
+    // 阶段 2：UIAutomation 未命中时，使用剪贴板 SendInput 模拟 Ctrl+C 提取 (完整全格式保护)
+    text = ClipboardHelper::GetSelectedTextViaSendInput(preserveClipboard);
     if (!text.empty() && text.size() <= 8000) {
         result.text = text;
         result.source = "Clipboard";
         return result;
     }
 
-    // 阶段 2：剪贴板未命中时，尝试 Windows UI Automation 无障碍查询
-    // (macOS 对应实现 TODO: AXUIElementCopyAttributeValue with kAXSelectedTextAttribute)
-    int uiaAnchorX = result.anchorX;
-    int uiaAnchorY = result.anchorY;
-    if (ExtractViaUIAutomation(endX, endY, text, uiaAnchorX, uiaAnchorY)) {
-        result.text = text;
-        result.anchorX = uiaAnchorX;
-        result.anchorY = uiaAnchorY;
-        result.source = "UIAutomation";
-        LOG_INFO("ScreenTextExtractor", "Extracted via UIAutomation: \"" + text + "\"");
-        return result;
-    }
-
-    // 阶段 3：轻量级屏幕切片极速 OCR 识别兜底 (Windows.Media.Ocr 约 5~15ms)
-    // (macOS 对应实现 TODO: Vision Framework VNRecognizeTextRequest)
-    int ocrAnchorX = result.anchorX;
-    int ocrAnchorY = result.anchorY;
-    if (ExtractViaScreenOcr(startX, startY, endX, endY, text, ocrAnchorX, ocrAnchorY)) {
-        result.text = text;
-        result.anchorX = ocrAnchorX;
-        result.anchorY = ocrAnchorY;
-        result.source = "ScreenOCR";
-        LOG_INFO("ScreenTextExtractor", "Extracted via Windows Media OCR: \"" + text + "\"");
-        return result;
-    }
-
+    // 注意：不再在鼠标划词时使用盲目的屏幕切片 OCR 兜底，
+    // 防止用户在截图、拖动窗口、框选桌面图标时误识别屏幕底图文字而产生误触发。
     return result;
 }
 

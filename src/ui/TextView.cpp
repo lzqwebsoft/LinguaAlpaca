@@ -52,40 +52,7 @@ namespace LinguaAlpaca::UI {
 
 		mainSizer->Add(headerSizer, 0, wxEXPAND | wxALL, 20_dip);
 
-		// 2. 划词状态提示 Banner (SVG Info Icon)
-		m_bannerPanel = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxSize(-1, 44_dip), wxBORDER_NONE);
-		m_bannerPanel->SetBackgroundColour(palette.bannerBg);
-
-		wxBoxSizer* bannerSizer = new wxBoxSizer(wxHORIZONTAL);
-
-		wxBitmapBundle infoBundle = IconManager::GetIconBundle(SVG::INFO, dip(16, 16), palette.textSecondary);
-		wxStaticBitmap* infoIcon = new wxStaticBitmap(m_bannerPanel, wxID_ANY, infoBundle);
-
-		m_bannerText = new wxStaticText(m_bannerPanel, wxID_ANY, L"选中任意文本 · 自动翻译 · 当前选中：");
-		m_bannerText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
-		m_bannerText->SetForegroundColour(palette.bannerText);
-
-		m_selectedTagPanel = new wxPanel(m_bannerPanel, wxID_ANY, wxDefaultPosition, wxSize(-1, 24_dip), wxBORDER_NONE);
-		m_selectedTagPanel->SetBackgroundColour(palette.bannerBg);
-		wxBoxSizer* tagSizer = new wxBoxSizer(wxHORIZONTAL);
-		m_tagText = new wxStaticText(m_selectedTagPanel, wxID_ANY, L"「Hello World」");
-		m_tagText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
-		m_tagText->SetForegroundColour(palette.bannerText);
-		tagSizer->Add(m_tagText, 0, wxALIGN_CENTER);
-		m_selectedTagPanel->SetSizer(tagSizer);
-
-		m_instantTransBtn = new CustomButton(m_bannerPanel, wxID_ANY, L"立即翻译", ButtonStyle::Primary, wxDefaultPosition, dip(96, 32));
-
-		bannerSizer->Add(infoIcon, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 16_dip);
-		bannerSizer->Add(m_bannerText, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 6_dip);
-		bannerSizer->Add(m_selectedTagPanel, 0, wxALIGN_CENTER_VERTICAL);
-		bannerSizer->AddStretchSpacer(1);
-		bannerSizer->Add(m_instantTransBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 12_dip);
-
-		m_bannerPanel->SetSizer(bannerSizer);
-		mainSizer->Add(m_bannerPanel, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 20_dip);
-
-		// 3. 语言选择条
+		// 2. 语言选择条
 		m_langPanel = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxSize(-1, 52_dip), wxBORDER_NONE);
 		m_langPanel->SetBackgroundColour(palette.cardBg);
 
@@ -96,7 +63,7 @@ namespace LinguaAlpaca::UI {
 
 		mainSizer->Add(m_langPanel, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 20_dip);
 
-		// 4. 原文与译文卡片区
+		// 3. 原文与译文卡片区
 		wxBoxSizer* cardsSizer = new wxBoxSizer(wxHORIZONTAL);
 		m_sourceCard = new CardPanel(this, L"原文", false);
 		m_sourceCard->AddToolIcon(1, SVG::SPEAKER, L"朗读原文", [this]() {
@@ -149,7 +116,7 @@ namespace LinguaAlpaca::UI {
 
 		mainSizer->Add(cardsSizer, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 20_dip);
 
-		// 5. 底部操作按钮栏
+		// 4. 底部操作按钮栏
 		wxBoxSizer* bottomSizer = new wxBoxSizer(wxHORIZONTAL);
 
 		m_translateBtn = new CustomButton(this, wxID_ANY, L"翻译", ButtonStyle::Primary, wxDefaultPosition, dip(110, 42));
@@ -184,7 +151,6 @@ namespace LinguaAlpaca::UI {
 		// 事件绑定
 		m_translateBtn->Bind(wxEVT_BUTTON, &TextView::OnTranslateClicked, this);
 		m_stopBtn->Bind(wxEVT_BUTTON, &TextView::OnStopClicked, this);
-		m_instantTransBtn->Bind(wxEVT_BUTTON, &TextView::OnTranslateClicked, this);
 		m_clearBtn->Bind(wxEVT_BUTTON, &TextView::OnClearClicked, this);
 		m_swapBtn->Bind(wxEVT_BUTTON, &TextView::OnSwapClicked, this);
 		m_copyBtn->Bind(wxEVT_BUTTON, &TextView::OnCopyTargetClicked, this);
@@ -232,15 +198,6 @@ namespace LinguaAlpaca::UI {
 		if (m_titleText)
 			m_titleText->SetForegroundColour(palette.textPrimary);
 
-		if (m_bannerPanel)
-			m_bannerPanel->SetBackgroundColour(palette.bannerBg);
-		if (m_bannerText)
-			m_bannerText->SetForegroundColour(palette.bannerText);
-		if (m_selectedTagPanel)
-			m_selectedTagPanel->SetBackgroundColour(palette.bannerBg);
-		if (m_tagText)
-			m_tagText->SetForegroundColour(palette.bannerText);
-
 		if (m_langPanel)
 			m_langPanel->SetBackgroundColour(palette.cardBg);
 
@@ -251,8 +208,6 @@ namespace LinguaAlpaca::UI {
 		if (m_targetCard)
 			m_targetCard->UpdateTheme();
 
-		if (m_instantTransBtn)
-			m_instantTransBtn->Refresh();
 		if (m_translateBtn)
 			m_translateBtn->Refresh();
 		if (m_stopBtn)

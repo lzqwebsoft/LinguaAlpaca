@@ -52,13 +52,18 @@ void TextCtrl::InitUI(const wxString& value, long style) {
 
     wxBoxSizer* sizer = new wxBoxSizer(wxHORIZONTAL);
     sizer->Add(m_textCtrl, 1, wxEXPAND | wxLEFT | wxTOP | wxBOTTOM, 6_dip);
-    sizer->Add(m_scrollBar, 0, wxEXPAND, 0);
+    sizer->Add(m_scrollBar, 0, wxEXPAND | wxRIGHT, 2_dip);
     SetSizer(sizer);
 
     // 鼠标中键滚轮滑动与中键拖拽平移事件监听
     m_textCtrl->Bind(wxEVT_MOUSEWHEEL, &TextCtrl::OnMouseWheel, this);
     Bind(wxEVT_MOUSEWHEEL, &TextCtrl::OnMouseWheel, this);
     m_scrollBar->Bind(wxEVT_MOUSEWHEEL, &TextCtrl::OnMouseWheel, this);
+
+    m_textCtrl->Bind(wxEVT_ENTER_WINDOW, [this](wxMouseEvent& event) {
+        if (m_scrollBar) m_scrollBar->NotifyActivity();
+        event.Skip();
+    });
 
     m_textCtrl->Bind(wxEVT_MIDDLE_DOWN, &TextCtrl::OnMiddleDown, this);
     m_textCtrl->Bind(wxEVT_MIDDLE_UP, &TextCtrl::OnMiddleUp, this);
@@ -81,6 +86,13 @@ void TextCtrl::InitUI(const wxString& value, long style) {
     });
 
     Bind(wxEVT_SIZE, [this](wxSizeEvent& event) {
+        event.Skip();
+        if (wxTheApp) {
+            wxTheApp->CallAfter([this]() { UpdateScrollInfo(); });
+        }
+    });
+
+    m_textCtrl->Bind(wxEVT_SIZE, [this](wxSizeEvent& event) {
         event.Skip();
         if (wxTheApp) {
             wxTheApp->CallAfter([this]() { UpdateScrollInfo(); });

@@ -42,13 +42,8 @@ private:
     wxStaticText* m_titleText{nullptr};
     StatusBadge* m_statusBadge{nullptr};
 
-    wxPanel* m_bannerPanel{nullptr};
-    wxStaticText* m_bannerText{nullptr};
-    wxPanel* m_selectedTagPanel{nullptr};
-    wxStaticText* m_tagText{nullptr};
     wxPanel* m_langPanel{nullptr};
 
-    CustomButton* m_instantTransBtn{nullptr};
     CustomButton* m_translateBtn{nullptr};
     CustomButton* m_stopBtn{nullptr};
     CustomButton* m_clearBtn{nullptr};

@@ -112,6 +112,8 @@ set(UI_SOURCES
     src/ui/widgets/CustomButton.cpp
     src/ui/widgets/CustomChoice.hpp
     src/ui/widgets/CustomChoice.cpp
+    src/ui/widgets/CustomInputBox.hpp
+    src/ui/widgets/CustomInputBox.cpp
     src/ui/widgets/StatusBadge.hpp
     src/ui/widgets/StatusBadge.cpp
     src/ui/widgets/SidebarNav.hpp
@@ -134,8 +136,6 @@ set(UI_SOURCES
     src/ui/widgets/TextCtrl.cpp
     src/ui/widgets/ScrollBar.hpp
     src/ui/widgets/ScrollBar.cpp
-    src/ui/widgets/SearchInputBox.hpp
-    src/ui/widgets/SearchInputBox.cpp
     src/ui/widgets/SuggestListBox.hpp
     src/ui/widgets/SuggestListBox.cpp
     src/ui/TextView.hpp

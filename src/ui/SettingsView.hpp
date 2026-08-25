@@ -1,18 +1,19 @@
 #pragma once
 #include <wx/wx.h>
-#include <wx/gauge.h>
 #include <wx/scrolwin.h>
 #include <memory>
 #include "core/ModelManager.hpp"
 #include "core/Config.hpp"
-#include "core/Downloader.hpp"
 #include "widgets/CustomButton.hpp"
 #include "widgets/CustomChoice.hpp"
+#include "widgets/CustomInputBox.hpp"
+#include "widgets/ScrollBar.hpp"
 #include "widgets/StatusBadge.hpp"
+#include "widgets/TextCtrl.hpp"
 
 namespace LinguaAlpaca::UI {
 
-class SettingsView : public wxScrolledWindow {
+class SettingsView : public wxPanel {
 public:
     SettingsView(wxWindow* parent,
                  std::shared_ptr<ModelManager> modelManager,
@@ -24,12 +25,16 @@ public:
 
 private:
     void InitUI();
+    void ScrollTo(int targetY);
+    void UpdateLayoutAndScroll();
+    void OnSize(wxSizeEvent& event);
+    void OnMouseWheel(wxMouseEvent& event);
+    void BindMouseWheelRecursively(wxWindow* win);
+
     void OnBrowseModel(wxCommandEvent& event);
     void OnOpenModelDir(wxCommandEvent& event);
     void OnSaveConfig(wxCommandEvent& event);
     void OnTestModel(wxCommandEvent& event);
-    void OnDownloadRecommended(wxCommandEvent& event);
-    void OnTabChanged(int tabIndex);
     void OnBrowseOcrModel(wxCommandEvent& event);
     void OnBrowseOcrMmproj(wxCommandEvent& event);
     void OnSaveOcrConfig(wxCommandEvent& event);
@@ -38,7 +43,13 @@ private:
 
     std::shared_ptr<ModelManager> m_modelManager;
     std::shared_ptr<ConfigManager> m_configManager;
-    std::shared_ptr<Downloader> m_downloader;
+
+    // 视口容器、内容画板与自定义滚动条
+    wxPanel* m_viewport{nullptr};
+    wxPanel* m_contentPanel{nullptr};
+    wxBoxSizer* m_mainSizer{nullptr};
+    ScrollBar* m_scrollBar{nullptr};
+    int m_scrollOffsetY{0};
 
     // UI Elements - 1. 翻译模型 Group
     wxStaticText* m_titleText{nullptr};
@@ -46,23 +57,11 @@ private:
     wxStaticText* m_modelCardTitle{nullptr};
     StatusBadge* m_statusBadge{nullptr};
 
-    CustomButton* m_localTabBtn{nullptr};
-    CustomButton* m_recommendTabBtn{nullptr};
-
-    wxPanel* m_localPanel{nullptr};
-    wxPanel* m_recommendPanel{nullptr};
-
-    wxTextCtrl* m_modelPathCtrl{nullptr};
+    CustomInputBox* m_modelPathCtrl{nullptr};
     CustomButton* m_browseBtn{nullptr};
     CustomButton* m_openDirBtn{nullptr};
     CustomButton* m_saveBtn{nullptr};
     CustomButton* m_testBtn{nullptr};
-
-    // 下载进度 UI
-    wxPanel* m_progressPanel{nullptr};
-    wxGauge* m_downloadGauge{nullptr};
-    wxStaticText* m_progressText{nullptr};
-    CustomButton* m_downloadBtn{nullptr};
 
     // UI Elements - 2. OCR 模型 Group
     wxPanel* m_ocrCard{nullptr};
@@ -70,11 +69,11 @@ private:
     StatusBadge* m_ocrStatusBadge{nullptr};
 
     wxStaticText* m_ocrMainLabel{nullptr};
-    wxTextCtrl* m_ocrModelPathCtrl{nullptr};
+    CustomInputBox* m_ocrModelPathCtrl{nullptr};
     CustomButton* m_ocrBrowseBtn{nullptr};
 
     wxStaticText* m_ocrMmprojLabel{nullptr};
-    wxTextCtrl* m_ocrMmprojPathCtrl{nullptr};
+    CustomInputBox* m_ocrMmprojPathCtrl{nullptr};
     CustomButton* m_ocrMmprojBrowseBtn{nullptr};
 
     CustomButton* m_ocrSaveBtn{nullptr};
@@ -103,14 +102,14 @@ private:
     wxStaticText* m_dictTitleText{nullptr};
     StatusBadge* m_dictStatusBadge{nullptr};
     wxStaticText* m_dictDirLabel{nullptr};
-    wxTextCtrl* m_dictDirPathCtrl{nullptr};
+    CustomInputBox* m_dictDirPathCtrl{nullptr};
     CustomButton* m_dictBrowseBtn{nullptr};
     CustomButton* m_dictOpenDirBtn{nullptr};
     CustomButton* m_dictSaveBtn{nullptr};
     CustomButton* m_dictReloadBtn{nullptr};
     wxStaticText* m_dictStatusText{nullptr};
     wxStaticText* m_dictListTitleText{nullptr};
-    wxTextCtrl* m_dictListInfoCtrl{nullptr};
+    TextCtrl* m_dictListInfoCtrl{nullptr};
 
     void OnBrowseDictDir(wxCommandEvent& event);
     void OnOpenDictDir(wxCommandEvent& event);
@@ -136,7 +135,6 @@ private:
     wxPanel* m_prefCard{nullptr};
     wxStaticText* m_prefTitle{nullptr};
 
-    int m_activeTab{0};
     wxString m_configuredPath;
 };
 

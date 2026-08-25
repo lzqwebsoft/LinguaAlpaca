@@ -72,9 +72,10 @@ void DictView::InitUI() {
     m_dictChoice->Bind(wxEVT_CHOICE, &DictView::OnDictChoiceSelected, this);
 
     // 现代圆角搜索输入框（内嵌搜索图标与实时清除 x 按钮）
-    m_searchBox = new SearchInputBox(m_headerPanel, wxID_ANY, L"",
+    m_searchBox = new CustomInputBox(m_headerPanel, wxID_ANY, L"",
                                      L"输入要查询的单词或短语，按回车检索...",
                                      wxDefaultPosition, wxSize(-1, 38_dip));
+    m_searchBox->SetPrefixIcon(SVG::BROWSE, dip(16, 16));
     m_searchBox->Bind(wxEVT_TEXT, &DictView::OnSearchTextChanged, this);
     m_searchBox->Bind(wxEVT_TEXT_ENTER, &DictView::OnSearchTextEnter, this);
     m_searchBox->SetOnClearCallback([this]() {
@@ -127,22 +128,28 @@ void DictView::InitUI() {
 
     wxBoxSizer* leftCardSizer = new wxBoxSizer(wxVERTICAL);
 
-    // 建议栏顶部铺满标题栏 (左右对称铺满)
-    wxPanel* suggestHeaderBar = new wxPanel(m_leftSuggestCard, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE);
-    suggestHeaderBar->SetBackgroundColour(palette.cardBg);
+    // 建议栏顶部标题栏
+    m_suggestHeaderBar = new wxPanel(m_leftSuggestCard, wxID_ANY, wxDefaultPosition, wxSize(-1, 32_dip), wxBORDER_NONE);
+    m_suggestHeaderBar->SetBackgroundColour(palette.cardBg);
 
     wxBoxSizer* suggestHeaderSizer = new wxBoxSizer(wxHORIZONTAL);
-    m_suggestTitle = new wxStaticText(suggestHeaderBar, wxID_ANY, L"联想词列表");
-    m_suggestTitle->SetFont(wxFont(11, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
+    wxBitmapBundle suggestIconBundle = IconManager::GetIconBundle(SVG::BROWSE, dip(16, 16), palette.accentPrimary);
+    m_suggestIcon = new wxStaticBitmap(m_suggestHeaderBar, wxID_ANY, suggestIconBundle);
+
+    m_suggestTitle = new wxStaticText(m_suggestHeaderBar, wxID_ANY, L"联想词列表");
+    m_suggestTitle->SetFont(wxFont(13, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
     m_suggestTitle->SetForegroundColour(palette.textPrimary);
-    suggestHeaderSizer->Add(m_suggestTitle, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 16_dip);
-    suggestHeaderBar->SetSizer(suggestHeaderSizer);
+    m_suggestTitle->SetBackgroundColour(palette.cardBg);
+
+    suggestHeaderSizer->Add(m_suggestIcon, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 4_dip);
+    suggestHeaderSizer->Add(m_suggestTitle, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 8_dip);
+    m_suggestHeaderBar->SetSizer(suggestHeaderSizer);
 
     m_suggestListBox = new SuggestListBox(m_leftSuggestCard, wxID_ANY);
     m_suggestListBox->Bind(wxEVT_LISTBOX, &DictView::OnSuggestSelected, this);
 
-    leftCardSizer->Add(suggestHeaderBar, 0, wxEXPAND | wxTOP | wxLEFT | wxRIGHT, 14_dip);
-    leftCardSizer->Add(m_suggestListBox, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 6_dip);
+    leftCardSizer->Add(m_suggestHeaderBar, 0, wxEXPAND | wxALL, 16_dip);
+    leftCardSizer->Add(m_suggestListBox, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 16_dip);
     m_leftSuggestCard->SetSizer(leftCardSizer);
 
     // 2.2 右侧释义卡片 (70% 弹性权重) - 圆角边框卡片
@@ -166,17 +173,22 @@ void DictView::InitUI() {
     wxBoxSizer* rightCardSizer = new wxBoxSizer(wxVERTICAL);
 
     // 单词标题与操作栏
-    m_wordHeaderBar = new wxPanel(m_rightResultCard, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE);
+    m_wordHeaderBar = new wxPanel(m_rightResultCard, wxID_ANY, wxDefaultPosition, wxSize(-1, 32_dip), wxBORDER_NONE);
     m_wordHeaderBar->SetBackgroundColour(palette.cardBg);
 
     wxBoxSizer* wordHeaderSizer = new wxBoxSizer(wxHORIZONTAL);
-    m_headwordText = new wxStaticText(m_wordHeaderBar, wxID_ANY, L"");
-    m_headwordText->SetFont(wxFont(16, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
+    wxBitmapBundle resultIconBundle = IconManager::GetIconBundle(SVG::TEXT, dip(16, 16), palette.accentPrimary);
+    m_resultIcon = new wxStaticBitmap(m_wordHeaderBar, wxID_ANY, resultIconBundle);
+
+    m_headwordText = new wxStaticText(m_wordHeaderBar, wxID_ANY, L"输入单词开始查询");
+    m_headwordText->SetFont(wxFont(13, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
     m_headwordText->SetForegroundColour(palette.textPrimary);
+    m_headwordText->SetBackgroundColour(palette.cardBg);
 
     m_phoneticText = new wxStaticText(m_wordHeaderBar, wxID_ANY, L"");
     m_phoneticText->SetFont(wxFont(11, wxFONTFAMILY_SWISS, wxFONTSTYLE_ITALIC, wxFONTWEIGHT_NORMAL, false, "Lucida Sans Unicode"));
     m_phoneticText->SetForegroundColour(palette.accentPrimary);
+    m_phoneticText->SetBackgroundColour(palette.cardBg);
 
     m_speakBtn = new CustomButton(m_wordHeaderBar, wxID_ANY, L"发音", ButtonStyle::Secondary,
                                   wxDefaultPosition, dip(74, 30));
@@ -190,11 +202,12 @@ void DictView::InitUI() {
     m_copyBtn->Bind(wxEVT_BUTTON, &DictView::OnCopyClicked, this);
     m_copyBtn->Hide();
 
-    wordHeaderSizer->Add(m_headwordText, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 12_dip);
-    wordHeaderSizer->Add(m_phoneticText, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 12_dip);
-    wordHeaderSizer->Add(m_speakBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8_dip);
+    wordHeaderSizer->Add(m_resultIcon, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 4_dip);
+    wordHeaderSizer->Add(m_headwordText, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 8_dip);
+    wordHeaderSizer->Add(m_phoneticText, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 10_dip);
+    wordHeaderSizer->Add(m_speakBtn, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 10_dip);
     wordHeaderSizer->AddStretchSpacer(1);
-    wordHeaderSizer->Add(m_copyBtn, 0, wxALIGN_CENTER_VERTICAL);
+    wordHeaderSizer->Add(m_copyBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4_dip);
     m_wordHeaderBar->SetSizer(wordHeaderSizer);
 
     // 释义内容文本展示框 (启用 wxTE_RICH2 支持富文本样式)
@@ -548,16 +561,49 @@ void DictView::UpdateTheme() {
     }
     if (m_mainContentPanel) m_mainContentPanel->SetBackgroundColour(palette.windowBg);
 
-    if (m_leftSuggestCard) m_leftSuggestCard->SetBackgroundColour(palette.cardBg);
-    if (m_suggestTitle) m_suggestTitle->SetForegroundColour(palette.textSecondary);
+    if (m_leftSuggestCard) {
+        m_leftSuggestCard->SetBackgroundColour(palette.cardBg);
+        m_leftSuggestCard->Refresh();
+    }
+    if (m_suggestHeaderBar) {
+        m_suggestHeaderBar->SetBackgroundColour(palette.cardBg);
+        m_suggestHeaderBar->Refresh();
+    }
+    if (m_suggestIcon) {
+        wxBitmapBundle suggestIconBundle = IconManager::GetIconBundle(SVG::BROWSE, dip(16, 16), palette.accentPrimary);
+        m_suggestIcon->SetBitmap(suggestIconBundle);
+    }
+    if (m_suggestTitle) {
+        m_suggestTitle->SetForegroundColour(palette.textPrimary);
+        m_suggestTitle->SetBackgroundColour(palette.cardBg);
+        m_suggestTitle->Refresh();
+    }
     if (m_suggestListBox) {
         m_suggestListBox->UpdateTheme();
     }
 
-    if (m_rightResultCard) m_rightResultCard->SetBackgroundColour(palette.cardBg);
-    if (m_wordHeaderBar) m_wordHeaderBar->SetBackgroundColour(palette.cardBg);
-    if (m_headwordText) m_headwordText->SetForegroundColour(palette.textPrimary);
-    if (m_phoneticText) m_phoneticText->SetForegroundColour(palette.accentPrimary);
+    if (m_rightResultCard) {
+        m_rightResultCard->SetBackgroundColour(palette.cardBg);
+        m_rightResultCard->Refresh();
+    }
+    if (m_wordHeaderBar) {
+        m_wordHeaderBar->SetBackgroundColour(palette.cardBg);
+        m_wordHeaderBar->Refresh();
+    }
+    if (m_resultIcon) {
+        wxBitmapBundle resultIconBundle = IconManager::GetIconBundle(SVG::TEXT, dip(16, 16), palette.accentPrimary);
+        m_resultIcon->SetBitmap(resultIconBundle);
+    }
+    if (m_headwordText) {
+        m_headwordText->SetForegroundColour(palette.textPrimary);
+        m_headwordText->SetBackgroundColour(palette.cardBg);
+        m_headwordText->Refresh();
+    }
+    if (m_phoneticText) {
+        m_phoneticText->SetForegroundColour(palette.accentPrimary);
+        m_phoneticText->SetBackgroundColour(palette.cardBg);
+        m_phoneticText->Refresh();
+    }
     if (m_definitionCtrl) {
         m_definitionCtrl->SetBackgroundColour(palette.cardBg);
         m_definitionCtrl->SetForegroundColour(palette.textPrimary);

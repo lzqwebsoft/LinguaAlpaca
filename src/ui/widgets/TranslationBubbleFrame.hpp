@@ -97,6 +97,8 @@ private:
     wxPanel* m_targetPanel{nullptr};
     TextCtrl* m_sourceCtrl{nullptr};
     TextCtrl* m_targetCtrl{nullptr};
+    wxBitmapButton* m_sourceSpeakBtn{nullptr};
+    wxBitmapButton* m_targetSpeakBtn{nullptr};
 
     wxPanel* m_footerPanel{nullptr};
     wxStaticText* m_statusText{nullptr};

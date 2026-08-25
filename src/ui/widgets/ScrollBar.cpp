@@ -81,7 +81,7 @@ void ScrollBar::OnPaint(wxPaintEvent& WXUNUSED(event)) {
     dc.SetBackground(wxBrush(bg));
     dc.Clear();
 
-    if (!m_needed || (!m_isVisible && !m_isHovered && !m_isDragging)) {
+    if (!m_needed) {
         return;
     }
 
@@ -101,13 +101,13 @@ void ScrollBar::OnPaint(wxPaintEvent& WXUNUSED(event)) {
     wxColour thumbColor;
     if (m_isDragging) {
         thumbColor = palette.accentHover;
-    } else if (m_isHovered) {
+    } else if (m_isHovered || m_isVisible) {
         thumbColor = palette.accentPrimary;
     } else {
         thumbColor = palette.cardBorderActive;
     }
 
-    int thumbW = (m_isHovered || m_isDragging) ? 6_dip : 4_dip;
+    int thumbW = (m_isHovered || m_isDragging || m_isVisible) ? 6_dip : 4_dip;
     int thumbX = (GetClientSize().GetWidth() - thumbW) / 2;
 
     dc.SetBrush(wxBrush(thumbColor));

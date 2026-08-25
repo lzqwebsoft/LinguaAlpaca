@@ -12,7 +12,7 @@
 #include "widgets/CustomChoice.hpp"
 #include "widgets/TextCtrl.hpp"
 #include "widgets/StatusBadge.hpp"
-#include "widgets/SearchInputBox.hpp"
+#include "widgets/CustomInputBox.hpp"
 #include "widgets/SuggestListBox.hpp"
 
 namespace LinguaAlpaca::UI {
@@ -55,7 +55,7 @@ private:
     StatusBadge* m_dictCountBadge{nullptr};
     CustomChoice* m_dictChoice{nullptr};
 
-    SearchInputBox* m_searchBox{nullptr};
+    CustomInputBox* m_searchBox{nullptr};
     CustomButton* m_searchBtn{nullptr};
 
     // UI - 主分栏容器
@@ -64,12 +64,15 @@ private:
 
     // 左侧候选联想词栏
     wxPanel* m_leftSuggestCard{nullptr};
+    wxPanel* m_suggestHeaderBar{nullptr};
+    wxStaticBitmap* m_suggestIcon{nullptr};
     wxStaticText* m_suggestTitle{nullptr};
     SuggestListBox* m_suggestListBox{nullptr};
 
     // 右侧释义卡片
     wxPanel* m_rightResultCard{nullptr};
     wxPanel* m_wordHeaderBar{nullptr};
+    wxStaticBitmap* m_resultIcon{nullptr};
     wxStaticText* m_headwordText{nullptr};
     wxStaticText* m_phoneticText{nullptr};
     CustomButton* m_speakBtn{nullptr};

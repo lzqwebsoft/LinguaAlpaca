@@ -88,9 +88,8 @@ namespace LinguaAlpaca::UI {
                 float diam = (float)w - 2.0f * pad;
                 Gdiplus::RectF circleRect(pad, pad, diam, diam);
 
-                // 1. 绘制平滑抗锯齿基底圆角卡片背景 (适配亮暗主题)
-                wxColour bgCol = palette.cardBg;
-                Gdiplus::SolidBrush bgBrush(Gdiplus::Color(252, bgCol.Red(), bgCol.Green(), bgCol.Blue()));
+                // 1. 绘制平滑抗锯齿基底圆角卡片背景 (使用纯白基底消除任何黑色缝隙)
+                Gdiplus::SolidBrush bgBrush(Gdiplus::Color(255, 255, 255, 255));
                 g.FillEllipse(&bgBrush, circleRect);
 
                 // 2. 加载并高质量抗锯齿绘制应用 Logo 图标 (logo.png)
@@ -121,23 +120,22 @@ namespace LinguaAlpaca::UI {
                         }
                         srcBmp.UnlockBits(&bmpData);
 
-                        float imgPad = m_isHovered ? 2.5_dip : 3.5_dip;
+                        float imgPad = m_isHovered ? 1.5_dip : 2.0_dip;
                         Gdiplus::RectF imgRect(imgPad, imgPad, (float)w - 2.0f * imgPad, (float)h - 2.0f * imgPad);
                         g.DrawImage(&srcBmp, imgRect);
                     }
                 }
 
-                // 3. 绘制平滑抗锯齿边缘光晕与边框
+                // 3. 绘制平滑抗锯齿边缘光晕与边框 (高亮清新边框，杜绝黑色边缘)
                 if (m_isHovered) {
                     wxColour accent = palette.accentPrimary;
-                    Gdiplus::SolidBrush hoverGlow(Gdiplus::Color(30, accent.Red(), accent.Green(), accent.Blue()));
+                    Gdiplus::SolidBrush hoverGlow(Gdiplus::Color(40, accent.Red(), accent.Green(), accent.Blue()));
                     g.FillEllipse(&hoverGlow, circleRect);
 
-                    Gdiplus::Pen hoverPen(Gdiplus::Color(230, accent.Red(), accent.Green(), accent.Blue()), 1.8f);
+                    Gdiplus::Pen hoverPen(Gdiplus::Color(255, accent.Red(), accent.Green(), accent.Blue()), 1.8f);
                     g.DrawEllipse(&hoverPen, circleRect);
                 } else {
-                    wxColour borderCol = palette.cardBorder;
-                    Gdiplus::Pen borderPen(Gdiplus::Color(160, borderCol.Red(), borderCol.Green(), borderCol.Blue()), 1.2f);
+                    Gdiplus::Pen borderPen(Gdiplus::Color(180, 200, 220, 245), 1.2f);
                     g.DrawEllipse(&borderPen, circleRect);
                 }
             }

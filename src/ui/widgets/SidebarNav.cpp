@@ -83,7 +83,7 @@ void SidebarNav::OnPaint(wxPaintEvent& WXUNUSED(event)) {
     };
 
     auto getItemY = [topOffset, itemHeight](size_t i) -> int {
-        return (i <= 1) ? (topOffset + (int)i * itemHeight) : (topOffset + (int)i * itemHeight + 16_dip);
+        return (i <= 2) ? (topOffset + (int)i * itemHeight) : (topOffset + (int)i * itemHeight + 16_dip);
     };
 
     for (size_t i = 0; i < m_items.size(); ++i) {
@@ -91,8 +91,8 @@ void SidebarNav::OnPaint(wxPaintEvent& WXUNUSED(event)) {
         drawItem(m_items[i], y, m_selectedIndex == (int)i, m_hoverIndex == (int)i);
     }
 
-    // 绘制居中的横向短分割线 (位于“OCR”与“历史”按钮之间)
-    double dividerY = topOffset + 2 * itemHeight + 4.0_dip;
+    // 绘制居中的横向短分割线 (位于“词典”与“日志”按钮之间)
+    double dividerY = topOffset + 3 * itemHeight + 4.0_dip;
     double lineLen = 28.0_dip;
     gc->SetPen(gc->CreatePen(wxPen(palette.cardBorder, 1)));
     gc->StrokeLine((size.x - lineLen) / 2.0, dividerY, (size.x + lineLen) / 2.0, dividerY);
@@ -110,7 +110,7 @@ void SidebarNav::OnLeftDown(wxMouseEvent& event) {
 
     int newIndex = -1;
     for (size_t i = 0; i < m_items.size(); ++i) {
-        int itemY = (i <= 1) ? (topOffset + (int)i * itemHeight) : (topOffset + (int)i * itemHeight + 16_dip);
+        int itemY = (i <= 2) ? (topOffset + (int)i * itemHeight) : (topOffset + (int)i * itemHeight + 16_dip);
         if (y >= itemY && y <= itemY + 58_dip) {
             newIndex = (int)i;
             break;
@@ -140,7 +140,7 @@ void SidebarNav::OnMouseMove(wxMouseEvent& event) {
     m_hoverIndex = -1;
 
     for (size_t i = 0; i < m_items.size(); ++i) {
-        int itemY = (i <= 1) ? (topOffset + (int)i * itemHeight) : (topOffset + (int)i * itemHeight + 16_dip);
+        int itemY = (i <= 2) ? (topOffset + (int)i * itemHeight) : (topOffset + (int)i * itemHeight + 16_dip);
         if (y >= itemY && y <= itemY + 58_dip) {
             m_hoverIndex = (int)i;
             break;

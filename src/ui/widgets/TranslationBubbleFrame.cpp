@@ -4,6 +4,7 @@
 #include "../theme/AppIcons.hpp"
 #include "../theme/IconManager.hpp"
 #include "../../core/ClipboardHelper.hpp"
+#include "../../core/WinTtsHelper.hpp"
 
 #include <wx/display.h>
 #include <wx/dcbuffer.h>
@@ -27,7 +28,9 @@ namespace LinguaAlpaca::UI {
 			});
 	}
 
-	TranslationBubbleFrame::~TranslationBubbleFrame() = default;
+	TranslationBubbleFrame::~TranslationBubbleFrame() {
+		WinTtsHelper::GetInstance().Stop();
+	}
 
 	void TranslationBubbleFrame::InitUI() {
 		ThemePalette palette = ThemeManager::GetCurrentPalette();
@@ -91,6 +94,8 @@ namespace LinguaAlpaca::UI {
 			wxSP_LIVE_UPDATE | wxSP_NOBORDER);
 		m_splitter->SetBackgroundColour(palette.cardBg);
 
+		wxBitmapBundle speakBundle = IconManager::GetIconBundle(SVG::SPEAKER, wxSize(14, 14), palette.textSecondary);
+
 		// 原文展示区
 		m_sourcePanel = new wxPanel(m_splitter, wxID_ANY);
 		m_sourcePanel->SetBackgroundColour(palette.windowBg);
@@ -104,6 +109,11 @@ namespace LinguaAlpaca::UI {
 		sourceSizer->Add(m_sourceCtrl, 1, wxEXPAND);
 		m_sourcePanel->SetSizer(sourceSizer);
 
+		m_sourceSpeakBtn = new wxBitmapButton(m_sourcePanel, wxID_ANY, speakBundle, wxDefaultPosition, dip(24, 24), wxBORDER_NONE);
+		m_sourceSpeakBtn->SetBackgroundColour(palette.windowBg);
+		m_sourceSpeakBtn->SetToolTip(L"朗读原文");
+		m_sourceSpeakBtn->SetCursor(wxCursor(wxCURSOR_HAND));
+
 		// 译文输出区
 		m_targetPanel = new wxPanel(m_splitter, wxID_ANY);
 		m_targetPanel->SetBackgroundColour(palette.cardBg);
@@ -116,6 +126,46 @@ namespace LinguaAlpaca::UI {
 		m_targetCtrl->SetForegroundColour(palette.textPrimary);
 		targetSizer->Add(m_targetCtrl, 1, wxEXPAND);
 		m_targetPanel->SetSizer(targetSizer);
+
+		m_targetSpeakBtn = new wxBitmapButton(m_targetPanel, wxID_ANY, speakBundle, wxDefaultPosition, dip(24, 24), wxBORDER_NONE);
+		m_targetSpeakBtn->SetBackgroundColour(palette.cardBg);
+		m_targetSpeakBtn->SetToolTip(L"朗读译文");
+		m_targetSpeakBtn->SetCursor(wxCursor(wxCURSOR_HAND));
+
+		// 原文与译文面板的右上角悬浮播放按钮自适应定位
+		m_sourcePanel->Bind(wxEVT_SIZE, [this](wxSizeEvent& event) {
+			event.Skip();
+			if (m_sourceSpeakBtn && m_sourcePanel) {
+				wxSize sz = m_sourcePanel->GetClientSize();
+				wxSize btnSz = m_sourceSpeakBtn->GetSize();
+				m_sourceSpeakBtn->Move(sz.x - btnSz.x - 6_dip, 4_dip);
+				m_sourceSpeakBtn->Raise();
+			}
+		});
+
+		m_targetPanel->Bind(wxEVT_SIZE, [this](wxSizeEvent& event) {
+			event.Skip();
+			if (m_targetSpeakBtn && m_targetPanel) {
+				wxSize sz = m_targetPanel->GetClientSize();
+				wxSize btnSz = m_targetSpeakBtn->GetSize();
+				m_targetSpeakBtn->Move(sz.x - btnSz.x - 6_dip, 4_dip);
+				m_targetSpeakBtn->Raise();
+			}
+		});
+
+		m_sourceSpeakBtn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+			if (!m_sourceCtrl) return;
+			wxString text = m_sourceCtrl->GetValue();
+			if (text.IsEmpty()) return;
+			WinTtsHelper::GetInstance().Speak(text.ToStdWstring(), LanguageCode::AutoDetect);
+		});
+
+		m_targetSpeakBtn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+			if (!m_targetCtrl) return;
+			wxString text = m_targetCtrl->GetValue();
+			if (text.IsEmpty()) return;
+			WinTtsHelper::GetInstance().Speak(text.ToStdWstring(), LanguageCode::Chinese);
+		});
 
 		// 平分窗体高度并设置最小 Pane 限制与等比缩放
 		m_splitter->SetMinimumPaneSize(35_dip);
@@ -203,6 +253,7 @@ namespace LinguaAlpaca::UI {
 	}
 
 	void TranslationBubbleFrame::ShowAndTranslate(const wxPoint& spawnPos, const std::string& sourceText) {
+		WinTtsHelper::GetInstance().Stop();
 		m_lastSourceText = sourceText;
 		m_sourceCtrl->SetValue(wxString::FromUTF8(sourceText));
 		m_targetCtrl->SetValue(L"正在启动翻译引擎...");
@@ -353,6 +404,7 @@ namespace LinguaAlpaca::UI {
 	}
 
 	void TranslationBubbleFrame::Dismiss() {
+		WinTtsHelper::GetInstance().Stop();
 		Hide();
 	}
 
@@ -377,6 +429,18 @@ namespace LinguaAlpaca::UI {
 		if (m_targetCtrl) {
 			m_targetCtrl->SetBackgroundColour(palette.cardBg);
 			m_targetCtrl->SetForegroundColour(palette.textPrimary);
+		}
+		if (m_sourceSpeakBtn) {
+			m_sourceSpeakBtn->SetBackgroundColour(palette.windowBg);
+			wxBitmapBundle speakBundle = IconManager::GetIconBundle(SVG::SPEAKER, wxSize(14, 14), palette.textSecondary);
+			m_sourceSpeakBtn->SetBitmap(speakBundle);
+			m_sourceSpeakBtn->Refresh();
+		}
+		if (m_targetSpeakBtn) {
+			m_targetSpeakBtn->SetBackgroundColour(palette.cardBg);
+			wxBitmapBundle speakBundle = IconManager::GetIconBundle(SVG::SPEAKER, wxSize(14, 14), palette.textSecondary);
+			m_targetSpeakBtn->SetBitmap(speakBundle);
+			m_targetSpeakBtn->Refresh();
 		}
 		if (m_footerPanel) {
 			m_footerPanel->SetBackgroundColour(palette.sidebarBg);
@@ -764,6 +828,7 @@ namespace LinguaAlpaca::UI {
 	}
 
 	void TranslationBubbleFrame::OnRetry(wxCommandEvent& WXUNUSED(event)) {
+		WinTtsHelper::GetInstance().Stop();
 		std::string textToTranslate = m_lastSourceText;
 		if (textToTranslate.empty() && m_sourceCtrl) {
 			textToTranslate = m_sourceCtrl->GetValue().ToStdString();

@@ -42,7 +42,7 @@ public:
     template <typename Func>
     auto BindUi(Func&& fn) {
         auto alive = m_aliveToken;
-        return [alive, fn = std::forward<Func>(fn)](auto&&... args) mutable {
+        return [alive, fn = std::forward<Func>(fn)](auto&&... args) {
             if (!*alive) return;
             if (wxTheApp) {
                 auto tupleArgs = std::make_tuple(std::forward<decltype(args)>(args)...);

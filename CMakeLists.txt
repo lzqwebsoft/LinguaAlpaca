@@ -138,6 +138,8 @@ set(UI_SOURCES
     src/ui/widgets/ScrollBar.cpp
     src/ui/widgets/SuggestListBox.hpp
     src/ui/widgets/SuggestListBox.cpp
+    src/ui/widgets/SplashScreen.hpp
+    src/ui/widgets/SplashScreen.cpp
     src/ui/TextView.hpp
     src/ui/TextView.cpp
     src/ui/OcrView.hpp

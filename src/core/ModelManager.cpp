@@ -26,7 +26,7 @@ namespace LinguaAlpaca {
 		if (m_configManager) {
 			std::string dictDir = m_configManager->GetConfig().dictDirPath;
 			if (!dictDir.empty()) {
-				m_dictEngine->LoadDictionaries(dictDir);
+				m_dictEngine->SetDictDir(dictDir);
 			}
 		}
 	}

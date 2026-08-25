@@ -10,6 +10,7 @@
 #include "core/Config.hpp"
 #include "core/ModelManager.hpp"
 #include "core/SelectionService.hpp"
+#include "ui/widgets/SplashScreen.hpp"
 #include "ui/widgets/FloatingIconFrame.hpp"
 #include "ui/widgets/TranslationBubbleFrame.hpp"
 #include "ui/MainFrame.hpp"
@@ -20,6 +21,7 @@ class LinguaAlpacaApp : public wxApp {
 private:
     std::shared_ptr<ModelManager> m_modelManager;
     std::unique_ptr<SelectionService> m_selectionService;
+    UI::SplashScreen* m_splashScreen{nullptr};
     UI::FloatingIconFrame* m_floatingIcon{nullptr};
     UI::TranslationBubbleFrame* m_translationBubble{nullptr};
     UI::MainFrame* m_mainFrame{nullptr};
@@ -56,30 +58,51 @@ public:
         auto configManager = std::make_shared<ConfigManager>();
         m_modelManager = std::make_shared<ModelManager>(configManager);
 
-        // 2. 初始化全局划词翻译悬浮组件与全局常驻划词服务
-        m_floatingIcon = new UI::FloatingIconFrame(nullptr);
-        m_translationBubble = new UI::TranslationBubbleFrame(m_modelManager, nullptr);
+        // 2. 创建并居中显示现代无边框启动画面
+        m_splashScreen = new UI::SplashScreen(nullptr);
+        SetTopWindow(m_splashScreen);
+        m_splashScreen->Centre();
+        m_splashScreen->Show(true);
 
-        m_floatingIcon->SetClickCallback([this](const wxPoint& pos, const std::string& text) {
-            if (m_translationBubble) {
-                m_translationBubble->ShowAndTranslate(pos, text);
+        // 3. 执行异步初始化流水线 (加载配置、词典、翻译模型等)
+        m_splashScreen->StartInitialization(m_modelManager, [this]() {
+            LOG_INFO("App", "Initialization completed. Displaying MainFrame...");
+
+            auto configManager = m_modelManager ? m_modelManager->GetConfigManager() : nullptr;
+
+            // 4. 初始化全局划词翻译悬浮组件与全局常驻划词服务
+            m_floatingIcon = new UI::FloatingIconFrame(nullptr);
+            m_translationBubble = new UI::TranslationBubbleFrame(m_modelManager, nullptr);
+
+            m_floatingIcon->SetClickCallback([this](const wxPoint& pos, const std::string& text) {
+                if (m_translationBubble) {
+                    m_translationBubble->ShowAndTranslate(pos, text);
+                }
+            });
+
+            m_selectionService = std::make_unique<SelectionService>(configManager);
+            m_selectionService->SetCallback([this](int x, int y, const std::string& text) {
+                if (m_floatingIcon) {
+                    m_floatingIcon->ShowAt(x, y, text);
+                }
+            });
+            m_selectionService->Start();
+
+            // 5. 创建并居中显示主界面
+            m_mainFrame = new UI::MainFrame(m_modelManager);
+            SetTopWindow(m_mainFrame);
+            m_mainFrame->Centre();
+            m_mainFrame->Show(true);
+
+            // 6. 关闭并销毁启动页
+            if (m_splashScreen) {
+                m_splashScreen->Destroy();
+                m_splashScreen = nullptr;
             }
+
+            LOG_INFO("App", "MainFrame and Global Selection Service initialized successfully.");
         });
 
-        m_selectionService = std::make_unique<SelectionService>(configManager);
-        m_selectionService->SetCallback([this](int x, int y, const std::string& text) {
-            if (m_floatingIcon) {
-                m_floatingIcon->ShowAt(x, y, text);
-            }
-        });
-        m_selectionService->Start();
-
-        // 3. 创建并居中显示主界面
-        m_mainFrame = new UI::MainFrame(m_modelManager);
-        m_mainFrame->Centre();
-        m_mainFrame->Show(true);
-
-        LOG_INFO("App", "MainFrame and Global Selection Service initialized successfully.");
         return true;
     }
 
@@ -96,6 +119,10 @@ public:
         if (m_translationBubble) {
             m_translationBubble->Destroy();
             m_translationBubble = nullptr;
+        }
+        if (m_splashScreen) {
+            m_splashScreen->Destroy();
+            m_splashScreen = nullptr;
         }
         if (m_modelManager) {
             LOG_INFO("App", "Stopping model manager...");

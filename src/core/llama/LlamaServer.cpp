@@ -327,9 +327,13 @@ bool LlamaServer::QueryHealth(ServerStatusInfo& outInfo) const {
     }
 }
 
-bool LlamaServer::WaitUntilReady(int timeoutSec, const std::function<bool()>& shouldAbort) {
+bool LlamaServer::WaitUntilReady(
+    int timeoutSec,
+    const std::function<bool()>& shouldAbort,
+    const std::function<void(const std::string& status)>& onStatus) {
     if (!IsAlive()) return false;
 
+    std::string lastMsg;
     auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(timeoutSec);
     while (std::chrono::steady_clock::now() < deadline) {
         if (shouldAbort && shouldAbort()) {
@@ -341,12 +345,19 @@ bool LlamaServer::WaitUntilReady(int timeoutSec, const std::function<bool()>& sh
         }
 
         ServerStatusInfo info;
-        if (QueryHealth(info) && info.state == ServerHealthState::Ready) {
-            LOG_INFO("LlamaServer", "Server is ready at " + m_baseUrl);
-            return true;
+        if (QueryHealth(info)) {
+            if (info.state == ServerHealthState::Ready) {
+                LOG_INFO("LlamaServer", "Server is ready at " + m_baseUrl);
+                if (onStatus) onStatus("服务已就绪 (端口: " + std::to_string(m_port) + ")");
+                return true;
+            }
+        }
+        if (!info.message.empty() && info.message != lastMsg) {
+            lastMsg = info.message;
+            if (onStatus) onStatus(lastMsg);
         }
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        std::this_thread::sleep_for(std::chrono::milliseconds(150));
     }
 
     return false;
@@ -368,7 +379,7 @@ bool LlamaServer::EnsureModelRunning(
     if (IsAlive() && sameConfig) {
         ServerStatusInfo info;
         if (QueryHealth(info) && info.state == ServerHealthState::Ready) {
-            if (onStatus) onStatus("就绪");
+            if (onStatus) onStatus("服务已就绪 (端口: " + std::to_string(m_port) + ")");
             return true;
         }
     }
@@ -378,7 +389,7 @@ bool LlamaServer::EnsureModelRunning(
     }
 
     if (onStatus) {
-        onStatus("模型加载中...");
+        onStatus("正在拉起 llama-server 引擎进程...");
     }
 
     Stop();
@@ -388,16 +399,20 @@ bool LlamaServer::EnsureModelRunning(
     }
 
     if (!Start(config)) {
-        if (onStatus) onStatus("服务启动失败");
+        if (onStatus) onStatus("llama-server 进程启动失败");
         return false;
     }
 
-    bool ready = WaitUntilReady(45, shouldAbort);
+    if (onStatus) {
+        onStatus("正在装载模型权重与分配计算资源 (端口 " + std::to_string(m_port) + ")...");
+    }
+
+    bool ready = WaitUntilReady(45, shouldAbort, onStatus);
     if (ready) {
-        if (onStatus) onStatus("就绪");
+        if (onStatus) onStatus("模型已成功就绪并正常运行");
     } else {
         if (onStatus && (!shouldAbort || !shouldAbort())) {
-            onStatus("模型加载超时或失败");
+            onStatus("模型加载超时或启动失败");
         }
     }
     return ready;

@@ -41,7 +41,11 @@ public:
     bool IsAlive() const;
     bool QueryHealth(ServerStatusInfo& outInfo) const;
 
-    bool WaitUntilReady(int timeoutSec = 45, const std::function<bool()>& shouldAbort = nullptr);
+    bool WaitUntilReady(
+        int timeoutSec = 30,
+        const std::function<bool()>& shouldAbort = nullptr,
+        const std::function<void(const std::string& status)>& onStatus = nullptr
+    );
 
     bool EnsureModelRunning(
         const ServerConfig& config,

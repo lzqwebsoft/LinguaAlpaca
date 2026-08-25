@@ -168,70 +168,106 @@ void SelectionService::OnLowLevelMouseEvent(int message, int x, int y) {
     }
 }
 
+#ifdef _WIN32
+static bool IsIgnoredOrScreenshotWindow(HWND hwnd, DWORD currentPid) {
+    if (!hwnd) return false;
+
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hwnd, &pid);
+    if (pid != 0) {
+        if (pid == currentPid) {
+            return true;
+        }
+
+        // 1. 检查进程可执行文件名称 (如 Windows 自带截图、Snipping Tool、Snipaste、PixPin、微信截图等)
+        HANDLE hProc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+        if (hProc) {
+            wchar_t fullPath[MAX_PATH] = { 0 };
+            DWORD size = MAX_PATH;
+            if (QueryFullProcessImageNameW(hProc, 0, fullPath, &size)) {
+                std::wstring exePath(fullPath);
+                size_t slash = exePath.find_last_of(L"\\/");
+                std::wstring exeName = (slash != std::wstring::npos) ? exePath.substr(slash + 1) : exePath;
+                for (auto& ch : exeName) ch = towlower(ch);
+
+                if (exeName == L"screenclippinghost.exe" ||
+                    exeName == L"snippingtool.exe" ||
+                    exeName == L"screensketch.exe" ||
+                    exeName == L"snipaste.exe" ||
+                    exeName == L"pixpin.exe" ||
+                    exeName == L"sharex.exe" ||
+                    exeName == L"lightshot.exe" ||
+                    exeName == L"flameshot.exe") {
+                    CloseHandle(hProc);
+                    return true;
+                }
+            }
+            CloseHandle(hProc);
+        }
+    }
+
+    // 2. 检查窗口类名（截图工具、任务栏、桌面、原生滚动条等非文本区域）
+    wchar_t className[128] = { 0 };
+    if (GetClassNameW(hwnd, className, 128)) {
+        // Windows 自带截图 / 任务栏 / 桌面 / 常见第三方截图工具 (Snipaste, PixPin, 微信/QQ截图等)
+        if (_wcsicmp(className, L"ScreenClippingHost") == 0 ||
+            _wcsicmp(className, L"Microsoft.ScreenSketch") == 0 ||
+            _wcsicmp(className, L"SnippingTool") == 0 ||
+            _wcsicmp(className, L"SnippingToolWindowAndCursorClass") == 0 ||
+            _wcsicmp(className, L"Shell_TrayWnd") == 0 ||
+            _wcsicmp(className, L"Progman") == 0 ||
+            _wcsicmp(className, L"WorkerW") == 0 ||
+            _wcsicmp(className, L"SnipasteClass") == 0 ||
+            _wcsicmp(className, L"SnipasteWnd") == 0 ||
+            _wcsicmp(className, L"PixPin") == 0 ||
+            _wcsicmp(className, L"FLT_SCREENSHOT") == 0 ||
+            _wcsicmp(className, L"ChatWnd_Screenshot") == 0 ||
+            _wcsicmp(className, L"QQScreenshotWndClass") == 0 ||
+            _wcsicmp(className, L"TXGuiFoundation_Screenshot") == 0 ||
+            _wcsicmp(className, L"ScrollBar") == 0) {
+            return true;
+        }
+    }
+
+    // 3. 检查窗口标题
+    wchar_t windowTitle[128] = { 0 };
+    if (GetWindowTextW(hwnd, windowTitle, 128)) {
+        if (wcsstr(windowTitle, L"Screen Clipping") != nullptr ||
+            wcsstr(windowTitle, L"Snipping Tool") != nullptr ||
+            wcsstr(windowTitle, L"截图") != nullptr) {
+            return true;
+        }
+    }
+
+    return false;
+}
+#endif
+
 bool SelectionService::ShouldIgnoreMouseEvent(int startX, int startY, int endX, int endY) const {
 #ifdef _WIN32
     DWORD currentPid = GetCurrentProcessId();
 
-    // 1. 检查鼠标释放点所在的窗体是否属于自身进程
+    // 1. 检查鼠标释放点所在的窗体
     POINT ptUp = { endX, endY };
     HWND hwndUp = WindowFromPoint(ptUp);
-    if (hwndUp) {
-        DWORD targetPid = 0;
-        GetWindowThreadProcessId(hwndUp, &targetPid);
-        if (targetPid == currentPid) {
-            return true;
-        }
-    }
-
-    // 2. 检查鼠标按起点所在的窗体是否属于自身进程
-    POINT ptDown = { startX, startY };
-    HWND hwndDown = WindowFromPoint(ptDown);
-    if (hwndDown) {
-        DWORD downPid = 0;
-        GetWindowThreadProcessId(hwndDown, &downPid);
-        if (downPid == currentPid) {
-            return true;
-        }
-    }
-
-    // 3. 检查窗口类名（截图工具、任务栏、桌面、原生滚动条等非文本区域）
-    auto isIgnoredClass = [](HWND hwnd) -> bool {
-        if (!hwnd) return false;
-        wchar_t className[128] = { 0 };
-        if (GetClassNameW(hwnd, className, 128)) {
-            // Windows 自带截图 / 任务栏 / 桌面 / 常见第三方截图工具 (Snipaste, PixPin, 微信/QQ截图等)
-            if (_wcsicmp(className, L"ScreenClippingHost") == 0 ||
-                _wcsicmp(className, L"Microsoft.ScreenSketch") == 0 ||
-                _wcsicmp(className, L"SnippingTool") == 0 ||
-                _wcsicmp(className, L"Shell_TrayWnd") == 0 ||
-                _wcsicmp(className, L"Progman") == 0 ||
-                _wcsicmp(className, L"WorkerW") == 0 ||
-                _wcsicmp(className, L"SnipasteClass") == 0 ||
-                _wcsicmp(className, L"SnipasteWnd") == 0 ||
-                _wcsicmp(className, L"PixPin") == 0 ||
-                _wcsicmp(className, L"FLT_SCREENSHOT") == 0 ||
-                _wcsicmp(className, L"ChatWnd_Screenshot") == 0 ||
-                _wcsicmp(className, L"ScrollBar") == 0) {
-                return true;
-            }
-        }
-        return false;
-    };
-
-    HWND hwndForeground = GetForegroundWindow();
-    if (hwndForeground) {
-        DWORD fgPid = 0;
-        GetWindowThreadProcessId(hwndForeground, &fgPid);
-        if (fgPid == currentPid || isIgnoredClass(hwndForeground)) {
-            return true;
-        }
-    }
-
-    if (isIgnoredClass(hwndDown) || isIgnoredClass(hwndUp)) {
+    if (IsIgnoredOrScreenshotWindow(hwndUp, currentPid)) {
         return true;
     }
 
-    // 5. 检查非客户区操作（如拖拽标题栏移动窗体、滑动滚动条、拖拉边框调整大小等与文本选中无关的操作）
+    // 2. 检查鼠标按起点所在的窗体
+    POINT ptDown = { startX, startY };
+    HWND hwndDown = WindowFromPoint(ptDown);
+    if (IsIgnoredOrScreenshotWindow(hwndDown, currentPid)) {
+        return true;
+    }
+
+    // 3. 检查当前前景激活窗体
+    HWND hwndForeground = GetForegroundWindow();
+    if (IsIgnoredOrScreenshotWindow(hwndForeground, currentPid)) {
+        return true;
+    }
+
+    // 4. 检查非客户区操作（如拖拽标题栏移动窗体、滑动滚动条、拖拉边框调整大小等与文本选中无关的操作）
     auto checkNcHit = [](HWND hwnd, int px, int py) -> bool {
         if (!hwnd) return false;
         DWORD_PTR hitResult = 0;
@@ -284,12 +320,8 @@ void SelectionService::ProcessSelectionAsync(int startX, int startY, int endX, i
 #ifdef _WIN32
         DWORD currentPid = GetCurrentProcessId();
         HWND fgWnd = GetForegroundWindow();
-        if (fgWnd) {
-            DWORD fgPid = 0;
-            GetWindowThreadProcessId(fgWnd, &fgPid);
-            if (fgPid == currentPid) {
-                return;
-            }
+        if (IsIgnoredOrScreenshotWindow(fgWnd, currentPid)) {
+            return;
         }
 #endif
 

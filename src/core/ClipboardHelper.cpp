@@ -96,29 +96,104 @@ bool ClipboardHelper::HasText() {
 }
 
 bool ClipboardHelper::SendCtrlC() {
-    // 构造 Ctrl+C 击键序列
-    INPUT inputs[4] = {};
+#ifdef _WIN32
+    // 1. 严格检测当前物理按键状态 (Ctrl, Shift, Alt, Win)
+    bool ctrlPhysicallyDown  = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0 ||
+                               (GetAsyncKeyState(VK_LCONTROL) & 0x8000) != 0 ||
+                               (GetAsyncKeyState(VK_RCONTROL) & 0x8000) != 0;
+    bool shiftPhysicallyDown = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0 ||
+                               (GetAsyncKeyState(VK_LSHIFT) & 0x8000) != 0 ||
+                               (GetAsyncKeyState(VK_RSHIFT) & 0x8000) != 0;
+    bool altPhysicallyDown   = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0 ||
+                               (GetAsyncKeyState(VK_LMENU) & 0x8000) != 0 ||
+                               (GetAsyncKeyState(VK_RMENU) & 0x8000) != 0;
+    bool winPhysicallyDown   = (GetAsyncKeyState(VK_LWIN) & 0x8000) != 0 ||
+                               (GetAsyncKeyState(VK_RWIN) & 0x8000) != 0;
 
-    // 1. Ctrl Down
-    inputs[0].type = INPUT_KEYBOARD;
-    inputs[0].ki.wVk = VK_CONTROL;
+    std::vector<INPUT> inputs;
 
-    // 2. 'C' Down
-    inputs[1].type = INPUT_KEYBOARD;
-    inputs[1].ki.wVk = 'C';
+    // 2. 如果用户当前按住了 Shift / Alt / Win，先临时发送释放，避免组合成 Ctrl+Shift+C 或 Ctrl+Alt+C
+    if (shiftPhysicallyDown) {
+        INPUT in = {};
+        in.type = INPUT_KEYBOARD;
+        in.ki.wVk = VK_SHIFT;
+        in.ki.dwFlags = KEYEVENTF_KEYUP;
+        inputs.push_back(in);
+    }
+    if (altPhysicallyDown) {
+        INPUT in = {};
+        in.type = INPUT_KEYBOARD;
+        in.ki.wVk = VK_MENU;
+        in.ki.dwFlags = KEYEVENTF_KEYUP;
+        inputs.push_back(in);
+    }
+    if (winPhysicallyDown) {
+        INPUT in = {};
+        in.type = INPUT_KEYBOARD;
+        in.ki.wVk = VK_LWIN;
+        in.ki.dwFlags = KEYEVENTF_KEYUP;
+        inputs.push_back(in);
+    }
 
-    // 3. 'C' Up
-    inputs[2].type = INPUT_KEYBOARD;
-    inputs[2].ki.wVk = 'C';
-    inputs[2].ki.dwFlags = KEYEVENTF_KEYUP;
+    // 3. 确保 Ctrl 处于按下状态 (如果用户尚未物理按下 Ctrl，才发送模拟 Ctrl 按下)
+    if (!ctrlPhysicallyDown) {
+        INPUT in = {};
+        in.type = INPUT_KEYBOARD;
+        in.ki.wVk = VK_CONTROL;
+        inputs.push_back(in);
+    }
 
-    // 4. Ctrl Up
-    inputs[3].type = INPUT_KEYBOARD;
-    inputs[3].ki.wVk = VK_CONTROL;
-    inputs[3].ki.dwFlags = KEYEVENTF_KEYUP;
+    // 4. 模拟按下并释放 'C' 键
+    {
+        INPUT inDown = {};
+        inDown.type = INPUT_KEYBOARD;
+        inDown.ki.wVk = 'C';
+        inputs.push_back(inDown);
 
-    UINT sent = SendInput(4, inputs, sizeof(INPUT));
-    return sent == 4;
+        INPUT inUp = {};
+        inUp.type = INPUT_KEYBOARD;
+        inUp.ki.wVk = 'C';
+        inUp.ki.dwFlags = KEYEVENTF_KEYUP;
+        inputs.push_back(inUp);
+    }
+
+    // 5. 【关键修复】：仅在用户物理上未按 Ctrl 时，才模拟释放 Ctrl！
+    //    如果用户物理上正在按住 Ctrl 键（例如辅助按键划词、或用户正在按 Ctrl+C 进行手动复制），
+    //    绝对不能发送 Ctrl KEYUP，否则会强行重置操作系统的 Ctrl 键状态，导致用户的 Ctrl 键“失效/锁死”！
+    if (!ctrlPhysicallyDown) {
+        INPUT in = {};
+        in.type = INPUT_KEYBOARD;
+        in.ki.wVk = VK_CONTROL;
+        in.ki.dwFlags = KEYEVENTF_KEYUP;
+        inputs.push_back(in);
+    }
+
+    // 6. 恢复用户原本按住的 Shift / Alt / Win 物理按键状态
+    if (shiftPhysicallyDown) {
+        INPUT in = {};
+        in.type = INPUT_KEYBOARD;
+        in.ki.wVk = VK_SHIFT;
+        inputs.push_back(in);
+    }
+    if (altPhysicallyDown) {
+        INPUT in = {};
+        in.type = INPUT_KEYBOARD;
+        in.ki.wVk = VK_MENU;
+        inputs.push_back(in);
+    }
+    if (winPhysicallyDown) {
+        INPUT in = {};
+        in.type = INPUT_KEYBOARD;
+        in.ki.wVk = VK_LWIN;
+        inputs.push_back(in);
+    }
+
+    if (inputs.empty()) return false;
+    UINT sent = SendInput(static_cast<UINT>(inputs.size()), inputs.data(), sizeof(INPUT));
+    return sent == inputs.size();
+#else
+    return false;
+#endif
 }
 
 struct ClipboardFormatData {
@@ -211,12 +286,13 @@ std::string ClipboardHelper::GetSelectedTextViaSendInput(bool preserveClipboard)
     // 3. 等待目标程序响应复制并更新剪贴板（必须检测到剪贴板序列号变化，证明有真实选中的文本被复制）
     std::string selectedText;
     bool newContentCopied = false;
+    DWORD copySeq = 0;
 
     for (int i = 0; i < 15; ++i) {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
         DWORD currentSeq = GetClipboardSequenceNumber();
         if (currentSeq != origSeq) {
-            newContentCopied = true;
+            copySeq = currentSeq;
             // 尝试读取新复制到剪贴板的内容
             if (OpenClipboardWithRetry(nullptr, 4, 6)) {
                 HANDLE hData = GetClipboardData(CF_UNICODETEXT);
@@ -233,26 +309,37 @@ std::string ClipboardHelper::GetSelectedTextViaSendInput(bool preserveClipboard)
         }
     }
 
-    // 如果未成功复制到新文本（例如用户在截图、拖拽窗口或未选中任何文本）：
-    // 绝对不触碰剪贴板，绝对不执行 EmptyClipboard()，确保用户现有的截图/图片/文件完全不受污染！
-    if (!newContentCopied) {
-        return "";
-    }
-
-    // 4. 只有在确实成功复制了新文本且开启了剪贴板保护时，才恢复原本的所有格式数据
-    if (preserveClipboard && backup.isValid) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(15));
-        RestoreEntireClipboard(backup);
-    }
-
     // 去除首尾空白字符
     if (!selectedText.empty()) {
         size_t start = selectedText.find_first_not_of(" \t\r\n");
         if (start == std::string::npos) {
-            return "";
+            selectedText = "";
+        } else {
+            size_t end = selectedText.find_last_not_of(" \t\r\n");
+            selectedText = selectedText.substr(start, end - start + 1);
         }
-        size_t end = selectedText.find_last_not_of(" \t\r\n");
-        selectedText = selectedText.substr(start, end - start + 1);
+    }
+
+    // 如果未成功复制到有效的纯文本（例如用户在截图、系统写入的是图片/截图，或未选中任何文本）：
+    // 绝对不触碰剪贴板，绝对不执行 EmptyClipboard() / RestoreEntireClipboard()，确保用户的截图/图片完整无损！
+    if (selectedText.empty()) {
+        return "";
+    }
+
+    // 4. 只有在确实成功复制了有效纯文本且开启了剪贴板保护时，才恢复原本的所有格式数据。
+    // 【关键修复】：如果在此期间用户正在物理按住 Ctrl 甚至正在按 Ctrl+C，
+    // 或者剪贴板序列号在此之后又发生了新的变化（说明用户或外部程序刚刚进行了新的复制），
+    // 绝对不能用旧备份覆盖剪贴板，必须尊重用户的最新主动复制行为！
+    if (preserveClipboard && backup.isValid) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(15));
+
+        bool userIsCopying = ((GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0) &&
+                             ((GetAsyncKeyState('C') & 0x8000) != 0);
+        DWORD latestSeq = GetClipboardSequenceNumber();
+
+        if (!userIsCopying && (latestSeq == copySeq)) {
+            RestoreEntireClipboard(backup);
+        }
     }
 
     return selectedText;

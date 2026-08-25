@@ -15,6 +15,48 @@ namespace LinguaAlpaca::UI {
             wxDefaultSize, wxBORDER_NONE),
         m_modelManager(std::move(modelManager)) {
         SetIcons(IconManager::GetAppIconBundle());
+#ifdef __WXMSW__
+        HWND hwnd = (HWND)GetHWND();
+        if (hwnd) {
+            // 1. 设置 WS_EX_APPWINDOW 样式，确保无边框窗体在 Windows 任务栏正常常驻与显示
+            LONG_PTR exStyle = ::GetWindowLongPtr(hwnd, GWL_EXSTYLE);
+            ::SetWindowLongPtr(hwnd, GWL_EXSTYLE, (exStyle | WS_EX_APPWINDOW) & ~WS_EX_TOOLWINDOW);
+
+            // 2. 显式发送 Win32 原生 WM_SETICON 消息 (ICON_BIG / ICON_SMALL)
+            HICON hIconBig = (HICON)::LoadImageW(
+                ::GetModuleHandleW(NULL),
+                MAKEINTRESOURCEW(1),
+                IMAGE_ICON,
+                ::GetSystemMetrics(SM_CXICON),
+                ::GetSystemMetrics(SM_CYICON),
+                LR_DEFAULTCOLOR
+            );
+            HICON hIconSmall = (HICON)::LoadImageW(
+                ::GetModuleHandleW(NULL),
+                MAKEINTRESOURCEW(1),
+                IMAGE_ICON,
+                ::GetSystemMetrics(SM_CXSMICON),
+                ::GetSystemMetrics(SM_CYSMICON),
+                LR_DEFAULTCOLOR
+            );
+            if (!hIconBig) {
+                wxIcon wxIco = IconManager::GetAppIcon(wxSize(::GetSystemMetrics(SM_CXICON), ::GetSystemMetrics(SM_CYICON)));
+                if (wxIco.IsOk()) hIconBig = (HICON)wxIco.GetHICON();
+            }
+            if (!hIconSmall) {
+                wxIcon wxIco = IconManager::GetAppIcon(wxSize(::GetSystemMetrics(SM_CXSMICON), ::GetSystemMetrics(SM_CYSMICON)));
+                if (wxIco.IsOk()) hIconSmall = (HICON)wxIco.GetHICON();
+            }
+            if (hIconBig) {
+                ::SetClassLongPtrW(hwnd, GCLP_HICON, (LONG_PTR)hIconBig);
+                ::SendMessageW(hwnd, WM_SETICON, ICON_BIG, (LPARAM)hIconBig);
+            }
+            if (hIconSmall) {
+                ::SetClassLongPtrW(hwnd, GCLP_HICONSM, (LONG_PTR)hIconSmall);
+                ::SendMessageW(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)hIconSmall);
+            }
+        }
+#endif
         SetClientSize(dip(1080, 780));
         SetMinClientSize(dip(960, 680));
         InitUI();
@@ -29,7 +71,7 @@ namespace LinguaAlpaca::UI {
 
         // 1. 顶部自定义 Titlebar Header Panel
         m_topHeaderPanel = new wxPanel(this, wxID_ANY, wxDefaultPosition,
-            wxSize(-1, 52_dip), wxBORDER_NONE);
+            wxSize(-1, 52_dip), wxBORDER_NONE | wxFULL_REPAINT_ON_RESIZE);
         m_topHeaderPanel->SetBackgroundColour(palette.sidebarBg);
         m_topHeaderPanel->SetBackgroundStyle(wxBG_STYLE_PAINT);
 
@@ -137,7 +179,10 @@ namespace LinguaAlpaca::UI {
 
         // 绑定窗口控制按钮事件
         m_minBtn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { Iconize(true); });
-        m_maxBtn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { Maximize(!IsMaximized()); });
+        m_maxBtn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+            Maximize(!IsMaximized());
+            UpdateMaxButtonState();
+        });
         m_closeBtn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { Close(true); });
 
         // 绑定自定义 Titlebar 的拖动与双击最大化事件
@@ -157,6 +202,14 @@ namespace LinguaAlpaca::UI {
         m_appNameText->Bind(wxEVT_LEFT_DCLICK, &MainFrame::OnHeaderDoubleClick, this);
 
         Bind(wxEVT_CLOSE_WINDOW, &MainFrame::OnClose, this);
+        Bind(wxEVT_MAXIMIZE, [this](wxMaximizeEvent& event) {
+            UpdateMaxButtonState();
+            event.Skip();
+        });
+        Bind(wxEVT_SIZE, [this](wxSizeEvent& event) {
+            UpdateMaxButtonState();
+            event.Skip();
+        });
 
         // 初始启动时触发当前选中的默认 Tab 0 (文本翻译) 按需加载
         if (m_modelManager) {
@@ -217,6 +270,18 @@ namespace LinguaAlpaca::UI {
 
     void MainFrame::OnHeaderDoubleClick(wxMouseEvent& WXUNUSED(event)) {
         Maximize(!IsMaximized());
+        UpdateMaxButtonState();
+    }
+
+    void MainFrame::UpdateMaxButtonState() {
+        if (!m_maxBtn) return;
+        auto palette = ThemeColors::GetCurrentPalette();
+        bool max = IsMaximized();
+        wxBitmapBundle bundle = IconManager::GetIconBundle(
+            max ? SVG::RESTORE : SVG::MAXIMIZE, wxSize(15, 15), palette.textSecondary);
+        m_maxBtn->SetBitmap(bundle);
+        m_maxBtn->SetToolTip(max ? L"还原" : L"最大化");
+        m_maxBtn->Refresh();
     }
 
     void MainFrame::OnThemeToggle(wxCommandEvent& WXUNUSED(event)) {
@@ -242,7 +307,7 @@ namespace LinguaAlpaca::UI {
         wxBitmapBundle minBundle = IconManager::GetIconBundle(
             SVG::MINIMIZE, wxSize(15, 15), palette.textSecondary);
         wxBitmapBundle maxBundle = IconManager::GetIconBundle(
-            SVG::MAXIMIZE, wxSize(15, 15), palette.textSecondary);
+            IsMaximized() ? SVG::RESTORE : SVG::MAXIMIZE, wxSize(15, 15), palette.textSecondary);
         wxBitmapBundle closeBundle = IconManager::GetIconBundle(
             SVG::CLOSE, wxSize(15, 15), palette.textSecondary);
 
@@ -315,5 +380,36 @@ namespace LinguaAlpaca::UI {
 
         m_contentContainer->Layout();
     }
+
+#ifdef __WXMSW__
+    WXLRESULT MainFrame::MSWWindowProc(WXUINT nMsg, WXWPARAM wParam, WXLPARAM lParam) {
+        WXLRESULT rc = wxFrame::MSWWindowProc(nMsg, wParam, lParam);
+        if (nMsg == WM_GETMINMAXINFO) {
+            MINMAXINFO* mmi = reinterpret_cast<MINMAXINFO*>(lParam);
+            HWND hwnd = (HWND)GetHWND();
+            if (hwnd && mmi) {
+                HMONITOR hMonitor = ::MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+                if (hMonitor) {
+                    MONITORINFO mi;
+                    mi.cbSize = sizeof(MONITORINFO);
+                    if (::GetMonitorInfoW(hMonitor, &mi)) {
+                        mmi->ptMaxPosition.x = mi.rcWork.left - mi.rcMonitor.left;
+                        mmi->ptMaxPosition.y = mi.rcWork.top - mi.rcMonitor.top;
+                        mmi->ptMaxSize.x = mi.rcWork.right - mi.rcWork.left;
+                        mmi->ptMaxSize.y = mi.rcWork.bottom - mi.rcWork.top;
+                        if (mmi->ptMaxTrackSize.x < mmi->ptMaxSize.x) {
+                            mmi->ptMaxTrackSize.x = mmi->ptMaxSize.x;
+                        }
+                        if (mmi->ptMaxTrackSize.y < mmi->ptMaxSize.y) {
+                            mmi->ptMaxTrackSize.y = mmi->ptMaxSize.y;
+                        }
+                    }
+                }
+            }
+            return 0;
+        }
+        return rc;
+    }
+#endif
 
 } // namespace LinguaAlpaca::UI

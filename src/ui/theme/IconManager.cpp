@@ -141,7 +141,28 @@ wxBitmapBundle IconManager::GetAppLogoBundle(const wxSize& targetSize) {
 }
 
 wxIcon IconManager::GetAppIcon(const wxSize& targetSize) {
+#ifdef _WIN32
+    HICON hIcon = (HICON)::LoadImageW(
+        ::GetModuleHandleW(NULL),
+        MAKEINTRESOURCEW(1),
+        IMAGE_ICON,
+        targetSize.x,
+        targetSize.y,
+        LR_DEFAULTCOLOR
+    );
+    if (hIcon) {
+        wxIcon icon;
+        if (icon.CreateFromHICON(hIcon)) {
+            return icon;
+        }
+        ::DestroyIcon(hIcon);
+    }
+#endif
+
     wxImage img = GetAppWindowIconImage();
+    if (!img.IsOk()) {
+        img = GetAppLogoImage();
+    }
     if (!img.IsOk()) {
         return wxNullIcon;
     }
@@ -153,7 +174,35 @@ wxIcon IconManager::GetAppIcon(const wxSize& targetSize) {
 
 wxIconBundle IconManager::GetAppIconBundle() {
     wxIconBundle bundle;
+#ifdef _WIN32
+    const int sizes[] = { 16, 24, 32, 48, 64, 128, 256 };
+    for (int sz : sizes) {
+        HICON hIcon = (HICON)::LoadImageW(
+            ::GetModuleHandleW(NULL),
+            MAKEINTRESOURCEW(1),
+            IMAGE_ICON,
+            sz,
+            sz,
+            LR_DEFAULTCOLOR
+        );
+        if (hIcon) {
+            wxIcon icon;
+            if (icon.CreateFromHICON(hIcon)) {
+                bundle.AddIcon(icon);
+            } else {
+                ::DestroyIcon(hIcon);
+            }
+        }
+    }
+    if (bundle.IsOk() && bundle.GetIcon(wxSize(32, 32)).IsOk()) {
+        return bundle;
+    }
+#endif
+
     wxImage img = GetAppWindowIconImage();
+    if (!img.IsOk()) {
+        img = GetAppLogoImage();
+    }
     if (img.IsOk()) {
         const int sizes[] = { 16, 24, 32, 48, 64, 128, 256 };
         for (int sz : sizes) {

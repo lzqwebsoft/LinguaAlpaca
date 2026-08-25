@@ -8,9 +8,13 @@ namespace LinguaAlpaca::UI {
 
 StatusBadge::StatusBadge(wxWindow* parent, wxWindowID id,
                          const wxPoint& pos, const wxSize& size)
-    : wxControl(parent, id, pos, size, wxBORDER_NONE) {
+    : wxControl(parent, id, pos, size, wxBORDER_NONE | wxFULL_REPAINT_ON_RESIZE) {
     SetBackgroundStyle(wxBG_STYLE_PAINT);
     Bind(wxEVT_PAINT, &StatusBadge::OnPaint, this);
+    Bind(wxEVT_SIZE, [this](wxSizeEvent& event) {
+        Refresh();
+        event.Skip();
+    });
 }
 
 wxSize StatusBadge::DoGetBestSize() const {

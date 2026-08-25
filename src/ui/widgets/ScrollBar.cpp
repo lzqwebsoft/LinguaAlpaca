@@ -23,6 +23,9 @@ ScrollBar::ScrollBar(wxWindow* parent, ScrollCallback onScroll)
     Bind(wxEVT_LEFT_UP, &ScrollBar::OnLeftUp, this);
     Bind(wxEVT_MOTION, &ScrollBar::OnMouseMove, this);
     Bind(wxEVT_MOUSEWHEEL, &ScrollBar::OnMouseWheel, this);
+    Bind(wxEVT_MOUSE_CAPTURE_LOST, [this](wxMouseCaptureLostEvent&) {
+        m_isDragging = false;
+    });
 
     m_hideTimer.Bind(wxEVT_TIMER, &ScrollBar::OnTimer, this);
 }
@@ -150,7 +153,9 @@ void ScrollBar::OnLeftDown(wxMouseEvent& event) {
         m_isDragging = true;
         m_dragStartMouseY = mouseY;
         m_dragStartFirstLine = m_firstVisibleLine;
-        CaptureMouse();
+        if (!HasCapture()) {
+            CaptureMouse();
+        }
         Refresh();
     } else if (mouseY < thumbY) {
         // Page Up

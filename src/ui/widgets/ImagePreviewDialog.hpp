@@ -27,6 +27,11 @@ private:
     void OnTopBarMouseDown(wxMouseEvent& event);
     void OnTopBarMouseMotion(wxMouseEvent& event);
     void OnTopBarMouseUp(wxMouseEvent& event);
+    void UpdateMaxButtonState();
+
+#ifdef __WXMSW__
+    WXLRESULT MSWWindowProc(WXUINT nMsg, WXWPARAM wParam, WXLPARAM lParam) override;
+#endif
 
     wxImage m_originalImage;
     wxBitmap m_cachedBitmap;

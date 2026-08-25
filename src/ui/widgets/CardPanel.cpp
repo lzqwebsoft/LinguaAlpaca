@@ -6,7 +6,7 @@
 namespace LinguaAlpaca::UI {
 
 	CardPanel::CardPanel(wxWindow* parent, const wxString& title, bool isActiveBorder, wxWindowID id)
-		: wxPanel(parent, id, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE),
+		: wxPanel(parent, id, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE | wxFULL_REPAINT_ON_RESIZE),
 		m_title(title), m_isActiveBorder(isActiveBorder) {
 		SetBackgroundStyle(wxBG_STYLE_PAINT);
 		InitUI();
@@ -38,6 +38,10 @@ namespace LinguaAlpaca::UI {
 		SetSizer(sizer);
 
 		Bind(wxEVT_PAINT, &CardPanel::OnPaint, this);
+		Bind(wxEVT_SIZE, [this](wxSizeEvent& event) {
+			Refresh();
+			event.Skip();
+		});
 		Bind(wxEVT_MOTION, &CardPanel::OnMouseMove, this);
 		Bind(wxEVT_LEAVE_WINDOW, &CardPanel::OnMouseLeave, this);
 		Bind(wxEVT_LEFT_DOWN, &CardPanel::OnLeftDown, this);

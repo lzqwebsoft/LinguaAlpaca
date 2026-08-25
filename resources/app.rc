@@ -1,8 +1,8 @@
-#pragma code_page(65001)
+﻿// Main application icon
+1 ICON "app_icon.ico"
+wxICON_AAA ICON "app_icon.ico"
+IDI_MAIN_ICON ICON "app_icon.ico"
 
-// Windows 主程序图标定义 (由 app_icon.png 生成的多尺寸 ICO)
-IDI_ICON1 ICON "app_icon.ico"
-
-// 静态链接内嵌 PNG 图片资源
-APP_LOGO_PNG        RCDATA "logo.png"
+// Embedded PNG resources
+APP_LOGO_PNG RCDATA "logo.png"
 APP_WINDOW_ICON_PNG RCDATA "app_icon.png"

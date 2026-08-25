@@ -285,7 +285,7 @@ CustomChoice::CustomChoice(wxWindow* parent,
                            const wxSize& size,
                            const wxArrayString& choices,
                            long style)
-    : wxControl(parent, id, pos, size, style | wxBORDER_NONE | wxTAB_TRAVERSAL) {
+    : wxControl(parent, id, pos, size, style | wxBORDER_NONE | wxTAB_TRAVERSAL | wxFULL_REPAINT_ON_RESIZE) {
     SetBackgroundStyle(wxBG_STYLE_PAINT);
     SetItems(choices);
     InitControl();
@@ -298,7 +298,7 @@ CustomChoice::CustomChoice(wxWindow* parent,
                            int n,
                            const wxString choices[],
                            long style)
-    : wxControl(parent, id, pos, size, style | wxBORDER_NONE | wxTAB_TRAVERSAL) {
+    : wxControl(parent, id, pos, size, style | wxBORDER_NONE | wxTAB_TRAVERSAL | wxFULL_REPAINT_ON_RESIZE) {
     SetBackgroundStyle(wxBG_STYLE_PAINT);
     for (int i = 0; i < n; ++i) {
         m_items.push_back({choices[i], nullptr});
@@ -324,6 +324,10 @@ void CustomChoice::InitControl() {
     SetBackgroundColour(palette.cardBg);
 
     Bind(wxEVT_PAINT, &CustomChoice::OnPaint, this);
+    Bind(wxEVT_SIZE, [this](wxSizeEvent& event) {
+        Refresh();
+        event.Skip();
+    });
     Bind(wxEVT_ENTER_WINDOW, &CustomChoice::OnMouseEnter, this);
     Bind(wxEVT_LEAVE_WINDOW, &CustomChoice::OnMouseLeave, this);
     Bind(wxEVT_LEFT_DOWN, &CustomChoice::OnLeftDown, this);

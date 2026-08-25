@@ -9,12 +9,16 @@ namespace LinguaAlpaca::UI {
 CustomButton::CustomButton(wxWindow *parent, wxWindowID id,
                            const wxString &label, ButtonStyle style,
                            const wxPoint &pos, const wxSize &size)
-    : wxControl(parent, id, pos, size, wxBORDER_NONE), m_label(label),
+    : wxControl(parent, id, pos, size, wxBORDER_NONE | wxFULL_REPAINT_ON_RESIZE), m_label(label),
       m_buttonStyle(style) {
 
   SetBackgroundStyle(wxBG_STYLE_PAINT);
 
   Bind(wxEVT_PAINT, &CustomButton::OnPaint, this);
+  Bind(wxEVT_SIZE, [this](wxSizeEvent& event) {
+    Refresh();
+    event.Skip();
+  });
   Bind(wxEVT_ENTER_WINDOW, &CustomButton::OnMouseEnter, this);
   Bind(wxEVT_LEAVE_WINDOW, &CustomButton::OnMouseLeave, this);
   Bind(wxEVT_LEFT_DOWN, &CustomButton::OnLeftDown, this);

@@ -258,6 +258,14 @@ inline constexpr const char *PIN_OFF = R"(
 </svg>
 )";
 
+// 30. 窗口还原 (Restore Window)
+inline constexpr const char *RESTORE = R"(
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <rect x="7" y="3" width="14" height="14" rx="2" ry="2"/>
+  <path d="M3 7v12a2 2 0 0 0 2 2h12"/>
+</svg>
+)";
+
 } // namespace SVG
 
 } // namespace LinguaAlpaca::UI

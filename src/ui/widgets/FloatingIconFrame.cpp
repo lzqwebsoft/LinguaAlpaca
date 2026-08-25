@@ -21,7 +21,7 @@ namespace LinguaAlpaca::UI {
             wxFRAME_NO_TASKBAR | wxSTAY_ON_TOP | wxBORDER_NONE),
         m_autoHideTimer(this) {
         SetBackgroundStyle(wxBG_STYLE_PAINT);
-        int iconSize = 38_dip;
+        int iconSize = 40_dip;
         SetSize(iconSize, iconSize);
 
         InitUI();
@@ -88,21 +88,26 @@ namespace LinguaAlpaca::UI {
                 float diam = (float)w - 2.0f * pad;
                 Gdiplus::RectF circleRect(pad, pad, diam, diam);
 
-                // 1. 绘制平滑抗锯齿基底圆角卡片背景 (使用纯白基底消除任何黑色缝隙)
+                // 1. 设置平滑抗锯齿圆形剪裁路径，杜绝任何方角或外部像素泄露
+                Gdiplus::GraphicsPath clipPath;
+                clipPath.AddEllipse(circleRect);
+                g.SetClip(&clipPath);
+
+                // 绘制平滑抗锯齿基底圆角卡片背景 (纯白底色)
                 Gdiplus::SolidBrush bgBrush(Gdiplus::Color(255, 255, 255, 255));
                 g.FillEllipse(&bgBrush, circleRect);
 
-                // 2. 加载并高质量抗锯齿绘制应用 Logo 图标 (logo.png)
-                wxImage logoImg = IconManager::GetAppLogoImage();
-                if (logoImg.IsOk()) {
-                    int imgW = logoImg.GetWidth();
-                    int imgH = logoImg.GetHeight();
+                // 2. 加载并高质量抗锯齿绘制应用图标 (预留内边距，确保图标完整处于圆形之内)
+                wxImage iconImg = IconManager::GetAppLogoImage();
+                if (iconImg.IsOk()) {
+                    int imgW = iconImg.GetWidth();
+                    int imgH = iconImg.GetHeight();
                     Gdiplus::Bitmap srcBmp(imgW, imgH, PixelFormat32bppARGB);
                     Gdiplus::BitmapData bmpData;
                     Gdiplus::Rect r(0, 0, imgW, imgH);
                     if (srcBmp.LockBits(&r, Gdiplus::ImageLockModeWrite, PixelFormat32bppARGB, &bmpData) == Gdiplus::Ok) {
-                        const unsigned char* rgb = logoImg.GetData();
-                        const unsigned char* alpha = logoImg.HasAlpha() ? logoImg.GetAlpha() : nullptr;
+                        const unsigned char* rgb = iconImg.GetData();
+                        const unsigned char* alpha = iconImg.HasAlpha() ? iconImg.GetAlpha() : nullptr;
                         unsigned char* dst = (unsigned char*)bmpData.Scan0;
                         for (int y = 0; y < imgH; ++y) {
                             unsigned char* row = dst + y * bmpData.Stride;
@@ -125,6 +130,8 @@ namespace LinguaAlpaca::UI {
                         g.DrawImage(&srcBmp, imgRect);
                     }
                 }
+
+                g.ResetClip();
 
                 // 3. 绘制平滑抗锯齿边缘光晕与边框 (高亮清新边框，杜绝黑色边缘)
                 if (m_isHovered) {
@@ -160,7 +167,7 @@ namespace LinguaAlpaca::UI {
         m_selectedText = selectedText;
         m_isHovered = false;
         m_isDragging = false;
-        const int iconSize = 38_dip;
+        const int iconSize = 40_dip;
         int targetX = screenX + 8_dip;
         int targetY = screenY + 10_dip;
 
@@ -264,20 +271,32 @@ namespace LinguaAlpaca::UI {
         double h = sz.y;
         if (w <= 0 || h <= 0) return;
 
-        wxBitmapBundle logoBundle = IconManager::GetAppLogoBundle(sz);
-        wxBitmap bmp = logoBundle.GetBitmap(sz);
-        if (bmp.IsOk()) {
-            if (m_isHovered) {
-                ThemePalette palette = ThemeManager::GetCurrentPalette();
-                gc->SetBrush(wxBrush(wxColour(palette.accentPrimary.Red(), palette.accentPrimary.Green(), palette.accentPrimary.Blue(), 40)));
-                gc->SetPen(wxPen(palette.accentPrimary, 1.5));
-                gc->DrawEllipse(1, 1, w - 2, h - 2);
+        wxGraphicsPath clipPath = gc->CreatePath();
+        clipPath.AddCircle(w / 2.0, h / 2.0, (w / 2.0) - 1.5);
+        gc->Clip(clipPath);
 
-                double pad = 1.0_dip;
-                gc->DrawBitmap(bmp, pad, pad, w - 2 * pad, h - 2 * pad);
-            } else {
-                gc->DrawBitmap(bmp, 0, 0, w, h);
-            }
+        gc->SetBrush(*wxWHITE_BRUSH);
+        gc->SetPen(*wxTRANSPARENT_PEN);
+        gc->DrawEllipse(1.5, 1.5, w - 3.0, h - 3.0);
+
+        wxBitmapBundle iconBundle = IconManager::GetAppLogoBundle(sz);
+        wxBitmap bmp = iconBundle.GetBitmap(sz);
+        if (bmp.IsOk()) {
+            double pad = m_isHovered ? 4.5_dip : 5.5_dip;
+            gc->DrawBitmap(bmp, pad, pad, w - 2 * pad, h - 2 * pad);
+        }
+
+        gc->ResetClip();
+
+        if (m_isHovered) {
+            ThemePalette palette = ThemeManager::GetCurrentPalette();
+            gc->SetBrush(wxBrush(wxColour(palette.accentPrimary.Red(), palette.accentPrimary.Green(), palette.accentPrimary.Blue(), 40)));
+            gc->SetPen(wxPen(palette.accentPrimary, 1.8));
+            gc->DrawEllipse(1.5, 1.5, w - 3.0, h - 3.0);
+        } else {
+            gc->SetBrush(*wxTRANSPARENT_BRUSH);
+            gc->SetPen(wxPen(wxColour(200, 220, 245), 1.2));
+            gc->DrawEllipse(1.5, 1.5, w - 3.0, h - 3.0);
         }
 #endif
     }
@@ -336,7 +355,7 @@ namespace LinguaAlpaca::UI {
             if (m_isDragging) {
                 int targetX = m_dragStartFramePos.x + dx;
                 int targetY = m_dragStartFramePos.y + dy;
-                const int iconSize = 38_dip;
+                const int iconSize = 40_dip;
 
 #ifdef _WIN32
                 POINT pt = { targetX, targetY };

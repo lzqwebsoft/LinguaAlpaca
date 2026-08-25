@@ -109,8 +109,12 @@ void DictView::InitUI() {
     wxBoxSizer* contentRowSizer = new wxBoxSizer(wxHORIZONTAL);
 
     // 2.1 左侧候选联想词栏 (30% 弹性权重) - 圆角边框与定制滑动条
-    m_leftSuggestCard = new wxPanel(m_mainContentPanel, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE);
+    m_leftSuggestCard = new wxPanel(m_mainContentPanel, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE | wxFULL_REPAINT_ON_RESIZE);
     m_leftSuggestCard->SetBackgroundStyle(wxBG_STYLE_PAINT);
+    m_leftSuggestCard->Bind(wxEVT_SIZE, [this](wxSizeEvent& event) {
+        m_leftSuggestCard->Refresh();
+        event.Skip();
+    });
     m_leftSuggestCard->Bind(wxEVT_PAINT, [this](wxPaintEvent& WXUNUSED(event)) {
         wxAutoBufferedPaintDC dc(m_leftSuggestCard);
         wxSize size = m_leftSuggestCard->GetClientSize();
@@ -153,8 +157,12 @@ void DictView::InitUI() {
     m_leftSuggestCard->SetSizer(leftCardSizer);
 
     // 2.2 右侧释义卡片 (70% 弹性权重) - 圆角边框卡片
-    m_rightResultCard = new wxPanel(m_mainContentPanel, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE);
+    m_rightResultCard = new wxPanel(m_mainContentPanel, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE | wxFULL_REPAINT_ON_RESIZE);
     m_rightResultCard->SetBackgroundStyle(wxBG_STYLE_PAINT);
+    m_rightResultCard->Bind(wxEVT_SIZE, [this](wxSizeEvent& event) {
+        m_rightResultCard->Refresh();
+        event.Skip();
+    });
     m_rightResultCard->Bind(wxEVT_PAINT, [this](wxPaintEvent& WXUNUSED(event)) {
         wxAutoBufferedPaintDC dc(m_rightResultCard);
         wxSize size = m_rightResultCard->GetClientSize();

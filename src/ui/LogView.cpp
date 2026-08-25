@@ -97,9 +97,13 @@ void LogView::InitUI() {
     mainSizer->Add(m_headerPanel, 0, wxEXPAND | wxALL, 16_dip);
 
     // 2. 日志内容卡片 Panel (参考 CardPanel 绘制圆角与边框)
-    m_cardContainer = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE);
+    m_cardContainer = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE | wxFULL_REPAINT_ON_RESIZE);
     m_cardContainer->SetBackgroundStyle(wxBG_STYLE_PAINT);
 
+    m_cardContainer->Bind(wxEVT_SIZE, [this](wxSizeEvent& event) {
+        m_cardContainer->Refresh();
+        event.Skip();
+    });
     m_cardContainer->Bind(wxEVT_PAINT, [this](wxPaintEvent&) {
         wxAutoBufferedPaintDC dc(m_cardContainer);
         wxSize size = m_cardContainer->GetClientSize();

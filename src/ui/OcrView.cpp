@@ -87,7 +87,7 @@ namespace LinguaAlpaca::UI {
 		leftColSizer->Add(m_leftControlPanel, 0, wxEXPAND | wxBOTTOM, 12_dip);
 
 		// Dropzone Card
-		m_dropzonePanel = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE);
+		m_dropzonePanel = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE | wxFULL_REPAINT_ON_RESIZE);
 		m_dropzonePanel->SetBackgroundStyle(wxBG_STYLE_PAINT);
 		m_dropzonePanel->SetCursor(wxCursor(wxCURSOR_HAND));
 		m_dropzonePanel->SetBackgroundColour(palette.cardBg);
@@ -114,6 +114,10 @@ namespace LinguaAlpaca::UI {
 		m_dropzonePanel->SetSizer(dropSizer);
 		m_dropzonePanel->SetDropTarget(new OcrFileDropTarget(this));
 
+		m_dropzonePanel->Bind(wxEVT_SIZE, [this](wxSizeEvent& event) {
+			m_dropzonePanel->Refresh();
+			event.Skip();
+		});
 		m_dropzonePanel->Bind(wxEVT_PAINT, [this](wxPaintEvent&) {
 			wxAutoBufferedPaintDC dc(m_dropzonePanel);
 			wxSize size = m_dropzonePanel->GetClientSize();

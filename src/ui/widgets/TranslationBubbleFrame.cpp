@@ -690,7 +690,9 @@ namespace LinguaAlpaca::UI {
 		else {
 			m_isDragging = true;
 			m_dragStartPos = event.GetPosition();
-			m_headerPanel->CaptureMouse();
+			if (!m_headerPanel->HasCapture()) {
+				m_headerPanel->CaptureMouse();
+			}
 		}
 	}
 

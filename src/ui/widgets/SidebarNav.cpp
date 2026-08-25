@@ -8,7 +8,7 @@ namespace LinguaAlpaca::UI {
 wxDEFINE_EVENT(EVT_SIDEBAR_NAV_CHANGED, wxCommandEvent);
 
 SidebarNav::SidebarNav(wxWindow* parent, wxWindowID id)
-    : wxPanel(parent, id, wxDefaultPosition, wxSize(80_dip, -1), wxBORDER_NONE) {
+    : wxPanel(parent, id, wxDefaultPosition, wxSize(80_dip, -1), wxBORDER_NONE | wxFULL_REPAINT_ON_RESIZE) {
     
     SetBackgroundStyle(wxBG_STYLE_PAINT);
 
@@ -21,6 +21,10 @@ SidebarNav::SidebarNav(wxWindow* parent, wxWindowID id)
     m_bottomItem = { 4, L"设置", SVG::SETTINGS };
 
     Bind(wxEVT_PAINT, &SidebarNav::OnPaint, this);
+    Bind(wxEVT_SIZE, [this](wxSizeEvent& event) {
+        Refresh();
+        event.Skip();
+    });
     Bind(wxEVT_LEFT_DOWN, &SidebarNav::OnLeftDown, this);
     Bind(wxEVT_MOTION, &SidebarNav::OnMouseMove, this);
 }

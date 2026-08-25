@@ -29,6 +29,11 @@ private:
     void OnHeaderLeftUp(wxMouseEvent& event);
     void OnHeaderMouseMove(wxMouseEvent& event);
     void OnHeaderDoubleClick(wxMouseEvent& event);
+    void UpdateMaxButtonState();
+
+#ifdef __WXMSW__
+    WXLRESULT MSWWindowProc(WXUINT nMsg, WXWPARAM wParam, WXLPARAM lParam) override;
+#endif
 
     std::shared_ptr<ModelManager> m_modelManager;
 

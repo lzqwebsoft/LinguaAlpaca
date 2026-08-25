@@ -12,7 +12,7 @@ CustomInputBox::CustomInputBox(wxWindow *parent, wxWindowID id,
                                const wxString &value, const wxString &hint,
                                const wxPoint &pos, const wxSize &size,
                                long style)
-    : wxPanel(parent, id, pos, size, wxBORDER_NONE), m_hint(hint),
+    : wxPanel(parent, id, pos, size, wxBORDER_NONE | wxFULL_REPAINT_ON_RESIZE), m_hint(hint),
       m_isMultiline((style & wxTE_MULTILINE) != 0) {
   SetBackgroundStyle(wxBG_STYLE_PAINT);
   InitUI(value, hint, style);

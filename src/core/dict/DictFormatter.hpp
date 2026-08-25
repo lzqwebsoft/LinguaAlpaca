@@ -40,10 +40,15 @@ struct DictTextSegment {
 class DictFormatter {
 public:
     /**
-     * @brief 纯文本转义与排版 ('m')
-     * 还原 \n, \r, \t, \\ 等转义字符，规范化多余空行
+     * @brief 纯文本转义与结构化排版 ('m')
+     * 统一处理转义字符、字源《》、词性<<>>、义项编号、例句分隔符 (* / ~)、短语动词、习语及用法说明
      */
-    static std::string UnescapePlaintext(const std::string& text);
+    static std::string FormatPlaintext(const std::string& text);
+
+    // 为向上兼容及特定测试保留快捷调用
+    static std::string UnescapePlaintext(const std::string& text) { return FormatPlaintext(text); }
+    static std::string FormatOxfordPlaintext(const std::string& text) { return FormatPlaintext(text); }
+    static std::string Format21Century(const std::string& text) { return FormatPlaintext(text); }
 
     /**
      * @brief 国际音标与注音格式化 ('t' 英文音标, 'y' 汉语拼音/注音)

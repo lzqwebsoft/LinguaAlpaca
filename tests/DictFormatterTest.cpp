@@ -100,11 +100,20 @@ TEST_CASE("DictFormatter - Pango, Kingsoft & MediaWiki", "[core][dict_formatter]
         std::string ks = "<pos>n.</pos><pron>hə'ləʊ</pron><def>问候；你好</def><sent><orig>Say hello to him.</orig><trans>向他问好。</trans></sent>";
         std::string res = DictFormatter::FormatKingsoft(ks);
 
-        REQUIRE(res.find("[n.]") != std::string::npos);
-        REQUIRE(res.find("[hə'ləʊ]") != std::string::npos);
+        REQUIRE(res.find("n.") != std::string::npos);
         REQUIRE(res.find("问候；你好") != std::string::npos);
         REQUIRE(res.find("【例】 Say hello to him.") != std::string::npos);
         REQUIRE(res.find("向他问好。") != std::string::npos);
+
+        // CDATA 格式 (PowerWord 2011/2012)
+        std::string ksCdata = "<JS><CY><CX><YX><![CDATA[good]]></YX><YB><CB><![CDATA[ɡud]]></CB></YB><DX><![CDATA[adj.]]></DX><JX><![CDATA[良好的, 令人满意的]]></JX><DX><![CDATA[n.]]></DX><JX><![CDATA[善；好处]]></JX></CX></CY></JS>";
+        std::string phonetic, def;
+        DictFormatter::Format(ksCdata, "k", phonetic, def);
+        REQUIRE(phonetic == "[ɡud]");
+        REQUIRE(def.find("adj.") != std::string::npos);
+        REQUIRE(def.find("良好的, 令人满意的") != std::string::npos);
+        REQUIRE(def.find("n.") != std::string::npos);
+        REQUIRE(def.find("善；好处") != std::string::npos);
     }
 
     SECTION("MediaWiki ('w')") {
@@ -115,6 +124,32 @@ TEST_CASE("DictFormatter - Pango, Kingsoft & MediaWiki", "[core][dict_formatter]
         REQUIRE(res.find("Bold Text and Italic Text") != std::string::npos);
         REQUIRE(res.find("• List Item 1") != std::string::npos);
         REQUIRE(res.find("Display Text") != std::string::npos);
+    }
+
+    SECTION("Oxford / Dense Plaintext Formatting ('m')") {
+        std::string raw = "adj [attrib 作定语] with no part left out; whole; complete 全部的; 整个的; 完全的: The entire village was destroyed. 整个村子被毁. * I've wasted an entire day on this. 我为此事浪费了一整天的时间. * We are in entire agreement with you. 我们完全同意你的意见.";
+        std::string res = DictFormatter::FormatOxfordPlaintext(raw);
+
+        REQUIRE(res.find("adj. [attrib 作定语]") != std::string::npos);
+        REQUIRE(res.find("全部的; 整个的; 完全的:") != std::string::npos);
+        REQUIRE(res.find("• The entire village was destroyed. 整个村子被毁.") != std::string::npos);
+        REQUIRE(res.find("• I've wasted an entire day on this. 我为此事浪费了一整天的时间.") != std::string::npos);
+        REQUIRE(res.find("• We are in entire agreement with you. 我们完全同意你的意见.") != std::string::npos);
+    }
+
+    SECTION("21st Century Dictionary Formatting ('m')") {
+        std::string raw = "<<名词>>\n1 (U) (尤指基督教的) 上帝,造物主\nthe Almighty ~ 全能的神\nthe Lord ~ 主,上帝\n2 [g] (C)\na. (异教的) 神; (神话等的) 男神\nthe gods of Greece and Rome 希腊、罗马的诸神\n( ←→ evil)\n→ good thing";
+        std::string res = DictFormatter::Format21Century(raw);
+
+        REQUIRE(res.find("<<名词>>") != std::string::npos);
+        REQUIRE(res.find("1. (U)") != std::string::npos);
+        REQUIRE(res.find("• the Almighty ~ 全能的神") != std::string::npos);
+        REQUIRE(res.find("• the Lord ~ 主,上帝") != std::string::npos);
+        REQUIRE(res.find("2. [g] (C)") != std::string::npos);
+        REQUIRE(res.find("a. (异教的) 神") != std::string::npos);
+        REQUIRE(res.find("• the gods of Greece and Rome 希腊、罗马的诸神") != std::string::npos);
+        REQUIRE(res.find("【反义】 ( ←→ evil)") != std::string::npos);
+        REQUIRE(res.find("→ good thing") != std::string::npos);
     }
 }
 

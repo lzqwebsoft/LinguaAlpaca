@@ -8,6 +8,7 @@
 #include <string>
 
 #include "core/dict/DictEngine.hpp"
+#include "core/dict/DictFormatter.hpp"
 
 using namespace LinguaAlpaca;
 
@@ -153,5 +154,69 @@ TEST_CASE("DictEngine - StarDict Parser & Lookup", "[core][dict_engine]") {
         auto sugg = engine.GetSuggestions("b", 10);
         REQUIRE(!sugg.empty());
         REQUIRE(sugg[0] == "banana");
+    }
+
+    SECTION("Inspect PowerWord 2011 if present") {
+        std::string pwIfo = "C:\\Users\\zqluo\\AppData\\Roaming\\LinguaAlpaca\\dicts\\stardict-powerword2011_1_900-2.4.2\\powerword2011_1_900.ifo";
+        if (wxFileExists(wxString::FromUTF8(pwIfo))) {
+            StarDictBook pwBook;
+            REQUIRE(pwBook.Load(pwIfo) == true);
+            DictSearchResult res;
+            REQUIRE(pwBook.Lookup("good", res) == true);
+            REQUIRE(res.phonetic == "[ɡud]");
+            REQUIRE(res.definition.find("adj.") != std::string::npos);
+            REQUIRE(res.definition.find("良好的") != std::string::npos);
+            REQUIRE(res.definition.find("有道德的事, 善") != std::string::npos);
+            REQUIRE(res.definition.find("好处, 利益") != std::string::npos);
+        }
+    }
+
+    SECTION("Inspect Oxford Advanced Learner if present") {
+        std::string oxIfo = "C:\\Users\\zqluo\\AppData\\Roaming\\LinguaAlpaca\\dicts\\stardict-oxford-gb-2.4.2\\oxford-gb.ifo";
+        if (wxFileExists(wxString::FromUTF8(oxIfo))) {
+            StarDictBook oxBook;
+            REQUIRE(oxBook.Load(oxIfo) == true);
+            WARN("=== Oxford bookName: " << oxBook.GetInfo().bookName << " ===");
+            for (const auto& w : { "entire", "good", "look", "apple" }) {
+                DictSearchResult res;
+                if (oxBook.Lookup(w, res)) {
+                    WARN("Oxford Word: " << w << "\nPhonetic: " << res.phonetic << "\nRaw:\n" << res.rawData << "\nFormatted:\n" << res.definition);
+                }
+            }
+        }
+    }
+
+    SECTION("Inspect 21st Century Dictionary if present") {
+        std::string cenIfo = "C:\\Users\\zqluo\\AppData\\Roaming\\LinguaAlpaca\\dicts\\stardict-21cen-2.4.2\\21cen.ifo";
+        if (wxFileExists(wxString::FromUTF8(cenIfo))) {
+            StarDictBook cenBook;
+            REQUIRE(cenBook.Load(cenIfo) == true);
+            WARN("=== 21cen bookName: " << cenBook.GetInfo().bookName << " ===");
+            for (const auto& w : { "good", "god", "yes" }) {
+                DictSearchResult res;
+                if (cenBook.Lookup(w, res)) {
+                    WARN("21cen Word: " << w << "\nPhonetic: " << res.phonetic << "\nRaw:\n" << res.rawData << "\nFormatted:\n" << res.definition);
+                }
+            }
+        }
+    }
+}
+
+TEST_CASE("Inspect Landau Dict", "[landau]") {
+    std::string ldIfo = "C:\\Users\\zqluo\\AppData\\Roaming\\LinguaAlpaca\\dicts\\stardict-langdao-ec-gb-2.4.2\\langdao-ec-gb.ifo";
+    if (wxFileExists(wxString::FromUTF8(ldIfo))) {
+        StarDictBook ldBook;
+        REQUIRE(ldBook.Load(ldIfo) == true);
+        WARN("=== Landau bookName: " << ldBook.GetInfo().bookName << " ===");
+        for (const auto& w : { "ok", "yes", "good" }) {
+            DictSearchResult res;
+            if (ldBook.Lookup(w, res)) {
+                WARN("Landau Word: " << w << "\nPhonetic: " << res.phonetic << "\nRaw:\n" << res.rawData << "\nFormatted:\n" << res.definition);
+                auto segs = DictFormatter::BuildRichTextSegments({ res });
+                for (const auto& seg : segs) {
+                    WARN("Seg: style=" << static_cast<int>(seg.style) << " text=[" << seg.text << "]");
+                }
+            }
+        }
     }
 }

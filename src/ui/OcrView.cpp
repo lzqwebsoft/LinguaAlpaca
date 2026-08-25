@@ -257,7 +257,7 @@ namespace LinguaAlpaca::UI {
 			if (text.IsEmpty())
 				return;
 			WinTtsHelper::GetInstance().Speak(text.ToStdWstring(), LanguageCode::AutoDetect);
-		});
+			});
 
 		m_resultCard->AddToolIcon(2, SVG::COPY, L"复制文本", [this]() {
 			if (!m_resultCard)
@@ -272,7 +272,7 @@ namespace LinguaAlpaca::UI {
 				wxMessageBox(L"识别结果已复制到剪贴板！", L"提示",
 					wxOK | wxICON_INFORMATION, this);
 			}
-		});
+			});
 
 		m_resultCard->AddToolIcon(3, SVG::CLEAR, L"清空内容", [this]() {
 			if (!m_resultCard)
@@ -280,7 +280,7 @@ namespace LinguaAlpaca::UI {
 			WinTtsHelper::GetInstance().Stop();
 			m_resultCard->GetTextCtrl()->Clear();
 			m_resultCard->SetCharacterCount(0);
-		});
+			});
 
 		contentSizer->Add(m_resultCard, 55, wxEXPAND);
 
@@ -326,7 +326,7 @@ namespace LinguaAlpaca::UI {
 					wxString text = m_resultCard->GetTextCtrl()->GetValue();
 					m_resultCard->SetCharacterCount(text.Length());
 				}
-			});
+				});
 		}
 	}
 
@@ -588,22 +588,58 @@ namespace LinguaAlpaca::UI {
 			return;
 		}
 
-		auto info = m_modelManager->GetHealthStatus(TargetModelType::Ocr);
-		if (info.state != ServerHealthState::Ready) {
-			wxMessageBox(L"OCR 模型尚未就绪或未能成功加载！\n\n请先前往「系统设置」界面配置合法的 OCR 模型与 mmproj 视觉投影器文件路径。",
-				L"OCR 服务提示", wxOK | wxICON_WARNING, this);
+		WinTtsHelper::GetInstance().Stop();
+
+		if (m_resultCard && m_resultCard->GetTextCtrl()) {
+			m_resultCard->GetTextCtrl()->Clear();
+			m_resultCard->SetCharacterCount(0);
+			m_resultCard->GetTextCtrl()->SetValue(L"正在启动/检查 OCR 视觉识别引擎，请稍候...");
+		}
+
+		SetState(OcrTaskState::Recognizing);
+
+		// 异步确保 OCR 视觉模型已装载就绪，再执行识别
+		m_modelManager->EnsureModelAsync(
+			TargetModelType::Ocr,
+			BindUi([this](const std::string& statusMsg) {
+				if (m_resultCard && m_resultCard->GetTextCtrl()) {
+					m_resultCard->GetTextCtrl()->SetValue(L"正在加载 OCR 视觉模型: " + wxString::FromUTF8(statusMsg));
+				}
+				UpdateStatusBadge();
+				}),
+			BindUi([this](bool ok, const ServerStatusInfo& info) {
+				if (!ok) {
+					SetState(OcrTaskState::Idle);
+					if (m_resultCard && m_resultCard->GetTextCtrl()) {
+						m_resultCard->GetTextCtrl()->SetValue(
+							L"OCR 视觉模型未就绪: " + wxString::FromUTF8(info.message) +
+							L"\n\n请先前往「系统设置」检查并配置 OCR 模型与 mmproj 视觉投影器文件路径。"
+						);
+					}
+					UpdateStatusBadge();
+				}
+				else {
+					std::string imgPath = m_loadedImagePath.ToUTF8().data();
+					std::string taskType = GetSelectedTaskType();
+					DoExecuteOcr(imgPath, taskType);
+				}
+				})
+		);
+	}
+
+	void OcrView::DoExecuteOcr(const std::string& imgPath, const std::string& taskType) {
+		if (!m_modelManager) {
+			SetState(OcrTaskState::Idle);
+			if (m_resultCard && m_resultCard->GetTextCtrl()) {
+				m_resultCard->GetTextCtrl()->SetValue(L"错误: 服务管理器未初始化");
+			}
 			return;
 		}
 
-		if (m_resultCard) {
+		if (m_resultCard && m_resultCard->GetTextCtrl()) {
 			m_resultCard->GetTextCtrl()->Clear();
 			m_resultCard->SetCharacterCount(0);
 		}
-		WinTtsHelper::GetInstance().Stop();
-		SetState(OcrTaskState::Recognizing);
-
-		std::string imgPath = m_loadedImagePath.ToUTF8().data();
-		std::string taskType = GetSelectedTaskType();
 
 		m_modelManager->ExecuteOcrStream(
 			imgPath, taskType,
@@ -612,7 +648,7 @@ namespace LinguaAlpaca::UI {
 				m_resultCard->GetTextCtrl()->AppendText(wxString::FromUTF8(token));
 				wxString current = m_resultCard->GetTextCtrl()->GetValue();
 				m_resultCard->SetCharacterCount(current.Length());
-			}),
+				}),
 			BindUi([this](const std::string& fullText, bool success, const std::string& error) {
 				SetState(OcrTaskState::Idle);
 
@@ -631,7 +667,7 @@ namespace LinguaAlpaca::UI {
 						m_resultCard->GetTextCtrl()->SetValue(wxString::FromUTF8("识别出现提示/错误: " + error));
 					}
 				}
-			})
+				})
 		);
 	}
 

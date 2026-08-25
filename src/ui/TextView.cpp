@@ -242,8 +242,8 @@ namespace LinguaAlpaca::UI {
 
 	void TextView::OnTranslateClicked(wxCommandEvent& WXUNUSED(event)) {
 		std::string text = m_sourceCard->GetTextCtrl()->GetValue().ToUTF8().data();
-		LanguageCode srcLang = m_langSelector->GetSourceLanguage();
-		LanguageCode tgtLang = m_langSelector->GetTargetLanguage();
+		LanguageCode srcLang = m_langSelector ? m_langSelector->GetSourceLanguage() : LanguageCode::AutoDetect;
+		LanguageCode tgtLang = m_langSelector ? m_langSelector->GetTargetLanguage() : LanguageCode::Chinese;
 
 		if (text.empty()) {
 			m_targetCard->GetTextCtrl()->Clear();
@@ -251,25 +251,70 @@ namespace LinguaAlpaca::UI {
 			return;
 		}
 
-		// 1. 清空译文框准备流式追加
+		if (!m_modelManager) {
+			m_targetCard->GetTextCtrl()->SetValue(L"错误: 模型服务管理器未初始化");
+			return;
+		}
+
+		WinTtsHelper::GetInstance().Stop();
+
+		// 1. 清空译文框并显示准备启动中提示
 		m_targetCard->GetTextCtrl()->Clear();
 		m_targetCard->SetCharacterCount(0);
+		m_targetCard->GetTextCtrl()->SetValue(L"正在启动/检查翻译模型，请稍候...");
 
 		// 2. 切换 UI 状态：显示红色的 [⏹ 中断翻译] 按钮，禁用 [▶ 翻译] 按钮
 		m_stopBtn->Show();
 		m_translateBtn->Disable();
 		Layout();
 
-		TranslationTask task(text, srcLang, tgtLang);
+		// 3. 异步确保翻译模型已装载就绪，再执行流式翻译
+		m_modelManager->EnsureModelAsync(
+			TargetModelType::Translation,
+			BindUi([this](const std::string& statusMsg) {
+				if (m_targetCard && m_targetCard->GetTextCtrl()) {
+					m_targetCard->GetTextCtrl()->SetValue(L"正在加载翻译模型: " + wxString::FromUTF8(statusMsg) + L"\n请稍候...");
+				}
+				UpdateStatusBadge();
+			}),
+			BindUi([this, text, srcLang, tgtLang](bool ok, const ServerStatusInfo& info) {
+				if (!ok) {
+					if (m_stopBtn) m_stopBtn->Hide();
+					if (m_translateBtn) m_translateBtn->Enable();
+					Layout();
 
-		// 3. 直接通过 ModelManager 发起异步流式翻译
+					if (m_targetCard && m_targetCard->GetTextCtrl()) {
+						m_targetCard->GetTextCtrl()->SetValue(
+							L"翻译模型未就绪: " + wxString::FromUTF8(info.message) +
+							L"\n\n请先前往「系统设置」检查并配置翻译模型文件路径。"
+						);
+					}
+					UpdateStatusBadge();
+				}
+				else {
+					DoExecuteTranslation(text, srcLang, tgtLang);
+				}
+			})
+		);
+	}
+
+	void TextView::DoExecuteTranslation(const std::string& text, LanguageCode srcLang, LanguageCode tgtLang) {
 		if (!m_modelManager) {
-			m_stopBtn->Hide();
-			m_translateBtn->Enable();
+			if (m_stopBtn) m_stopBtn->Hide();
+			if (m_translateBtn) m_translateBtn->Enable();
 			Layout();
-			m_targetCard->GetTextCtrl()->SetValue(L"模型服务管理器未初始化");
+			if (m_targetCard && m_targetCard->GetTextCtrl()) {
+				m_targetCard->GetTextCtrl()->SetValue(L"错误: 模型服务管理器未初始化");
+			}
 			return;
 		}
+
+		if (m_targetCard && m_targetCard->GetTextCtrl()) {
+			m_targetCard->GetTextCtrl()->Clear();
+			m_targetCard->SetCharacterCount(0);
+		}
+
+		TranslationTask task(text, srcLang, tgtLang);
 
 		m_modelManager->ExecuteTranslationStream(
 			task,

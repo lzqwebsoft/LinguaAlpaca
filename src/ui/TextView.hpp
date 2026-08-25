@@ -30,6 +30,7 @@ private:
     void OnCopyTargetClicked(wxCommandEvent& event);
     void OnSwapClicked(wxCommandEvent& event);
     void OnSourceTextChanged(wxCommandEvent& event);
+    void DoExecuteTranslation(const std::string& text, LanguageCode srcLang, LanguageCode tgtLang);
 
     std::shared_ptr<ModelManager> m_modelManager;
     wxTimer m_healthTimer;

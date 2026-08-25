@@ -58,6 +58,7 @@ private:
     void LoadImageFile(const wxString& filePath);
     void UpdateDropzoneUI();
     std::string GetSelectedTaskType() const;
+    void DoExecuteOcr(const std::string& imgPath, const std::string& taskType);
 
     std::shared_ptr<ModelManager> m_modelManager;
     wxTimer m_healthTimer;

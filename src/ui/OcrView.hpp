@@ -56,6 +56,8 @@ private:
 
     void SetState(OcrTaskState state);
     void LoadImageFile(const wxString& filePath);
+    bool PasteImageFromClipboard();
+    void ShowDropzoneContextMenu(const wxPoint& pos);
     void UpdateDropzoneUI();
     std::string GetSelectedTaskType() const;
     void DoExecuteOcr(const std::string& imgPath, const std::string& taskType);

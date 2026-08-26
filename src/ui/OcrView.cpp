@@ -3,10 +3,12 @@
 #include "theme/IconManager.hpp"
 #include "theme/Theme.hpp"
 #include <wx/clipbrd.h>
+#include <wx/dataobj.h>
 #include <wx/dcbuffer.h>
 #include <wx/filedlg.h>
 #include <wx/filename.h>
 #include <wx/graphics.h>
+#include <wx/stdpaths.h>
 
 namespace LinguaAlpaca::UI {
 
@@ -97,11 +99,11 @@ namespace LinguaAlpaca::UI {
 		wxBitmapBundle uploadBundle = IconManager::GetIconBundle(SVG::CLOUD_UPLOAD, dip(44, 44), palette.accentPrimary);
 		m_uploadIconBmp = new wxStaticBitmap(m_dropzonePanel, wxID_ANY, uploadBundle);
 
-		m_dropTextPrimary = new wxStaticText(m_dropzonePanel, wxID_ANY, L"点击上传 或拖拽图片至此");
+		m_dropTextPrimary = new wxStaticText(m_dropzonePanel, wxID_ANY, L"点击上传 或 拖拽/粘贴图片至此");
 		m_dropTextPrimary->SetFont(wxFont(11, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
 		m_dropTextPrimary->SetForegroundColour(palette.textPrimary);
 
-		m_dropTextSecondary = new wxStaticText(m_dropzonePanel, wxID_ANY, L"支持 JPG, PNG, BMP, WebP");
+		m_dropTextSecondary = new wxStaticText(m_dropzonePanel, wxID_ANY, L"支持 JPG, PNG, BMP, WebP 及剪贴板截图 (Ctrl+V)");
 		m_dropTextSecondary->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
 		m_dropTextSecondary->SetForegroundColour(palette.textSecondary);
 
@@ -317,9 +319,32 @@ namespace LinguaAlpaca::UI {
 		m_dropzonePanel->Bind(wxEVT_LEAVE_WINDOW, &OcrView::OnDropzoneMouseLeave, this);
 		m_dropzonePanel->Bind(wxEVT_MOTION, &OcrView::OnDropzoneMouseMove, this);
 
+		auto showMenuHandler = [this](wxMouseEvent& event) {
+			ShowDropzoneContextMenu(event.GetPosition());
+		};
+		m_dropzonePanel->Bind(wxEVT_RIGHT_DOWN, showMenuHandler);
+		m_uploadIconBmp->Bind(wxEVT_RIGHT_DOWN, showMenuHandler);
+		m_dropTextPrimary->Bind(wxEVT_RIGHT_DOWN, showMenuHandler);
+		m_dropTextSecondary->Bind(wxEVT_RIGHT_DOWN, showMenuHandler);
+
 		m_uploadIconBmp->Bind(wxEVT_LEFT_DOWN, &OcrView::OnSelectImageClicked, this);
 		m_dropTextPrimary->Bind(wxEVT_LEFT_DOWN, &OcrView::OnSelectImageClicked, this);
 		m_dropTextSecondary->Bind(wxEVT_LEFT_DOWN, &OcrView::OnSelectImageClicked, this);
+
+		// 全局快捷键: Ctrl+V 粘贴剪贴板图片
+		Bind(wxEVT_CHAR_HOOK, [this](wxKeyEvent& event) {
+			if ((event.GetKeyCode() == 'V' || event.GetKeyCode() == 'v') && (event.ControlDown() || event.CmdDown())) {
+				wxWindow* focused = wxWindow::FindFocus();
+				if (focused && focused->IsKindOf(wxCLASSINFO(wxTextCtrl))) {
+					event.Skip();
+					return;
+				}
+				if (PasteImageFromClipboard()) {
+					return;
+				}
+			}
+			event.Skip();
+		});
 
 		m_recognizeBtn->Bind(wxEVT_BUTTON, &OcrView::OnRecognizeClicked, this);
 		m_stopBtn->Bind(wxEVT_BUTTON, &OcrView::OnStopClicked, this);
@@ -512,6 +537,99 @@ namespace LinguaAlpaca::UI {
 		m_loadedImage.LoadFile(filePath);
 
 		UpdateDropzoneUI();
+	}
+
+	bool OcrView::PasteImageFromClipboard() {
+		if (m_currentState == OcrTaskState::Recognizing)
+			return false;
+
+		if (!wxTheClipboard->Open()) {
+			return false;
+		}
+
+		bool handled = false;
+
+		// 1. 优先检查剪贴板中是否有位图图像 (如系统截图、聊天工具截图、剪切板位图)
+		if (wxTheClipboard->IsSupported(wxDF_BITMAP)) {
+			wxBitmapDataObject bmpData;
+			if (wxTheClipboard->GetData(bmpData)) {
+				wxBitmap bmp = bmpData.GetBitmap();
+				if (bmp.IsOk()) {
+					wxImage img = bmp.ConvertToImage();
+					if (img.IsOk()) {
+						wxString cacheDir = wxStandardPaths::Get().GetUserDataDir() + wxFileName::GetPathSeparator() + "cache";
+						if (!wxDirExists(cacheDir)) {
+							wxFileName::Mkdir(cacheDir, 0777, wxPATH_MKDIR_FULL);
+						}
+						wxString tempPath = cacheDir + wxFileName::GetPathSeparator() + "clipboard_ocr_temp.png";
+						if (img.SaveFile(tempPath, wxBITMAP_TYPE_PNG)) {
+							m_loadedImagePath = tempPath;
+							m_imageFileName = L"剪贴板截图.png";
+							m_loadedImage = img;
+							UpdateDropzoneUI();
+							handled = true;
+						}
+					}
+				}
+			}
+		}
+
+		// 2. 检查剪贴板中是否复制了文件 (如在文件资源管理器中复制了图片文件)
+		if (!handled && wxTheClipboard->IsSupported(wxDF_FILENAME)) {
+			wxFileDataObject fileData;
+			if (wxTheClipboard->GetData(fileData)) {
+				const wxArrayString& files = fileData.GetFilenames();
+				for (const auto& file : files) {
+					wxString ext = wxFileName(file).GetExt().Lower();
+					if (ext == "png" || ext == "jpg" || ext == "jpeg" || ext == "bmp" || ext == "webp" || ext == "tif" || ext == "tiff") {
+						LoadImageFile(file);
+						handled = true;
+						break;
+					}
+				}
+			}
+		}
+
+		wxTheClipboard->Close();
+		return handled;
+	}
+
+	void OcrView::ShowDropzoneContextMenu(const wxPoint& pos) {
+		if (m_currentState == OcrTaskState::Recognizing) return;
+
+		wxMenu menu;
+		menu.Append(1001, L"粘贴图片 (Ctrl+V)");
+		menu.Append(1002, L"选择本地图片...");
+		if (m_loadedImage.IsOk() && !m_loadedImagePath.IsEmpty()) {
+			menu.AppendSeparator();
+			menu.Append(1003, L"预览图片");
+			menu.Append(1004, L"清除图片");
+		}
+
+		menu.Bind(wxEVT_MENU, [this](wxCommandEvent& e) {
+			switch (e.GetId()) {
+			case 1001:
+				if (!PasteImageFromClipboard()) {
+					wxMessageBox(L"剪贴板中未找到图像数据或图片文件！\n\n提示：您可以使用系统截图快捷键 (如 Win+Shift+S 或 Alt+A) 截图后直接按 Ctrl+V 粘贴。",
+						L"提示", wxOK | wxICON_INFORMATION, this);
+				}
+				break;
+			case 1002:
+				OpenImageDialog();
+				break;
+			case 1003:
+				OpenImagePreview();
+				break;
+			case 1004:
+				m_loadedImagePath.Clear();
+				m_imageFileName.Clear();
+				m_loadedImage.Destroy();
+				UpdateDropzoneUI();
+				break;
+			}
+		});
+
+		m_dropzonePanel->PopupMenu(&menu, pos);
 	}
 
 	void OcrView::UpdateDropzoneUI() {

@@ -73,7 +73,7 @@ namespace LinguaAlpaca::UI {
 				cfg.targetLang = LanguageHelper::GetCodeName(m_langSelector->GetTargetLanguage());
 				m_modelManager->GetConfigManager()->UpdateConfig(cfg);
 			}
-		});
+			});
 
 		langSizer->Add(m_langSelector, 1, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, 12_dip);
 		m_langPanel->SetSizer(langSizer);
@@ -89,7 +89,7 @@ namespace LinguaAlpaca::UI {
 			if (text.IsEmpty()) return;
 			LanguageCode srcLang = m_langSelector ? m_langSelector->GetSourceLanguage() : LanguageCode::AutoDetect;
 			WinTtsHelper::GetInstance().Speak(text.ToStdWstring(), srcLang);
-		});
+			});
 		m_sourceCard->AddToolIcon(2, SVG::PASTE, L"粘贴文本", [this]() {
 			if (wxTheClipboard->Open()) {
 				if (wxTheClipboard->IsSupported(wxDF_TEXT)) {
@@ -99,12 +99,12 @@ namespace LinguaAlpaca::UI {
 				}
 				wxTheClipboard->Close();
 			}
-		});
+			});
 		m_sourceCard->AddToolIcon(3, SVG::CLEAR, L"清空原文", [this]() {
 			WinTtsHelper::GetInstance().Stop();
 			m_sourceCard->GetTextCtrl()->Clear();
 			m_sourceCard->SetCharacterCount(0);
-		});
+			});
 
 		m_sourceCard->GetTextCtrl()->SetValue(L"Hello, welcome to LinguaAlpaca Translator!");
 		m_sourceCard->SetCharacterCount(43);
@@ -116,16 +116,16 @@ namespace LinguaAlpaca::UI {
 			if (text.IsEmpty()) return;
 			LanguageCode tgtLang = m_langSelector ? m_langSelector->GetTargetLanguage() : LanguageCode::Chinese;
 			WinTtsHelper::GetInstance().Speak(text.ToStdWstring(), tgtLang);
-		});
+			});
 		m_targetCard->AddToolIcon(2, SVG::COPY, L"复制译文", [this]() {
 			wxString text = m_targetCard->GetTextCtrl()->GetValue();
 			if (!text.IsEmpty() && wxTheClipboard->Open()) {
 				wxTheClipboard->SetData(new wxTextDataObject(text));
 				wxTheClipboard->Close();
 			}
-		});
+			});
 
-		m_targetCard->GetTextCtrl()->SetValue(L"你好，欢迎使用灵驼译！");
+		m_targetCard->GetTextCtrl()->SetValue(L"你好，欢迎使用译灵驼！");
 		m_targetCard->SetCharacterCount(11);
 
 		cardsSizer->Add(m_sourceCard, 1, wxEXPAND | wxRIGHT, 12_dip);
@@ -276,7 +276,7 @@ namespace LinguaAlpaca::UI {
 					m_targetCard->GetTextCtrl()->SetValue(L"正在加载翻译模型: " + wxString::FromUTF8(statusMsg) + L"\n请稍候...");
 				}
 				UpdateStatusBadge();
-			}),
+				}),
 			BindUi([this, text, srcLang, tgtLang](bool ok, const ServerStatusInfo& info) {
 				if (!ok) {
 					if (m_stopBtn) m_stopBtn->Hide();
@@ -294,7 +294,7 @@ namespace LinguaAlpaca::UI {
 				else {
 					DoExecuteTranslation(text, srcLang, tgtLang);
 				}
-			})
+				})
 		);
 	}
 
@@ -324,7 +324,7 @@ namespace LinguaAlpaca::UI {
 				m_targetCard->GetTextCtrl()->AppendText(wxString::FromUTF8(token));
 				wxString current = m_targetCard->GetTextCtrl()->GetValue();
 				m_targetCard->SetCharacterCount(current.Length());
-			}),
+				}),
 			// 翻译完成/被中断回调
 			BindUi([this](bool success, const std::string& fullText, const std::string& error) {
 				if (m_stopBtn) m_stopBtn->Hide();
@@ -346,7 +346,7 @@ namespace LinguaAlpaca::UI {
 						m_targetCard->GetTextCtrl()->SetValue(wxString::FromUTF8("翻译出错: " + error));
 					}
 				}
-			})
+				})
 		);
 	}
 

@@ -22,25 +22,20 @@ ExtractedSelection ScreenTextExtractor::ExtractSelection(
     bool preserveClipboard
 ) {
     ExtractedSelection result;
-    // 默认几何锚点：选区包围盒最右下角
-    int minX = (std::min)(startX, endX);
-    int maxX = (std::max)(startX, endX);
-    int minY = (std::min)(startY, endY);
-    int maxY = (std::max)(startY, endY);
-
-    result.anchorX = maxX + 6;
-    result.anchorY = maxY + 8;
+    // 浮动图标锚点使用鼠标最终释放弹起时的位置 (endX, endY)
+    result.anchorX = endX;
+    result.anchorY = endY;
 
     // 阶段 1：首选 Windows UI Automation 无障碍选区精准查询 (非侵入式，完全不触碰/不污染剪贴板)
     // (macOS 对应实现 TODO: AXUIElementCopyAttributeValue with kAXSelectedTextAttribute)
-    int uiaAnchorX = result.anchorX;
-    int uiaAnchorY = result.anchorY;
+    int uiaAnchorX = endX;
+    int uiaAnchorY = endY;
     std::string text;
     if (ExtractViaUIAutomation(endX, endY, text, uiaAnchorX, uiaAnchorY)) {
         if (!text.empty() && text.size() <= 8000) {
             result.text = text;
-            result.anchorX = uiaAnchorX;
-            result.anchorY = uiaAnchorY;
+            result.anchorX = endX;
+            result.anchorY = endY;
             result.source = "UIAutomation";
             LOG_INFO("ScreenTextExtractor", "Extracted via UIAutomation: \"" + text + "\"");
             return result;
@@ -51,6 +46,8 @@ ExtractedSelection ScreenTextExtractor::ExtractSelection(
     text = ClipboardHelper::GetSelectedTextViaSendInput(preserveClipboard);
     if (!text.empty() && text.size() <= 8000) {
         result.text = text;
+        result.anchorX = endX;
+        result.anchorY = endY;
         result.source = "Clipboard";
         return result;
     }

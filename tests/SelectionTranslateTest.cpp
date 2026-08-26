@@ -76,11 +76,11 @@ TEST_CASE("Logger - Real-time notification and memory history", "[core][logger]"
 }
 
 TEST_CASE("ScreenTextExtractor - Anchor coordinate calculation", "[core][extractor]") {
-    SECTION("Calculates bottom-right anchor from selection points") {
+    SECTION("Calculates anchor from mouse release points") {
         ExtractedSelection res = ScreenTextExtractor::ExtractSelection(500, 400, 200, 100, false);
-        // Anchor should always be bottom-right (maxX + 6, maxY + 8)
-        REQUIRE(res.anchorX >= 500);
-        REQUIRE(res.anchorY >= 400);
+        // Anchor should always be mouse up position (endX, endY)
+        REQUIRE(res.anchorX == 200);
+        REQUIRE(res.anchorY == 100);
     }
 }
 

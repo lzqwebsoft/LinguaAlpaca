@@ -17,9 +17,11 @@ public:
     ~MainFrame() override = default;
 
     void NavigateToSettings();
+    void CheckAndShowWelcomeDialog();
 
 private:
     void InitUI();
+    void ApplyTheme();
     void OnThemeToggle(wxCommandEvent& event);
     void OnNavChanged(wxCommandEvent& event);
     void OnClose(wxCloseEvent& event);

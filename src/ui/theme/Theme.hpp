@@ -2,15 +2,30 @@
 #pragma execution_character_set("utf-8")
 
 #include <wx/wx.h>
+#include <wx/settings.h>
 #include "Dpi.hpp"
 #include <functional>
 #include <vector>
+#include <string>
+
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#endif
 
 namespace LinguaAlpaca::UI {
 
 enum class ThemeMode {
     Light,
     Dark
+};
+
+enum class ThemePreference {
+    Light,
+    Dark,
+    System
 };
 
 struct ThemePalette {
@@ -41,7 +56,27 @@ public:
     }
 
     ThemeMode GetCurrentTheme() const { return m_currentTheme; }
-    
+    ThemePreference GetPreference() const { return m_preference; }
+
+    static ThemeMode DetectSystemTheme() {
+#ifdef _WIN32
+        HKEY hKey;
+        if (RegOpenKeyExW(HKEY_CURRENT_USER,
+            L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+            0, KEY_READ, &hKey) == ERROR_SUCCESS) {
+            DWORD appsUseLightTheme = 1;
+            DWORD size = sizeof(appsUseLightTheme);
+            DWORD type = REG_DWORD;
+            if (RegQueryValueExW(hKey, L"AppsUseLightTheme", nullptr, &type, (LPBYTE)&appsUseLightTheme, &size) == ERROR_SUCCESS) {
+                RegCloseKey(hKey);
+                return (appsUseLightTheme == 0) ? ThemeMode::Dark : ThemeMode::Light;
+            }
+            RegCloseKey(hKey);
+        }
+#endif
+        return wxSystemSettings::GetAppearance().IsDark() ? ThemeMode::Dark : ThemeMode::Light;
+    }
+
     void SetTheme(ThemeMode theme) {
         if (m_currentTheme != theme) {
             m_currentTheme = theme;
@@ -49,8 +84,46 @@ public:
         }
     }
 
+    void SetPreference(ThemePreference pref) {
+        m_preference = pref;
+        ThemeMode targetMode = ThemeMode::Light;
+        if (pref == ThemePreference::Light) {
+            targetMode = ThemeMode::Light;
+        } else if (pref == ThemePreference::Dark) {
+            targetMode = ThemeMode::Dark;
+        } else {
+            targetMode = DetectSystemTheme();
+        }
+        SetTheme(targetMode);
+    }
+
+    void SetPreferenceByString(const std::string& prefStr) {
+        if (prefStr == "Dark") {
+            SetPreference(ThemePreference::Dark);
+        } else if (prefStr == "System") {
+            SetPreference(ThemePreference::System);
+        } else {
+            SetPreference(ThemePreference::Light);
+        }
+    }
+
+    std::string GetPreferenceString() const {
+        switch (m_preference) {
+        case ThemePreference::Dark: return "Dark";
+        case ThemePreference::System: return "System";
+        case ThemePreference::Light:
+        default: return "Light";
+        }
+    }
+
     void ToggleTheme() {
-        SetTheme(m_currentTheme == ThemeMode::Light ? ThemeMode::Dark : ThemeMode::Light);
+        if (m_preference == ThemePreference::Light) {
+            SetPreference(ThemePreference::Dark);
+        } else if (m_preference == ThemePreference::Dark) {
+            SetPreference(ThemePreference::Light);
+        } else {
+            SetPreference(m_currentTheme == ThemeMode::Light ? ThemePreference::Dark : ThemePreference::Light);
+        }
     }
 
     void RegisterCallback(ThemeChangedCallback cb) {
@@ -109,6 +182,7 @@ private:
     }
 
     ThemeMode m_currentTheme{ThemeMode::Light};
+    ThemePreference m_preference{ThemePreference::Light};
     std::vector<ThemeChangedCallback> m_callbacks;
 };
 

@@ -232,6 +232,8 @@ struct ServerStatusInfo {
     std::string message;
     std::string currentModel;
     TargetModelType activeType{TargetModelType::None};
+    int port{0};
+    std::string baseUrl;
 };
 
 // ============================================================================

@@ -1,7 +1,9 @@
 #include "SettingsView.hpp"
+#include "widgets/AboutDialog.hpp"
 #include "core/Downloader.hpp"
 #include "theme/IconManager.hpp"
 #include "theme/Theme.hpp"
+#include <wx/clipbrd.h>
 #include <wx/filedlg.h>
 #include <wx/filename.h>
 #include <wx/utils.h>
@@ -10,11 +12,23 @@ namespace LinguaAlpaca::UI {
 
 	SettingsView::SettingsView(wxWindow* parent, std::shared_ptr<ModelManager> modelManager, wxWindowID id)
 		: wxPanel(parent, id, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE),
-		  m_modelManager(std::move(modelManager)) {
+		m_modelManager(std::move(modelManager)) {
 		if (m_modelManager) {
 			m_configManager = m_modelManager->GetConfigManager();
 		}
 		InitUI();
+
+		m_statusTimer.Bind(wxEVT_TIMER, [this](wxTimerEvent&) {
+			UpdateTranslationStatus();
+			UpdateOcrStatus();
+			});
+		m_statusTimer.Start(1500);
+	}
+
+	SettingsView::~SettingsView() {
+		if (m_statusTimer.IsRunning()) {
+			m_statusTimer.Stop();
+		}
 	}
 
 	void SettingsView::InitUI() {
@@ -32,7 +46,7 @@ namespace LinguaAlpaca::UI {
 		// 现代化细条滑动条
 		m_scrollBar = new ScrollBar(this, [this](int pixelY) {
 			ScrollTo(pixelY);
-		});
+			});
 
 		wxBoxSizer* rootSizer = new wxBoxSizer(wxHORIZONTAL);
 		rootSizer->Add(m_viewport, 1, wxEXPAND);
@@ -56,7 +70,9 @@ namespace LinguaAlpaca::UI {
 
 		m_mainSizer->Add(headerSizer, 0, wxEXPAND | wxALL, 20_dip);
 
-		// Group 1: 翻译模型 (Translation Model Settings Card)
+		// ====================================================================
+		// Group 1: 翻译大模型 (Translation Model Settings Card)
+		// ====================================================================
 		m_modelCard = new wxPanel(m_contentPanel, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE);
 		m_modelCard->SetBackgroundColour(palette.cardBg);
 
@@ -68,7 +84,7 @@ namespace LinguaAlpaca::UI {
 		wxBitmapBundle cardTitleBundle = IconManager::GetIconBundle(SVG::MODEL_LOAD, dip(18, 18), palette.textPrimary);
 		wxStaticBitmap* cardTitleIcon = new wxStaticBitmap(m_modelCard, wxID_ANY, cardTitleBundle);
 
-		m_modelCardTitle = new wxStaticText(m_modelCard, wxID_ANY, L"翻译模型");
+		m_modelCardTitle = new wxStaticText(m_modelCard, wxID_ANY, L"翻译模型 (Text Translation Model)");
 		m_modelCardTitle->SetFont(wxFont(12, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
 		m_modelCardTitle->SetForegroundColour(palette.textPrimary);
 
@@ -97,27 +113,125 @@ namespace LinguaAlpaca::UI {
 		pathSizer->Add(m_openDirBtn, 0, wxALIGN_CENTER_VERTICAL);
 		modelCardSizer->Add(pathSizer, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 12_dip);
 
-		wxStaticText* pathNote = new wxStaticText(m_modelCard, wxID_ANY, L"支持 .gguf 格式的 llama.cpp 兼容翻译模型。");
-		pathNote->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
-		pathNote->SetForegroundColour(palette.textSecondary);
-		modelCardSizer->Add(pathNote, 0, wxLEFT | wxRIGHT | wxBOTTOM, 16_dip);
+		// 运行参数设置行
+		wxBoxSizer* modelParamSizer = new wxBoxSizer(wxHORIZONTAL);
 
-		// 保存与测试操作按钮 (`保存配置` & `测试模型`)
+		m_modelGpuLabel = new wxStaticText(m_modelCard, wxID_ANY, L"计算加速：");
+		m_modelGpuLabel->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+		m_modelGpuLabel->SetForegroundColour(palette.textPrimary);
+
+		wxArrayString gpuModes;
+		gpuModes.Add(L"GPU 硬件加速 (-ngl 99)");
+		gpuModes.Add(L"纯 CPU 计算模式 (-ngl 0)");
+		gpuModes.Add(L"自定义 GPU 层数");
+		m_modelGpuModeChoice = new CustomChoice(m_modelCard, wxID_ANY, wxDefaultPosition, dip(180, 34), gpuModes);
+		m_modelGpuModeChoice->SetSelection(0);
+
+		m_modelNglLabel = new wxStaticText(m_modelCard, wxID_ANY, L"-ngl 层数：");
+		m_modelNglLabel->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+		m_modelNglLabel->SetForegroundColour(palette.textPrimary);
+		m_modelNglLabel->Show(false);
+
+		m_modelNglCtrl = new CustomInputBox(m_modelCard, wxID_ANY, L"99", L"99", wxDefaultPosition, dip(70, 34));
+		m_modelNglCtrl->Show(false);
+
+		m_modelPortLabel = new wxStaticText(m_modelCard, wxID_ANY, L"端口：");
+		m_modelPortLabel->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+		m_modelPortLabel->SetForegroundColour(palette.textPrimary);
+
+		m_modelPortCtrl = new CustomInputBox(m_modelCard, wxID_ANY, L"0", L"0(自动)", wxDefaultPosition, dip(80, 34));
+
+		m_modelCtxLabel = new wxStaticText(m_modelCard, wxID_ANY, L"上下文：");
+		m_modelCtxLabel->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+		m_modelCtxLabel->SetForegroundColour(palette.textPrimary);
+
+		m_modelCtxCtrl = new CustomInputBox(m_modelCard, wxID_ANY, L"2048", L"2048", wxDefaultPosition, dip(80, 34));
+
+		modelParamSizer->Add(m_modelGpuLabel, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6_dip);
+		modelParamSizer->Add(m_modelGpuModeChoice, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 14_dip);
+		modelParamSizer->Add(m_modelNglLabel, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6_dip);
+		modelParamSizer->Add(m_modelNglCtrl, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 14_dip);
+		modelParamSizer->Add(m_modelPortLabel, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6_dip);
+		modelParamSizer->Add(m_modelPortCtrl, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 14_dip);
+		modelParamSizer->Add(m_modelCtxLabel, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6_dip);
+		modelParamSizer->Add(m_modelCtxCtrl, 0, wxALIGN_CENTER_VERTICAL);
+
+		modelCardSizer->Add(modelParamSizer, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 12_dip);
+
+		// 本地 API 访问端点展示卡片
+		m_modelApiPanel = new wxPanel(m_modelCard, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE);
+		m_modelApiPanel->SetBackgroundColour(palette.windowBg);
+
+		wxBoxSizer* apiPanelSizer = new wxBoxSizer(wxHORIZONTAL);
+		wxBoxSizer* apiTextSizer = new wxBoxSizer(wxVERTICAL);
+
+		m_modelApiStatusText = new wxStaticText(m_modelApiPanel, wxID_ANY, L"● 服务状态: 离线 (未启动)");
+		m_modelApiStatusText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
+		m_modelApiStatusText->SetForegroundColour(palette.textSecondary);
+
+		m_modelApiUrlText = new wxStaticText(m_modelApiPanel, wxID_ANY, L"OpenAI 兼容 API 接口: 待启动后分配");
+		m_modelApiUrlText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Consolas, Microsoft YaHei"));
+		m_modelApiUrlText->SetForegroundColour(palette.textSecondary);
+
+		apiTextSizer->Add(m_modelApiStatusText, 0, wxBOTTOM, 3_dip);
+		apiTextSizer->Add(m_modelApiUrlText, 0);
+
+		m_modelCopyApiBtn = new CustomButton(m_modelApiPanel, wxID_ANY, L"复制 API 地址", ButtonStyle::Secondary, wxDefaultPosition, dip(120, 32));
+		m_modelCopyApiBtn->SetIcon(SVG::COPY, dip(14, 14));
+
+		apiPanelSizer->Add(apiTextSizer, 1, wxALIGN_CENTER_VERTICAL | wxALL, 10_dip);
+		apiPanelSizer->Add(m_modelCopyApiBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10_dip);
+		m_modelApiPanel->SetSizer(apiPanelSizer);
+
+		modelCardSizer->Add(m_modelApiPanel, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 14_dip);
+
+		// 操作按钮 (`保存配置` / `启动/重启服务` / `停止服务` / `测试推理`)
 		wxBoxSizer* actionSizer = new wxBoxSizer(wxHORIZONTAL);
-		m_saveBtn = new CustomButton(m_modelCard, wxID_ANY, L"保存配置", ButtonStyle::Primary, wxDefaultPosition, dip(145, 40));
-		m_saveBtn->SetIcon(SVG::COPY, dip(16, 16), *wxWHITE);
+		m_saveBtn = new CustomButton(m_modelCard, wxID_ANY, L"保存配置", ButtonStyle::Primary, wxDefaultPosition, dip(115, 38));
+		m_saveBtn->SetIcon(SVG::SAVE, dip(15, 15), *wxWHITE);
 
-		m_testBtn = new CustomButton(m_modelCard, wxID_ANY, L"测试模型", ButtonStyle::Secondary, wxDefaultPosition, dip(130, 40));
-		m_testBtn->SetIcon(SVG::TRANSLATE, dip(16, 16));
+		m_startBtn = new CustomButton(m_modelCard, wxID_ANY, L"启动 / 重启服务", ButtonStyle::Secondary, wxDefaultPosition, dip(140, 38));
+		m_startBtn->SetIcon(SVG::START, dip(15, 15));
 
-		actionSizer->Add(m_saveBtn, 0, wxRIGHT, 12_dip);
+		m_stopBtn = new CustomButton(m_modelCard, wxID_ANY, L"停止服务", ButtonStyle::Danger, wxDefaultPosition, dip(115, 38));
+		m_stopBtn->SetIcon(SVG::STOP, dip(15, 15), *wxWHITE);
+
+		m_testBtn = new CustomButton(m_modelCard, wxID_ANY, L"测试推理", ButtonStyle::Secondary, wxDefaultPosition, dip(115, 38));
+		m_testBtn->SetIcon(SVG::TEST, dip(15, 15));
+
+		actionSizer->Add(m_saveBtn, 0, wxRIGHT, 10_dip);
+		actionSizer->Add(m_startBtn, 0, wxRIGHT, 10_dip);
+		actionSizer->Add(m_stopBtn, 0, wxRIGHT, 10_dip);
 		actionSizer->Add(m_testBtn, 0);
-		modelCardSizer->Add(actionSizer, 0, wxLEFT | wxRIGHT | wxBOTTOM, 16_dip);
+		modelCardSizer->Add(actionSizer, 0, wxLEFT | wxRIGHT | wxBOTTOM, 14_dip);
+
+		// 底部模型下载链接说明
+		wxBoxSizer* modelFooterSizer = new wxBoxSizer(wxHORIZONTAL);
+		wxBitmapBundle modelInfoBundle = IconManager::GetIconBundle(SVG::INFO, dip(15, 15), palette.accentPrimary);
+		wxStaticBitmap* modelInfoIcon = new wxStaticBitmap(m_modelCard, wxID_ANY, modelInfoBundle);
+
+		wxStaticText* modelFooterLabel = new wxStaticText(m_modelCard, wxID_ANY, L"模型下载：");
+		modelFooterLabel->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+		modelFooterLabel->SetForegroundColour(palette.textSecondary);
+
+		m_transModelLink = new wxHyperlinkCtrl(m_modelCard, wxID_ANY,
+			L"Tencent Hy-MT2-1.8B-GGUF (HuggingFace)",
+			"https://huggingface.co/tencent/Hy-MT2-1.8B-GGUF");
+		m_transModelLink->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+		m_transModelLink->SetNormalColour(palette.accentPrimary);
+		m_transModelLink->SetHoverColour(palette.accentHover);
+
+		modelFooterSizer->Add(modelInfoIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6_dip);
+		modelFooterSizer->Add(modelFooterLabel, 0, wxALIGN_CENTER_VERTICAL);
+		modelFooterSizer->Add(m_transModelLink, 0, wxALIGN_CENTER_VERTICAL);
+		modelCardSizer->Add(modelFooterSizer, 0, wxLEFT | wxRIGHT | wxBOTTOM, 16_dip);
 
 		m_modelCard->SetSizer(modelCardSizer);
 		m_mainSizer->Add(m_modelCard, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 20_dip);
 
-		// Group 2: OCR 模型 (OCR Model Settings Card)
+		// ====================================================================
+		// Group 2: OCR 视觉识别模型 (OCR Model Settings Card)
+		// ====================================================================
 		m_ocrCard = new wxPanel(m_contentPanel, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE);
 		m_ocrCard->SetBackgroundColour(palette.cardBg);
 
@@ -129,7 +243,7 @@ namespace LinguaAlpaca::UI {
 		wxBitmapBundle ocrTitleBundle = IconManager::GetIconBundle(SVG::OCR, dip(18, 18), palette.textPrimary);
 		wxStaticBitmap* ocrTitleIcon = new wxStaticBitmap(m_ocrCard, wxID_ANY, ocrTitleBundle);
 
-		m_ocrTitleText = new wxStaticText(m_ocrCard, wxID_ANY, L"OCR 模型");
+		m_ocrTitleText = new wxStaticText(m_ocrCard, wxID_ANY, L"OCR 视觉识别模型 (Vision OCR Model)");
 		m_ocrTitleText->SetFont(wxFont(12, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
 		m_ocrTitleText->SetForegroundColour(palette.textPrimary);
 
@@ -176,42 +290,143 @@ namespace LinguaAlpaca::UI {
 		ocrMmprojRow->Add(m_ocrMmprojPathCtrl, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8_dip);
 		ocrMmprojRow->Add(m_ocrMmprojBrowseBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 16_dip);
 
-		ocrCardSizer->Add(ocrMmprojRow, 0, wxEXPAND | wxBOTTOM, 16_dip);
+		ocrCardSizer->Add(ocrMmprojRow, 0, wxEXPAND | wxBOTTOM, 12_dip);
 
-		// OCR 操作按钮 (`保存配置` & `测试模型`)
+		// OCR 运行参数设置行
+		wxBoxSizer* ocrParamSizer = new wxBoxSizer(wxHORIZONTAL);
+
+		m_ocrGpuLabel = new wxStaticText(m_ocrCard, wxID_ANY, L"计算加速：");
+		m_ocrGpuLabel->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+		m_ocrGpuLabel->SetForegroundColour(palette.textPrimary);
+
+		wxArrayString ocrGpuModes;
+		ocrGpuModes.Add(L"纯 CPU 计算模式 (-ngl 0, 推荐)");
+		ocrGpuModes.Add(L"GPU 硬件加速 (-ngl 99)");
+		ocrGpuModes.Add(L"自定义 GPU 层数");
+		m_ocrGpuModeChoice = new CustomChoice(m_ocrCard, wxID_ANY, wxDefaultPosition, dip(210, 34), ocrGpuModes);
+		m_ocrGpuModeChoice->SetSelection(0);
+
+		m_ocrNglLabel = new wxStaticText(m_ocrCard, wxID_ANY, L"-ngl 层数：");
+		m_ocrNglLabel->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+		m_ocrNglLabel->SetForegroundColour(palette.textPrimary);
+		m_ocrNglLabel->Show(false);
+
+		m_ocrNglCtrl = new CustomInputBox(m_ocrCard, wxID_ANY, L"0", L"0", wxDefaultPosition, dip(70, 34));
+		m_ocrNglCtrl->Show(false);
+
+		m_ocrPortLabel = new wxStaticText(m_ocrCard, wxID_ANY, L"端口：");
+		m_ocrPortLabel->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+		m_ocrPortLabel->SetForegroundColour(palette.textPrimary);
+
+		m_ocrPortCtrl = new CustomInputBox(m_ocrCard, wxID_ANY, L"0", L"0(自动)", wxDefaultPosition, dip(80, 34));
+
+		m_ocrCtxLabel = new wxStaticText(m_ocrCard, wxID_ANY, L"上下文：");
+		m_ocrCtxLabel->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+		m_ocrCtxLabel->SetForegroundColour(palette.textPrimary);
+
+		m_ocrCtxCtrl = new CustomInputBox(m_ocrCard, wxID_ANY, L"4096", L"4096", wxDefaultPosition, dip(80, 34));
+
+		ocrParamSizer->Add(m_ocrGpuLabel, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 16_dip);
+		ocrParamSizer->Add(m_ocrGpuModeChoice, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 14_dip);
+		ocrParamSizer->Add(m_ocrNglLabel, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6_dip);
+		ocrParamSizer->Add(m_ocrNglCtrl, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 14_dip);
+		ocrParamSizer->Add(m_ocrPortLabel, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6_dip);
+		ocrParamSizer->Add(m_ocrPortCtrl, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 14_dip);
+		ocrParamSizer->Add(m_ocrCtxLabel, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6_dip);
+		ocrParamSizer->Add(m_ocrCtxCtrl, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 16_dip);
+
+		ocrCardSizer->Add(ocrParamSizer, 0, wxEXPAND | wxBOTTOM, 10_dip);
+
+		// mmproj GPU 加速开关
+		m_ocrMmprojOffloadCheck = new wxCheckBox(m_ocrCard, wxID_ANY, L"启用 mmproj 视觉投影器 GPU 硬件加速（显存 < 8GB 建议取消勾选，使用 CPU 运行）");
+		m_ocrMmprojOffloadCheck->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+		m_ocrMmprojOffloadCheck->SetForegroundColour(palette.textPrimary);
+		ocrCardSizer->Add(m_ocrMmprojOffloadCheck, 0, wxLEFT | wxRIGHT | wxBOTTOM, 12_dip);
+
+		// OCR 本地 API 访问端点展示卡片
+		m_ocrApiPanel = new wxPanel(m_ocrCard, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE);
+		m_ocrApiPanel->SetBackgroundColour(palette.windowBg);
+
+		wxBoxSizer* ocrApiPanelSizer = new wxBoxSizer(wxHORIZONTAL);
+		wxBoxSizer* ocrApiTextSizer = new wxBoxSizer(wxVERTICAL);
+
+		m_ocrApiStatusText = new wxStaticText(m_ocrApiPanel, wxID_ANY, L"● 服务状态: 离线 (未启动)");
+		m_ocrApiStatusText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
+		m_ocrApiStatusText->SetForegroundColour(palette.textSecondary);
+
+		m_ocrApiUrlText = new wxStaticText(m_ocrApiPanel, wxID_ANY, L"OpenAI 兼容 API 接口: 待启动后分配");
+		m_ocrApiUrlText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Consolas, Microsoft YaHei"));
+		m_ocrApiUrlText->SetForegroundColour(palette.textSecondary);
+
+		ocrApiTextSizer->Add(m_ocrApiStatusText, 0, wxBOTTOM, 3_dip);
+		ocrApiTextSizer->Add(m_ocrApiUrlText, 0);
+
+		m_ocrCopyApiBtn = new CustomButton(m_ocrApiPanel, wxID_ANY, L"复制 API 地址", ButtonStyle::Secondary, wxDefaultPosition, dip(120, 32));
+		m_ocrCopyApiBtn->SetIcon(SVG::COPY, dip(14, 14));
+
+		ocrApiPanelSizer->Add(ocrApiTextSizer, 1, wxALIGN_CENTER_VERTICAL | wxALL, 10_dip);
+		ocrApiPanelSizer->Add(m_ocrCopyApiBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10_dip);
+		m_ocrApiPanel->SetSizer(ocrApiPanelSizer);
+
+		ocrCardSizer->Add(m_ocrApiPanel, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 14_dip);
+
+		// OCR 操作按钮 (`保存配置` / `启动/重启服务` / `停止服务` / `测试模型`)
 		wxBoxSizer* ocrActionSizer = new wxBoxSizer(wxHORIZONTAL);
-		m_ocrSaveBtn = new CustomButton(m_ocrCard, wxID_ANY, L"保存配置", ButtonStyle::Primary,wxDefaultPosition, dip(145, 40));
-		m_ocrSaveBtn->SetIcon(SVG::COPY, dip(16, 16), *wxWHITE);
+		m_ocrSaveBtn = new CustomButton(m_ocrCard, wxID_ANY, L"保存配置", ButtonStyle::Primary, wxDefaultPosition, dip(115, 38));
+		m_ocrSaveBtn->SetIcon(SVG::SAVE, dip(15, 15), *wxWHITE);
 
-		m_ocrTestBtn = new CustomButton(m_ocrCard, wxID_ANY, L"测试模型", ButtonStyle::Secondary,wxDefaultPosition, dip(130, 40));
-		m_ocrTestBtn->SetIcon(SVG::TRANSLATE, dip(16, 16));
+		m_ocrStartBtn = new CustomButton(m_ocrCard, wxID_ANY, L"启动 / 重启服务", ButtonStyle::Secondary, wxDefaultPosition, dip(140, 38));
+		m_ocrStartBtn->SetIcon(SVG::START, dip(15, 15));
 
-		ocrActionSizer->Add(m_ocrSaveBtn, 0, wxRIGHT, 12_dip);
+		m_ocrStopBtn = new CustomButton(m_ocrCard, wxID_ANY, L"停止服务", ButtonStyle::Danger, wxDefaultPosition, dip(115, 38));
+		m_ocrStopBtn->SetIcon(SVG::STOP, dip(15, 15), *wxWHITE);
+
+		m_ocrTestBtn = new CustomButton(m_ocrCard, wxID_ANY, L"测试模型", ButtonStyle::Secondary, wxDefaultPosition, dip(115, 38));
+		m_ocrTestBtn->SetIcon(SVG::TEST, dip(15, 15));
+
+		ocrActionSizer->Add(m_ocrSaveBtn, 0, wxRIGHT, 10_dip);
+		ocrActionSizer->Add(m_ocrStartBtn, 0, wxRIGHT, 10_dip);
+		ocrActionSizer->Add(m_ocrStopBtn, 0, wxRIGHT, 10_dip);
 		ocrActionSizer->Add(m_ocrTestBtn, 0);
-		ocrCardSizer->Add(ocrActionSizer, 0, wxLEFT | wxRIGHT | wxBOTTOM, 16_dip);
+		ocrCardSizer->Add(ocrActionSizer, 0, wxLEFT | wxRIGHT | wxBOTTOM, 14_dip);
 
-		// 底部说明
-		m_ocrFooterPanel = new wxPanel(m_ocrCard, wxID_ANY, wxDefaultPosition,wxDefaultSize, wxBORDER_NONE);
+		// 底部说明与模型下载链接
+		m_ocrFooterPanel = new wxPanel(m_ocrCard, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE);
 		m_ocrFooterPanel->SetBackgroundColour(palette.cardBg);
 		wxBoxSizer* ocrFooterSizer = new wxBoxSizer(wxHORIZONTAL);
 
-		wxBitmapBundle infoBundle = IconManager::GetIconBundle(SVG::INFO, dip(16, 16), palette.accentPrimary);
-		wxStaticBitmap* infoIcon =new wxStaticBitmap(m_ocrFooterPanel, wxID_ANY, infoBundle);
+		wxBitmapBundle infoBundle = IconManager::GetIconBundle(SVG::INFO, dip(15, 15), palette.accentPrimary);
+		wxStaticBitmap* infoIcon = new wxStaticBitmap(m_ocrFooterPanel, wxID_ANY, infoBundle);
 
-		m_ocrFooterText = new wxStaticText(m_ocrFooterPanel, wxID_ANY,L"OCR 模型需为 GGUF 格式，并配合对应的 mmproj 视觉投影器文件使用。");
-		m_ocrFooterText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL,wxFONTWEIGHT_NORMAL, false,"Microsoft YaHei"));
+		m_ocrFooterText = new wxStaticText(m_ocrFooterPanel, wxID_ANY, L"提示: 视觉模型需配合 mmproj 使用 (<= 8GB 显存建议 CPU 模式)。");
+		m_ocrFooterText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
 		m_ocrFooterText->SetForegroundColour(palette.textSecondary);
+
+		wxStaticText* ocrLinkSep = new wxStaticText(m_ocrFooterPanel, wxID_ANY, L"  |  模型下载：");
+		ocrLinkSep->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+		ocrLinkSep->SetForegroundColour(palette.textSecondary);
+
+		m_ocrModelLink = new wxHyperlinkCtrl(m_ocrFooterPanel, wxID_ANY,
+			L"PaddleOCR-VL-1.6-GGUF (HuggingFace)",
+			"https://huggingface.co/PaddlePaddle/PaddleOCR-VL-1.6-GGUF");
+		m_ocrModelLink->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+		m_ocrModelLink->SetNormalColour(palette.accentPrimary);
+		m_ocrModelLink->SetHoverColour(palette.accentHover);
 
 		ocrFooterSizer->Add(infoIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6_dip);
 		ocrFooterSizer->Add(m_ocrFooterText, 0, wxALIGN_CENTER_VERTICAL);
+		ocrFooterSizer->Add(ocrLinkSep, 0, wxALIGN_CENTER_VERTICAL);
+		ocrFooterSizer->Add(m_ocrModelLink, 0, wxALIGN_CENTER_VERTICAL);
 		m_ocrFooterPanel->SetSizer(ocrFooterSizer);
 
-		ocrCardSizer->Add(m_ocrFooterPanel, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM,16_dip);
+		ocrCardSizer->Add(m_ocrFooterPanel, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 16_dip);
 
 		m_ocrCard->SetSizer(ocrCardSizer);
 		m_mainSizer->Add(m_ocrCard, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 20_dip);
 
+		// ====================================================================
 		// Group 3: 划词翻译设置卡片
+		// ====================================================================
 		m_selectionCard = new wxPanel(m_contentPanel, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE);
 		m_selectionCard->SetBackgroundColour(palette.cardBg);
 		wxBoxSizer* selSizer = new wxBoxSizer(wxVERTICAL);
@@ -269,7 +484,8 @@ namespace LinguaAlpaca::UI {
 
 		// 5. 保存按钮与状态
 		wxBoxSizer* btnSizer = new wxBoxSizer(wxHORIZONTAL);
-		m_selectionSaveBtn = new CustomButton(m_selectionCard, wxID_ANY, L"保存划词设置", ButtonStyle::Primary);
+		m_selectionSaveBtn = new CustomButton(m_selectionCard, wxID_ANY, L"保存划词设置", ButtonStyle::Primary, wxDefaultPosition, dip(145, 38));
+		m_selectionSaveBtn->SetIcon(SVG::SAVE, dip(15, 15), *wxWHITE);
 		m_selectionStatusText = new wxStaticText(m_selectionCard, wxID_ANY, "");
 		m_selectionStatusText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
 		m_selectionStatusText->SetForegroundColour(palette.accentGreen);
@@ -281,7 +497,9 @@ namespace LinguaAlpaca::UI {
 		m_selectionCard->SetSizer(selSizer);
 		m_mainSizer->Add(m_selectionCard, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 20_dip);
 
+		// ====================================================================
 		// Group 4: StarDict 词典设置卡片
+		// ====================================================================
 		m_dictCard = new wxPanel(m_contentPanel, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE);
 		m_dictCard->SetBackgroundColour(palette.cardBg);
 		wxBoxSizer* dictSizer = new wxBoxSizer(wxVERTICAL);
@@ -326,11 +544,11 @@ namespace LinguaAlpaca::UI {
 
 		// 操作按钮行
 		wxBoxSizer* dictActionRow = new wxBoxSizer(wxHORIZONTAL);
-		m_dictSaveBtn = new CustomButton(m_dictCard, wxID_ANY, L"保存词典设置", ButtonStyle::Primary, wxDefaultPosition, dip(145, 40));
-		m_dictSaveBtn->SetIcon(SVG::COPY, dip(16, 16), *wxWHITE);
+		m_dictSaveBtn = new CustomButton(m_dictCard, wxID_ANY, L"保存词典设置", ButtonStyle::Primary, wxDefaultPosition, dip(145, 38));
+		m_dictSaveBtn->SetIcon(SVG::SAVE, dip(15, 15), *wxWHITE);
 
-		m_dictReloadBtn = new CustomButton(m_dictCard, wxID_ANY, L"重新扫描词典", ButtonStyle::Secondary, wxDefaultPosition, dip(145, 40));
-		m_dictReloadBtn->SetIcon(SVG::REPLACE, dip(16, 16));
+		m_dictReloadBtn = new CustomButton(m_dictCard, wxID_ANY, L"重新扫描词典", ButtonStyle::Secondary, wxDefaultPosition, dip(145, 38));
+		m_dictReloadBtn->SetIcon(SVG::REPLACE, dip(15, 15));
 
 		m_dictStatusText = new wxStaticText(m_dictCard, wxID_ANY, "");
 		m_dictStatusText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
@@ -352,12 +570,35 @@ namespace LinguaAlpaca::UI {
 		m_dictListInfoCtrl->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Consolas, Microsoft YaHei"));
 		m_dictListInfoCtrl->SetBackgroundColour(palette.windowBg);
 		m_dictListInfoCtrl->SetForegroundColour(palette.textPrimary);
-		dictSizer->Add(m_dictListInfoCtrl, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 16_dip);
+		dictSizer->Add(m_dictListInfoCtrl, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 12_dip);
+
+		// 底部词典下载链接说明
+		wxBoxSizer* dictFooterSizer = new wxBoxSizer(wxHORIZONTAL);
+		wxBitmapBundle dictInfoBundle = IconManager::GetIconBundle(SVG::INFO, dip(15, 15), palette.accentPrimary);
+		wxStaticBitmap* dictInfoIcon = new wxStaticBitmap(m_dictCard, wxID_ANY, dictInfoBundle);
+
+		wxStaticText* dictFooterLabel = new wxStaticText(m_dictCard, wxID_ANY, L"免费词典库下载：");
+		dictFooterLabel->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+		dictFooterLabel->SetForegroundColour(palette.textSecondary);
+
+		m_dictDownloadLink = new wxHyperlinkCtrl(m_dictCard, wxID_ANY,
+			L"StarDict 免费离线词典库 (stardict.uber.space)",
+			"https://stardict.uber.space/");
+		m_dictDownloadLink->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+		m_dictDownloadLink->SetNormalColour(palette.accentPrimary);
+		m_dictDownloadLink->SetHoverColour(palette.accentHover);
+
+		dictFooterSizer->Add(dictInfoIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6_dip);
+		dictFooterSizer->Add(dictFooterLabel, 0, wxALIGN_CENTER_VERTICAL);
+		dictFooterSizer->Add(m_dictDownloadLink, 0, wxALIGN_CENTER_VERTICAL);
+		dictSizer->Add(dictFooterSizer, 0, wxLEFT | wxRIGHT | wxBOTTOM, 16_dip);
 
 		m_dictCard->SetSizer(dictSizer);
 		m_mainSizer->Add(m_dictCard, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 20_dip);
 
+		// ====================================================================
 		// Group 5: 日志与诊断设置卡片
+		// ====================================================================
 		m_logCard = new wxPanel(m_contentPanel, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE);
 		m_logCard->SetBackgroundColour(palette.cardBg);
 		wxBoxSizer* logSizer = new wxBoxSizer(wxVERTICAL);
@@ -389,8 +630,10 @@ namespace LinguaAlpaca::UI {
 
 		// 3. 按钮行
 		wxBoxSizer* logBtnSizer = new wxBoxSizer(wxHORIZONTAL);
-		m_logSaveBtn = new CustomButton(m_logCard, wxID_ANY, L"保存日志设置", ButtonStyle::Primary);
-		m_openLogDirBtn = new CustomButton(m_logCard, wxID_ANY, L"打开日志目录", ButtonStyle::Secondary);
+		m_logSaveBtn = new CustomButton(m_logCard, wxID_ANY, L"保存日志设置", ButtonStyle::Primary, wxDefaultPosition, dip(145, 38));
+		m_logSaveBtn->SetIcon(SVG::SAVE, dip(15, 15), *wxWHITE);
+		m_openLogDirBtn = new CustomButton(m_logCard, wxID_ANY, L"打开日志目录", ButtonStyle::Secondary, wxDefaultPosition, dip(145, 38));
+		m_openLogDirBtn->SetIcon(SVG::FOLDER_OPEN, dip(15, 15));
 		m_logStatusText = new wxStaticText(m_logCard, wxID_ANY, "");
 		m_logStatusText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
 		m_logStatusText->SetForegroundColour(palette.accentGreen);
@@ -403,7 +646,9 @@ namespace LinguaAlpaca::UI {
 		m_logCard->SetSizer(logSizer);
 		m_mainSizer->Add(m_logCard, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 20_dip);
 
-		// Group 6: 偏好设置卡片
+		// ====================================================================
+		// Group 6: 偏好设置与关于卡片
+		// ====================================================================
 		m_prefCard = new wxPanel(m_contentPanel, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE);
 		m_prefCard->SetBackgroundColour(palette.cardBg);
 		wxBoxSizer* prefSizer = new wxBoxSizer(wxVERTICAL);
@@ -412,13 +657,36 @@ namespace LinguaAlpaca::UI {
 		wxBitmapBundle moonBundle = IconManager::GetIconBundle(SVG::MOON, dip(18, 18), palette.textPrimary);
 		wxStaticBitmap* moonIcon = new wxStaticBitmap(m_prefCard, wxID_ANY, moonBundle);
 
-		m_prefTitle = new wxStaticText(m_prefCard, wxID_ANY, L"深色主题与偏好");
+		m_prefTitle = new wxStaticText(m_prefCard, wxID_ANY, L"界面外观与关于");
 		m_prefTitle->SetFont(wxFont(12, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
 		m_prefTitle->SetForegroundColour(palette.textPrimary);
 
 		prefTitleSizer->Add(moonIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8_dip);
 		prefTitleSizer->Add(m_prefTitle, 0, wxALIGN_CENTER_VERTICAL);
 		prefSizer->Add(prefTitleSizer, 0, wxALL, 16_dip);
+
+		// 主题选择单选选项组 (浅色、暗色、跟随系统)
+		wxArrayString themeOptions;
+		themeOptions.Add(L"浅色模式");
+		themeOptions.Add(L"暗色模式");
+		themeOptions.Add(L"跟随系统");
+		m_themeRadioBox = new wxRadioBox(m_prefCard, wxID_ANY, L"主题外观选择", wxDefaultPosition, wxDefaultSize, themeOptions, 3, wxRA_SPECIFY_COLS);
+		m_themeRadioBox->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+		m_themeRadioBox->SetForegroundColour(palette.textPrimary);
+		prefSizer->Add(m_themeRadioBox, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 16_dip);
+
+		// 关于说明栏
+		wxBoxSizer* aboutRowSizer = new wxBoxSizer(wxHORIZONTAL);
+		m_aboutBtn = new CustomButton(m_prefCard, wxID_ANY, L"关于 LinguaAlpaca", ButtonStyle::Secondary, wxDefaultPosition, dip(160, 36));
+		m_aboutBtn->SetIcon(SVG::INFO, dip(15, 15));
+
+		m_aboutDescText = new wxStaticText(m_prefCard, wxID_ANY, L"查看应用版本、项目初衷、开源协议与主页链接");
+		m_aboutDescText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+		m_aboutDescText->SetForegroundColour(palette.textSecondary);
+
+		aboutRowSizer->Add(m_aboutBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 14_dip);
+		aboutRowSizer->Add(m_aboutDescText, 0, wxALIGN_CENTER_VERTICAL);
+		prefSizer->Add(aboutRowSizer, 0, wxLEFT | wxRIGHT | wxBOTTOM, 16_dip);
 
 		m_prefCard->SetSizer(prefSizer);
 		m_mainSizer->Add(m_prefCard, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 20_dip);
@@ -432,7 +700,7 @@ namespace LinguaAlpaca::UI {
 		m_viewport->Bind(wxEVT_SIZE, [this](wxSizeEvent& event) {
 			UpdateLayoutAndScroll();
 			event.Skip();
-		});
+			});
 
 		// 递归绑定鼠标滚轮事件到所有子控件，确保在任意卡片或控件上滚动均可平滑翻页
 		BindMouseWheelRecursively(m_viewport);
@@ -442,21 +710,56 @@ namespace LinguaAlpaca::UI {
 			auto cfg = m_configManager->GetConfig();
 			SetModelPath(wxString::FromUTF8(cfg.modelPath));
 			SetOcrModelPath(wxString::FromUTF8(cfg.ocrModelPath), wxString::FromUTF8(cfg.ocrMmprojPath));
+
+			// 翻译模型参数回显
+			if (m_modelNglCtrl) m_modelNglCtrl->SetValue(wxString::Format("%d", cfg.gpuLayers));
+			if (m_modelPortCtrl) m_modelPortCtrl->SetValue(wxString::Format("%d", cfg.translationPort));
+			if (m_modelCtxCtrl) m_modelCtxCtrl->SetValue(wxString::Format("%d", cfg.translationCtxSize));
+			if (m_modelGpuModeChoice) {
+				int sel = (cfg.gpuLayers >= 99) ? 0 : (cfg.gpuLayers == 0 ? 1 : 2);
+				m_modelGpuModeChoice->SetSelection(sel);
+				bool isCustom = (sel == 2);
+				if (m_modelNglLabel) m_modelNglLabel->Show(isCustom);
+				if (m_modelNglCtrl) m_modelNglCtrl->Show(isCustom);
+			}
+
+			// OCR 模型参数回显
+			if (m_ocrNglCtrl) m_ocrNglCtrl->SetValue(wxString::Format("%d", cfg.ocrGpuLayers));
+			if (m_ocrPortCtrl) m_ocrPortCtrl->SetValue(wxString::Format("%d", cfg.ocrPort));
+			if (m_ocrCtxCtrl) m_ocrCtxCtrl->SetValue(wxString::Format("%d", cfg.ocrCtxSize));
+			if (m_ocrMmprojOffloadCheck) m_ocrMmprojOffloadCheck->SetValue(cfg.ocrMmprojOffload);
+			if (m_ocrGpuModeChoice) {
+				int sel = (cfg.ocrGpuLayers == 0) ? 0 : (cfg.ocrGpuLayers >= 99 ? 1 : 2);
+				m_ocrGpuModeChoice->SetSelection(sel);
+				bool isCustom = (sel == 2);
+				if (m_ocrNglLabel) m_ocrNglLabel->Show(isCustom);
+				if (m_ocrNglCtrl) m_ocrNglCtrl->Show(isCustom);
+			}
+
 			SetSelectionConfig(cfg);
 			SetDictConfig(cfg);
 			SetLogConfig(cfg);
+			SetThemeConfig(cfg);
 		}
 
 		// 事件绑定 - 翻译模型 Group
 		m_browseBtn->Bind(wxEVT_BUTTON, &SettingsView::OnBrowseModel, this);
 		m_openDirBtn->Bind(wxEVT_BUTTON, &SettingsView::OnOpenModelDir, this);
+		m_modelGpuModeChoice->Bind(wxEVT_CHOICE, &SettingsView::OnModelGpuModeChanged, this);
+		m_modelCopyApiBtn->Bind(wxEVT_BUTTON, &SettingsView::OnCopyModelApiUrl, this);
 		m_saveBtn->Bind(wxEVT_BUTTON, &SettingsView::OnSaveConfig, this);
+		m_startBtn->Bind(wxEVT_BUTTON, &SettingsView::OnStartModel, this);
+		m_stopBtn->Bind(wxEVT_BUTTON, &SettingsView::OnStopModel, this);
 		m_testBtn->Bind(wxEVT_BUTTON, &SettingsView::OnTestModel, this);
 
 		// 事件绑定 - OCR 模型 Group
 		m_ocrBrowseBtn->Bind(wxEVT_BUTTON, &SettingsView::OnBrowseOcrModel, this);
 		m_ocrMmprojBrowseBtn->Bind(wxEVT_BUTTON, &SettingsView::OnBrowseOcrMmproj, this);
+		m_ocrGpuModeChoice->Bind(wxEVT_CHOICE, &SettingsView::OnOcrGpuModeChanged, this);
+		m_ocrCopyApiBtn->Bind(wxEVT_BUTTON, &SettingsView::OnCopyOcrApiUrl, this);
 		m_ocrSaveBtn->Bind(wxEVT_BUTTON, &SettingsView::OnSaveOcrConfig, this);
+		m_ocrStartBtn->Bind(wxEVT_BUTTON, &SettingsView::OnStartOcrModel, this);
+		m_ocrStopBtn->Bind(wxEVT_BUTTON, &SettingsView::OnStopOcrModel, this);
 		m_ocrTestBtn->Bind(wxEVT_BUTTON, &SettingsView::OnTestOcrModel, this);
 
 		// 事件绑定 - 划词翻译 Group
@@ -472,6 +775,13 @@ namespace LinguaAlpaca::UI {
 		// 事件绑定 - 日志与诊断 Group
 		m_logSaveBtn->Bind(wxEVT_BUTTON, &SettingsView::OnSaveLogConfig, this);
 		m_openLogDirBtn->Bind(wxEVT_BUTTON, &SettingsView::OnOpenLogDirFromSettings, this);
+
+		// 事件绑定 - 偏好与关于 Group
+		m_themeRadioBox->Bind(wxEVT_RADIOBOX, &SettingsView::OnThemeRadioChanged, this);
+		m_aboutBtn->Bind(wxEVT_BUTTON, &SettingsView::OnShowAboutDialog, this);
+
+		UpdateTranslationStatus();
+		UpdateOcrStatus();
 	}
 
 	void SettingsView::SetModelPath(const wxString& path) {
@@ -479,23 +789,10 @@ namespace LinguaAlpaca::UI {
 		if (m_modelPathCtrl) {
 			m_modelPathCtrl->SetValue(path);
 		}
-
-		bool loaded = false;
-		if (m_modelManager) {
-			auto info = m_modelManager->GetHealthStatus(TargetModelType::Translation);
-			loaded = (info.state == ServerHealthState::Ready);
-		}
-
-		if (loaded || (!path.IsEmpty() && wxFileExists(path))) {
-			m_statusBadge->SetStatus(ServerHealthState::Ready, L"● 已配置: " + wxFileName(path).GetFullName());
-		}
-		else {
-			m_statusBadge->SetStatus(ServerHealthState::Unconfigured, L"● 未配置模型");
-		}
+		UpdateTranslationStatus();
 	}
 
-	void SettingsView::SetOcrModelPath(const wxString& mainPath,
-		const wxString& mmprojPath) {
+	void SettingsView::SetOcrModelPath(const wxString& mainPath, const wxString& mmprojPath) {
 		if (m_ocrModelPathCtrl)
 			m_ocrModelPathCtrl->SetValue(mainPath);
 		if (m_ocrMmprojPathCtrl)
@@ -504,27 +801,124 @@ namespace LinguaAlpaca::UI {
 		UpdateOcrStatus();
 	}
 
-	void SettingsView::UpdateOcrStatus() {
-		if (!m_ocrStatusBadge)
+	void SettingsView::UpdateTranslationStatus() {
+		if (!m_statusBadge || !m_modelManager)
 			return;
 
-		wxString mainPath = m_ocrModelPathCtrl ? m_ocrModelPathCtrl->GetValue() : L"";
-		wxString mmprojPath = m_ocrMmprojPathCtrl ? m_ocrMmprojPathCtrl->GetValue() : L"";
+		auto info = m_modelManager->GetHealthStatus(TargetModelType::Translation);
 
-		bool loaded = false;
-		if (m_modelManager) {
-			auto info = m_modelManager->GetHealthStatus(TargetModelType::Ocr);
-			loaded = (info.state == ServerHealthState::Ready);
-		}
-		if (!loaded && !mainPath.IsEmpty() && !mmprojPath.IsEmpty()) {
-			loaded = wxFileExists(mainPath) && wxFileExists(mmprojPath);
-		}
+		if (info.state == ServerHealthState::Ready) {
+			wxString label = wxString::Format(L"● 已就绪 (端口: %d)", info.port);
+			m_statusBadge->SetStatus(ServerHealthState::Ready, label);
 
-		if (loaded) {
-			m_ocrStatusBadge->SetStatus(ServerHealthState::Ready, L"● 已配置: " + wxFileName(mainPath).GetFullName());
+			if (m_modelApiStatusText) {
+				m_modelApiStatusText->SetLabel(wxString::Format(L"● 运行中 (端口: %d)", info.port));
+				m_modelApiStatusText->SetForegroundColour(ThemeColors::GetCurrentPalette().accentGreen);
+			}
+			if (m_modelApiUrlText) {
+				m_modelApiUrlText->SetLabel(wxString::Format(L"OpenAI 兼容接口: http://127.0.0.1:%d/v1/chat/completions", info.port));
+				m_modelApiUrlText->SetForegroundColour(ThemeColors::GetCurrentPalette().textPrimary);
+			}
+		}
+		else if (info.state == ServerHealthState::Loading) {
+			m_statusBadge->SetStatus(ServerHealthState::Loading, L"● 正在加载中...");
+			if (m_modelApiStatusText) {
+				m_modelApiStatusText->SetLabel(L"● 正在拉起或装载权重中...");
+				m_modelApiStatusText->SetForegroundColour(ThemeColors::GetCurrentPalette().accentPrimary);
+			}
+		}
+		else if (info.state == ServerHealthState::Unconfigured) {
+			m_statusBadge->SetStatus(ServerHealthState::Unconfigured, L"● 未配置模型");
+			if (m_modelApiStatusText) {
+				m_modelApiStatusText->SetLabel(L"● 未配置模型路径");
+				m_modelApiStatusText->SetForegroundColour(ThemeColors::GetCurrentPalette().textSecondary);
+			}
+			if (m_modelApiUrlText) {
+				m_modelApiUrlText->SetLabel(L"OpenAI 兼容接口: 待配置并启动后分配");
+				m_modelApiUrlText->SetForegroundColour(ThemeColors::GetCurrentPalette().textSecondary);
+			}
 		}
 		else {
-			m_ocrStatusBadge->SetStatus(ServerHealthState::Unconfigured, L"● 未配置");
+			wxString path = m_modelPathCtrl ? m_modelPathCtrl->GetValue() : L"";
+			if (!path.IsEmpty() && wxFileExists(path)) {
+				m_statusBadge->SetStatus(ServerHealthState::Offline, L"● 服务离线 (已就绪)");
+				if (m_modelApiStatusText) {
+					m_modelApiStatusText->SetLabel(L"● 服务离线 (调用或点击「启动服务」时自动运行)");
+					m_modelApiStatusText->SetForegroundColour(ThemeColors::GetCurrentPalette().textSecondary);
+				}
+			}
+			else {
+				m_statusBadge->SetStatus(ServerHealthState::Unconfigured, L"● 未配置模型");
+				if (m_modelApiStatusText) {
+					m_modelApiStatusText->SetLabel(L"● 模型未配置");
+					m_modelApiStatusText->SetForegroundColour(ThemeColors::GetCurrentPalette().textSecondary);
+				}
+			}
+			if (m_modelApiUrlText) {
+				m_modelApiUrlText->SetLabel(L"OpenAI 兼容接口: 待启动后分配");
+				m_modelApiUrlText->SetForegroundColour(ThemeColors::GetCurrentPalette().textSecondary);
+			}
+		}
+	}
+
+	void SettingsView::UpdateOcrStatus() {
+		if (!m_ocrStatusBadge || !m_modelManager)
+			return;
+
+		auto info = m_modelManager->GetHealthStatus(TargetModelType::Ocr);
+
+		if (info.state == ServerHealthState::Ready) {
+			wxString label = wxString::Format(L"● 已就绪 (端口: %d)", info.port);
+			m_ocrStatusBadge->SetStatus(ServerHealthState::Ready, label);
+
+			if (m_ocrApiStatusText) {
+				m_ocrApiStatusText->SetLabel(wxString::Format(L"● 运行中 (端口: %d)", info.port));
+				m_ocrApiStatusText->SetForegroundColour(ThemeColors::GetCurrentPalette().accentGreen);
+			}
+			if (m_ocrApiUrlText) {
+				m_ocrApiUrlText->SetLabel(wxString::Format(L"OpenAI 兼容接口: http://127.0.0.1:%d/v1/chat/completions", info.port));
+				m_ocrApiUrlText->SetForegroundColour(ThemeColors::GetCurrentPalette().textPrimary);
+			}
+		}
+		else if (info.state == ServerHealthState::Loading) {
+			m_ocrStatusBadge->SetStatus(ServerHealthState::Loading, L"● 正在加载中...");
+			if (m_ocrApiStatusText) {
+				m_ocrApiStatusText->SetLabel(L"● 正在拉起或装载 OCR 模型中...");
+				m_ocrApiStatusText->SetForegroundColour(ThemeColors::GetCurrentPalette().accentPrimary);
+			}
+		}
+		else if (info.state == ServerHealthState::Unconfigured) {
+			m_ocrStatusBadge->SetStatus(ServerHealthState::Unconfigured, L"● 未配置模型");
+			if (m_ocrApiStatusText) {
+				m_ocrApiStatusText->SetLabel(L"● 未配置 OCR 主模型或 mmproj");
+				m_ocrApiStatusText->SetForegroundColour(ThemeColors::GetCurrentPalette().textSecondary);
+			}
+			if (m_ocrApiUrlText) {
+				m_ocrApiUrlText->SetLabel(L"OpenAI 兼容接口: 待配置并启动后分配");
+				m_ocrApiUrlText->SetForegroundColour(ThemeColors::GetCurrentPalette().textSecondary);
+			}
+		}
+		else {
+			wxString mainPath = m_ocrModelPathCtrl ? m_ocrModelPathCtrl->GetValue() : L"";
+			wxString mmprojPath = m_ocrMmprojPathCtrl ? m_ocrMmprojPathCtrl->GetValue() : L"";
+			if (!mainPath.IsEmpty() && !mmprojPath.IsEmpty() && wxFileExists(mainPath) && wxFileExists(mmprojPath)) {
+				m_ocrStatusBadge->SetStatus(ServerHealthState::Offline, L"● 服务离线 (已就绪)");
+				if (m_ocrApiStatusText) {
+					m_ocrApiStatusText->SetLabel(L"● 服务离线 (调用或点击「启动服务」时自动运行)");
+					m_ocrApiStatusText->SetForegroundColour(ThemeColors::GetCurrentPalette().textSecondary);
+				}
+			}
+			else {
+				m_ocrStatusBadge->SetStatus(ServerHealthState::Unconfigured, L"● 未配置");
+				if (m_ocrApiStatusText) {
+					m_ocrApiStatusText->SetLabel(L"● 模型未配置");
+					m_ocrApiStatusText->SetForegroundColour(ThemeColors::GetCurrentPalette().textSecondary);
+				}
+			}
+			if (m_ocrApiUrlText) {
+				m_ocrApiUrlText->SetLabel(L"OpenAI 兼容接口: 待启动后分配");
+				m_ocrApiUrlText->SetForegroundColour(ThemeColors::GetCurrentPalette().textSecondary);
+			}
 		}
 	}
 
@@ -573,20 +967,97 @@ namespace LinguaAlpaca::UI {
 		wxLaunchDefaultBrowser(modelDir);
 	}
 
+	void SettingsView::OnModelGpuModeChanged(wxCommandEvent& WXUNUSED(event)) {
+		if (!m_modelGpuModeChoice || !m_modelNglCtrl) return;
+		int sel = m_modelGpuModeChoice->GetSelection();
+		bool isCustom = (sel == 2);
+		if (sel == 0) {
+			m_modelNglCtrl->SetValue("99");
+		}
+		else if (sel == 1) {
+			m_modelNglCtrl->SetValue("0");
+		}
+		if (m_modelNglLabel) m_modelNglLabel->Show(isCustom);
+		m_modelNglCtrl->Show(isCustom);
+		if (m_modelCard) m_modelCard->Layout();
+		UpdateLayoutAndScroll();
+	}
+
+	void SettingsView::OnOcrGpuModeChanged(wxCommandEvent& WXUNUSED(event)) {
+		if (!m_ocrGpuModeChoice || !m_ocrNglCtrl) return;
+		int sel = m_ocrGpuModeChoice->GetSelection();
+		bool isCustom = (sel == 2);
+		if (sel == 0) {
+			m_ocrNglCtrl->SetValue("0");
+			if (m_ocrMmprojOffloadCheck) m_ocrMmprojOffloadCheck->SetValue(false);
+		}
+		else if (sel == 1) {
+			m_ocrNglCtrl->SetValue("99");
+			if (m_ocrMmprojOffloadCheck) m_ocrMmprojOffloadCheck->SetValue(true);
+		}
+		if (m_ocrNglLabel) m_ocrNglLabel->Show(isCustom);
+		m_ocrNglCtrl->Show(isCustom);
+		if (m_ocrCard) m_ocrCard->Layout();
+		UpdateLayoutAndScroll();
+	}
+
+	void SettingsView::OnCopyModelApiUrl(wxCommandEvent& WXUNUSED(event)) {
+		if (!m_modelManager) return;
+		auto info = m_modelManager->GetHealthStatus(TargetModelType::Translation);
+		int port = info.port;
+		if (port <= 0) {
+			if (m_configManager) {
+				port = m_configManager->GetConfig().translationPort;
+			}
+		}
+		wxString url = (port > 0) ? wxString::Format("http://127.0.0.1:%d/v1/chat/completions", port) : "http://127.0.0.1:<port>/v1/chat/completions";
+
+		if (wxTheClipboard->Open()) {
+			wxTheClipboard->SetData(new wxTextDataObject(url));
+			wxTheClipboard->Close();
+			wxMessageBox(L"翻译模型 API 接口端点已复制到剪贴板：\n" + url, L"复制成功", wxOK | wxICON_INFORMATION, this);
+		}
+	}
+
+	void SettingsView::OnCopyOcrApiUrl(wxCommandEvent& WXUNUSED(event)) {
+		if (!m_modelManager) return;
+		auto info = m_modelManager->GetHealthStatus(TargetModelType::Ocr);
+		int port = info.port;
+		if (port <= 0) {
+			if (m_configManager) {
+				port = m_configManager->GetConfig().ocrPort;
+			}
+		}
+		wxString url = (port > 0) ? wxString::Format("http://127.0.0.1:%d/v1/chat/completions", port) : "http://127.0.0.1:<port>/v1/chat/completions";
+
+		if (wxTheClipboard->Open()) {
+			wxTheClipboard->SetData(new wxTextDataObject(url));
+			wxTheClipboard->Close();
+			wxMessageBox(L"OCR 视觉模型 API 接口端点已复制到剪贴板：\n" + url, L"复制成功", wxOK | wxICON_INFORMATION, this);
+		}
+	}
+
 	void SettingsView::OnSaveConfig(wxCommandEvent& WXUNUSED(event)) {
-		wxString path = m_modelPathCtrl->GetValue();
-		SetModelPath(path);
+		wxString path = m_modelPathCtrl ? m_modelPathCtrl->GetValue() : "";
+		long ngl = 99;
+		if (m_modelNglCtrl) m_modelNglCtrl->GetValue().ToLong(&ngl);
+		long port = 0;
+		if (m_modelPortCtrl) m_modelPortCtrl->GetValue().ToLong(&port);
+		long ctxSize = 2048;
+		if (m_modelCtxCtrl) m_modelCtxCtrl->GetValue().ToLong(&ctxSize);
 
 		if (m_configManager) {
-			m_configManager->SaveModelPath(path.ToUTF8().data());
+			m_configManager->SaveModelConfig(path.ToUTF8().data(), (int)ngl, (int)port, (int)ctxSize);
 		}
 
+		UpdateTranslationStatus();
+
 		if (!path.IsEmpty() && wxFileExists(path)) {
-			wxMessageBox(L"翻译模型配置已成功保存至 config.ini 配置文件！", L"系统设置",
+			wxMessageBox(L"翻译模型配置已成功保存！", L"系统设置",
 				wxOK | wxICON_INFORMATION, this);
 		}
 		else {
-			wxMessageBox(L"请输入或选择合法的 GGUF 翻译模型路径！", L"系统设置",
+			wxMessageBox(L"配置已保存。提示：当前指定的 GGUF 翻译模型文件路径尚未找到有效文件。", L"系统设置",
 				wxOK | wxICON_WARNING, this);
 		}
 	}
@@ -594,56 +1065,157 @@ namespace LinguaAlpaca::UI {
 	void SettingsView::OnSaveOcrConfig(wxCommandEvent& WXUNUSED(event)) {
 		wxString ocrPath = m_ocrModelPathCtrl ? m_ocrModelPathCtrl->GetValue() : L"";
 		wxString mmprojPath = m_ocrMmprojPathCtrl ? m_ocrMmprojPathCtrl->GetValue() : L"";
+		long ocrNgl = 0;
+		if (m_ocrNglCtrl) m_ocrNglCtrl->GetValue().ToLong(&ocrNgl);
+		long ocrPort = 0;
+		if (m_ocrPortCtrl) m_ocrPortCtrl->GetValue().ToLong(&ocrPort);
+		long ocrCtx = 4096;
+		if (m_ocrCtxCtrl) m_ocrCtxCtrl->GetValue().ToLong(&ocrCtx);
+		bool mmprojOffload = m_ocrMmprojOffloadCheck ? m_ocrMmprojOffloadCheck->GetValue() : false;
 
 		if (m_configManager) {
-			m_configManager->SaveOcrConfig(ocrPath.ToUTF8().data(), mmprojPath.ToUTF8().data());
+			m_configManager->SaveOcrConfig(ocrPath.ToUTF8().data(), mmprojPath.ToUTF8().data(), (int)ocrNgl, (int)ocrPort, (int)ocrCtx, 0, mmprojOffload);
 		}
 
-		SetOcrModelPath(ocrPath, mmprojPath);
+		UpdateOcrStatus();
 
 		if (wxFileExists(ocrPath) && wxFileExists(mmprojPath)) {
 			wxMessageBox(L"OCR 主模型与 mmproj 视觉投影器配置已成功保存！",
 				L"系统设置", wxOK | wxICON_INFORMATION, this);
 		}
 		else {
-			wxMessageBox(L"请输入或选择合法的 OCR 主模型与 mmproj 视觉投影器文件路径！",
+			wxMessageBox(L"配置已保存。提示：请检查 OCR 主模型与 mmproj 视觉投影器文件路径是否有效。",
 				L"系统设置", wxOK | wxICON_WARNING, this);
 		}
 	}
 
+	void SettingsView::OnStartModel(wxCommandEvent& WXUNUSED(event)) {
+		if (!m_modelManager) return;
+		OnSaveConfig(wxCommandEvent{});
+
+		m_modelManager->EnsureModelAsync(
+			TargetModelType::Translation,
+			BindUi([this](const std::string& statusMsg) {
+				if (m_modelApiStatusText) {
+					m_modelApiStatusText->SetLabel(L"● " + wxString::FromUTF8(statusMsg));
+				}
+				UpdateTranslationStatus();
+				}),
+			BindUi([this](bool ok, const ServerStatusInfo& info) {
+				UpdateTranslationStatus();
+				if (ok) {
+					wxMessageBox(wxString::Format(L"翻译模型服务已成功启动！\n运行端口: %d\nAPI端点: http://127.0.0.1:%d/v1/chat/completions", info.port, info.port),
+						L"服务启动成功", wxOK | wxICON_INFORMATION, this);
+				}
+				else {
+					wxMessageBox(L"翻译模型服务启动失败: " + wxString::FromUTF8(info.message),
+						L"服务启动失败", wxOK | wxICON_ERROR, this);
+				}
+				})
+		);
+	}
+
+	void SettingsView::OnStopModel(wxCommandEvent& WXUNUSED(event)) {
+		if (!m_modelManager) return;
+		m_modelManager->StopModelAsync(TargetModelType::Translation, BindUi([this]() {
+			UpdateTranslationStatus();
+			wxMessageBox(L"翻译模型服务已停止。", L"提示", wxOK | wxICON_INFORMATION, this);
+			}));
+	}
+
+	void SettingsView::OnStartOcrModel(wxCommandEvent& WXUNUSED(event)) {
+		if (!m_modelManager) return;
+		OnSaveOcrConfig(wxCommandEvent{});
+
+		m_modelManager->EnsureModelAsync(
+			TargetModelType::Ocr,
+			BindUi([this](const std::string& statusMsg) {
+				if (m_ocrApiStatusText) {
+					m_ocrApiStatusText->SetLabel(L"● " + wxString::FromUTF8(statusMsg));
+				}
+				UpdateOcrStatus();
+				}),
+			BindUi([this](bool ok, const ServerStatusInfo& info) {
+				UpdateOcrStatus();
+				if (ok) {
+					wxMessageBox(wxString::Format(L"OCR 视觉识别服务已成功启动！\n运行端口: %d\nAPI端点: http://127.0.0.1:%d/v1/chat/completions", info.port, info.port),
+						L"服务启动成功", wxOK | wxICON_INFORMATION, this);
+				}
+				else {
+					wxMessageBox(L"OCR 视觉模型服务启动失败: " + wxString::FromUTF8(info.message),
+						L"服务启动失败", wxOK | wxICON_ERROR, this);
+				}
+				})
+		);
+	}
+
+	void SettingsView::OnStopOcrModel(wxCommandEvent& WXUNUSED(event)) {
+		if (!m_modelManager) return;
+		m_modelManager->StopModelAsync(TargetModelType::Ocr, BindUi([this]() {
+			UpdateOcrStatus();
+			wxMessageBox(L"OCR 视觉模型服务已停止。", L"提示", wxOK | wxICON_INFORMATION, this);
+			}));
+	}
+
 	void SettingsView::OnTestModel(wxCommandEvent& WXUNUSED(event)) {
-		wxString path = m_modelPathCtrl->GetValue();
+		wxString path = m_modelPathCtrl ? m_modelPathCtrl->GetValue() : "";
 		if (path.IsEmpty() || !wxFileExists(path)) {
 			wxMessageBox(L"请先配置合法的 .gguf 翻译模型文件路径！", L"测试模型失败",
 				wxOK | wxICON_WARNING, this);
+			return;
 		}
-		else {
-			SetModelPath(path);
-			wxMessageBox(L"正在测试推理，Hy-MT2 1.8B 翻译模型回应正常！",
-				L"测试模型成功", wxOK | wxICON_INFORMATION, this);
-		}
+
+		if (!m_modelManager) return;
+		m_modelManager->EnsureModelAsync(
+			TargetModelType::Translation,
+			nullptr,
+			BindUi([this](bool ok, const ServerStatusInfo& info) {
+				UpdateTranslationStatus();
+				if (ok) {
+					wxMessageBox(wxString::Format(L"翻译模型运行正常！\n端口: %d\n端点: http://127.0.0.1:%d/v1/chat/completions", info.port, info.port),
+						L"测试模型成功", wxOK | wxICON_INFORMATION, this);
+				}
+				else {
+					wxMessageBox(L"翻译模型测试失败: " + wxString::FromUTF8(info.message),
+						L"测试失败", wxOK | wxICON_ERROR, this);
+				}
+				})
+		);
 	}
 
 	void SettingsView::OnTestOcrModel(wxCommandEvent& WXUNUSED(event)) {
 		wxString mainPath = m_ocrModelPathCtrl ? m_ocrModelPathCtrl->GetValue() : L"";
 		wxString mmprojPath = m_ocrMmprojPathCtrl ? m_ocrMmprojPathCtrl->GetValue() : L"";
 
-		SetOcrModelPath(mainPath, mmprojPath);
-
 		bool mainOk = !mainPath.IsEmpty() && wxFileExists(mainPath);
 		bool mmprojOk = !mmprojPath.IsEmpty() && wxFileExists(mmprojPath);
 
-		if (mainOk && mmprojOk) {
-			wxMessageBox(L"OCR 模型路径与 mmproj 视觉投影器配置有效！",
-				L"测试模型成功", wxOK | wxICON_INFORMATION, this);
-		} else {
+		if (!mainOk || !mmprojOk) {
 			wxString msg = L"OCR 模型配置校验失败:\n";
 			if (!mainOk)
 				msg += L" - 主模型路径无效或文件缺失\n";
 			if (!mmprojOk)
 				msg += L" - mmproj 视觉投影器路径无效或文件缺失\n";
 			wxMessageBox(msg, L"测试 OCR 模型提示", wxOK | wxICON_WARNING, this);
+			return;
 		}
+
+		if (!m_modelManager) return;
+		m_modelManager->EnsureModelAsync(
+			TargetModelType::Ocr,
+			nullptr,
+			BindUi([this](bool ok, const ServerStatusInfo& info) {
+				UpdateOcrStatus();
+				if (ok) {
+					wxMessageBox(wxString::Format(L"OCR 视觉模型运行正常！\n端口: %d\n端点: http://127.0.0.1:%d/v1/chat/completions", info.port, info.port),
+						L"测试模型成功", wxOK | wxICON_INFORMATION, this);
+				}
+				else {
+					wxMessageBox(L"OCR 视觉模型测试失败: " + wxString::FromUTF8(info.message),
+						L"测试失败", wxOK | wxICON_ERROR, this);
+				}
+				})
+		);
 	}
 
 	void SettingsView::UpdateTheme() {
@@ -672,6 +1244,39 @@ namespace LinguaAlpaca::UI {
 			m_prefCard->SetBackgroundColour(palette.cardBg);
 		if (m_prefTitle)
 			m_prefTitle->SetForegroundColour(palette.textPrimary);
+		if (m_themeRadioBox)
+			m_themeRadioBox->SetForegroundColour(palette.textPrimary);
+		if (m_aboutDescText)
+			m_aboutDescText->SetForegroundColour(palette.textSecondary);
+		if (m_aboutBtn)
+			m_aboutBtn->Refresh();
+
+		if (m_modelGpuLabel) m_modelGpuLabel->SetForegroundColour(palette.textPrimary);
+		if (m_modelNglLabel) m_modelNglLabel->SetForegroundColour(palette.textPrimary);
+		if (m_modelPortLabel) m_modelPortLabel->SetForegroundColour(palette.textPrimary);
+		if (m_modelCtxLabel) m_modelCtxLabel->SetForegroundColour(palette.textPrimary);
+
+		if (m_ocrGpuLabel) m_ocrGpuLabel->SetForegroundColour(palette.textPrimary);
+		if (m_ocrNglLabel) m_ocrNglLabel->SetForegroundColour(palette.textPrimary);
+		if (m_ocrPortLabel) m_ocrPortLabel->SetForegroundColour(palette.textPrimary);
+		if (m_ocrCtxLabel) m_ocrCtxLabel->SetForegroundColour(palette.textPrimary);
+		if (m_ocrMmprojOffloadCheck) m_ocrMmprojOffloadCheck->SetForegroundColour(palette.textPrimary);
+
+		if (m_transModelLink) {
+			m_transModelLink->SetNormalColour(palette.accentPrimary);
+			m_transModelLink->SetHoverColour(palette.accentHover);
+		}
+		if (m_ocrModelLink) {
+			m_ocrModelLink->SetNormalColour(palette.accentPrimary);
+			m_ocrModelLink->SetHoverColour(palette.accentHover);
+		}
+		if (m_dictDownloadLink) {
+			m_dictDownloadLink->SetNormalColour(palette.accentPrimary);
+			m_dictDownloadLink->SetHoverColour(palette.accentHover);
+		}
+
+		if (m_modelApiPanel) m_modelApiPanel->SetBackgroundColour(palette.windowBg);
+		if (m_ocrApiPanel) m_ocrApiPanel->SetBackgroundColour(palette.windowBg);
 
 		if (m_selectionCard)
 			m_selectionCard->SetBackgroundColour(palette.cardBg);
@@ -732,39 +1337,43 @@ namespace LinguaAlpaca::UI {
 			m_scrollBar->Refresh();
 		}
 
-		if (m_modelPathCtrl)
-			m_modelPathCtrl->UpdateTheme();
-		if (m_browseBtn)
-			m_browseBtn->Refresh();
-		if (m_openDirBtn)
-			m_openDirBtn->Refresh();
-		if (m_saveBtn)
-			m_saveBtn->Refresh();
-		if (m_testBtn)
-			m_testBtn->Refresh();
+		if (m_modelPathCtrl) m_modelPathCtrl->UpdateTheme();
+		if (m_modelNglCtrl) m_modelNglCtrl->UpdateTheme();
+		if (m_modelPortCtrl) m_modelPortCtrl->UpdateTheme();
+		if (m_modelCtxCtrl) m_modelCtxCtrl->UpdateTheme();
+		if (m_modelGpuModeChoice) m_modelGpuModeChoice->UpdateTheme();
+		if (m_modelCopyApiBtn) m_modelCopyApiBtn->Refresh();
 
-		if (m_ocrModelPathCtrl)
-			m_ocrModelPathCtrl->UpdateTheme();
-		if (m_ocrMmprojPathCtrl)
-			m_ocrMmprojPathCtrl->UpdateTheme();
+		if (m_browseBtn) m_browseBtn->Refresh();
+		if (m_openDirBtn) m_openDirBtn->Refresh();
+		if (m_saveBtn) m_saveBtn->Refresh();
+		if (m_startBtn) m_startBtn->Refresh();
+		if (m_stopBtn) m_stopBtn->Refresh();
+		if (m_testBtn) m_testBtn->Refresh();
 
-		if (m_dictDirPathCtrl)
-			m_dictDirPathCtrl->UpdateTheme();
+		if (m_ocrModelPathCtrl) m_ocrModelPathCtrl->UpdateTheme();
+		if (m_ocrMmprojPathCtrl) m_ocrMmprojPathCtrl->UpdateTheme();
+		if (m_ocrNglCtrl) m_ocrNglCtrl->UpdateTheme();
+		if (m_ocrPortCtrl) m_ocrPortCtrl->UpdateTheme();
+		if (m_ocrCtxCtrl) m_ocrCtxCtrl->UpdateTheme();
+		if (m_ocrGpuModeChoice) m_ocrGpuModeChoice->UpdateTheme();
+		if (m_ocrCopyApiBtn) m_ocrCopyApiBtn->Refresh();
+
+		if (m_dictDirPathCtrl) m_dictDirPathCtrl->UpdateTheme();
 		if (m_dictListInfoCtrl) {
 			m_dictListInfoCtrl->SetBackgroundColour(palette.windowBg);
 			m_dictListInfoCtrl->SetForegroundColour(palette.textPrimary);
 			m_dictListInfoCtrl->Refresh();
 		}
 
-		if (m_ocrBrowseBtn)
-			m_ocrBrowseBtn->Refresh();
-		if (m_ocrMmprojBrowseBtn)
-			m_ocrMmprojBrowseBtn->Refresh();
-		if (m_ocrSaveBtn)
-			m_ocrSaveBtn->Refresh();
-		if (m_ocrTestBtn)
-			m_ocrTestBtn->Refresh();
+		if (m_ocrBrowseBtn) m_ocrBrowseBtn->Refresh();
+		if (m_ocrMmprojBrowseBtn) m_ocrMmprojBrowseBtn->Refresh();
+		if (m_ocrSaveBtn) m_ocrSaveBtn->Refresh();
+		if (m_ocrStartBtn) m_ocrStartBtn->Refresh();
+		if (m_ocrStopBtn) m_ocrStopBtn->Refresh();
+		if (m_ocrTestBtn) m_ocrTestBtn->Refresh();
 
+		UpdateTranslationStatus();
 		UpdateOcrStatus();
 		UpdateDictListSummary();
 		UpdateLayoutAndScroll();
@@ -795,7 +1404,7 @@ namespace LinguaAlpaca::UI {
 		}
 		win->Bind(wxEVT_MOUSEWHEEL, &SettingsView::OnMouseWheel, this);
 		for (wxWindowList::compatibility_iterator node = win->GetChildren().GetFirst();
-			 node; node = node->GetNext()) {
+			node; node = node->GetNext()) {
 			BindMouseWheelRecursively(node->GetData());
 		}
 	}
@@ -997,6 +1606,42 @@ namespace LinguaAlpaca::UI {
 			wxFileName::Mkdir(dirPath, 0777, wxPATH_MKDIR_FULL);
 		}
 		wxLaunchDefaultApplication(dirPath);
+	}
+
+	void SettingsView::SetThemeConfig(const AppConfig& cfg) {
+		if (!m_themeRadioBox) return;
+		if (cfg.themeMode == "Dark") {
+			m_themeRadioBox->SetSelection(1);
+		}
+		else if (cfg.themeMode == "System") {
+			m_themeRadioBox->SetSelection(2);
+		}
+		else {
+			m_themeRadioBox->SetSelection(0);
+		}
+	}
+
+	void SettingsView::OnThemeRadioChanged(wxCommandEvent& WXUNUSED(event)) {
+		if (!m_themeRadioBox) return;
+		int sel = m_themeRadioBox->GetSelection();
+		std::string themeModeStr = "Light";
+		if (sel == 1) {
+			themeModeStr = "Dark";
+		}
+		else if (sel == 2) {
+			themeModeStr = "System";
+		}
+
+		if (m_configManager) {
+			m_configManager->SaveThemeMode(themeModeStr);
+		}
+
+		ThemeManager::GetInstance().SetPreferenceByString(themeModeStr);
+	}
+
+	void SettingsView::OnShowAboutDialog(wxCommandEvent& WXUNUSED(event)) {
+		AboutDialog dlg(this);
+		dlg.ShowModal();
 	}
 
 } // namespace LinguaAlpaca::UI

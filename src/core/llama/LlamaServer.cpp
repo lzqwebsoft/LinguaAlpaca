@@ -172,8 +172,19 @@ bool LlamaServer::Start(const ServerConfig& config) {
         << " -ngl " << config.ngl
         << " --no-webui --jinja";
 
+    if (config.ctxSize > 0) {
+        cmd << " -c " << config.ctxSize;
+    }
+    if (config.threads > 0) {
+        cmd << " -t " << config.threads;
+    }
     if (!config.mmprojPath.empty()) {
         cmd << " --mmproj \"" << config.mmprojPath << "\"";
+        if (config.mmprojOffload) {
+            cmd << " --mmproj-offload";
+        } else {
+            cmd << " --no-mmproj-offload";
+        }
     }
 
     std::string cmdStr = cmd.str();
@@ -285,6 +296,9 @@ bool LlamaServer::IsAlive() const {
 }
 
 bool LlamaServer::QueryHealth(ServerStatusInfo& outInfo) const {
+    outInfo.port = m_port;
+    outInfo.baseUrl = m_baseUrl;
+
     if (!IsAlive() || m_baseUrl.empty()) {
         outInfo.state = ServerHealthState::Offline;
         outInfo.message = "服务未启动";
@@ -373,7 +387,11 @@ bool LlamaServer::EnsureModelRunning(
         std::lock_guard<std::mutex> lock(m_configMutex);
         sameConfig = (m_config.modelPath == config.modelPath &&
                       m_config.mmprojPath == config.mmprojPath &&
-                      m_config.ngl == config.ngl);
+                      m_config.mmprojOffload == config.mmprojOffload &&
+                      m_config.ngl == config.ngl &&
+                      m_config.port == config.port &&
+                      m_config.ctxSize == config.ctxSize &&
+                      m_config.threads == config.threads);
     }
 
     if (IsAlive() && sameConfig) {
@@ -418,8 +436,17 @@ bool LlamaServer::EnsureModelRunning(
     return ready;
 }
 
+int LlamaServer::GetPort() const {
+    return m_port;
+}
+
 std::string LlamaServer::GetBaseUrl() const {
     return m_baseUrl;
+}
+
+ServerConfig LlamaServer::GetConfig() const {
+    std::lock_guard<std::mutex> lock(m_configMutex);
+    return m_config;
 }
 
 } // namespace LinguaAlpaca

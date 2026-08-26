@@ -42,7 +42,6 @@ public:
 
 private:
     void InitUI();
-    void UpdateWindowShape();
     void OnPaint(wxPaintEvent& event);
     void OnAnimTimer(wxTimerEvent& event);
     void OnFinishTimer(wxTimerEvent& event);

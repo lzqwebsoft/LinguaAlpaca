@@ -35,9 +35,9 @@ TEST_CASE("ModelManager - Basic Stream Translation Test", "[core][model_manager]
         REQUIRE(done == true);
     }
 
-    SECTION("StopModelAsync resets active model type") {
+    SECTION("StopModelAsync stops translation and OCR servers") {
         bool stopped = false;
-        manager.StopModelAsync([&stopped]() {
+        manager.StopModelAsync(TargetModelType::None, [&stopped]() {
             stopped = true;
         });
         
@@ -47,6 +47,6 @@ TEST_CASE("ModelManager - Basic Stream Translation Test", "[core][model_manager]
             waitCount++;
         }
         REQUIRE(stopped == true);
-        REQUIRE(manager.GetActiveModelType() == TargetModelType::None);
+        REQUIRE(manager.IsSwitching() == false);
     }
 }

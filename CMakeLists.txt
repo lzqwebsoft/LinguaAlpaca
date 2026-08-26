@@ -124,6 +124,8 @@ set(UI_SOURCES
     src/ui/widgets/LanguageBar.cpp
     src/ui/widgets/WelcomeModelDialog.hpp
     src/ui/widgets/WelcomeModelDialog.cpp
+    src/ui/widgets/AboutDialog.hpp
+    src/ui/widgets/AboutDialog.cpp
     src/ui/widgets/ImagePreviewDialog.hpp
     src/ui/widgets/ImagePreviewDialog.cpp
     src/ui/widgets/FloatingIconFrame.hpp

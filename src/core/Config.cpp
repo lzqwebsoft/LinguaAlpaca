@@ -77,11 +77,28 @@ namespace LinguaAlpaca {
         Save();
     }
 
-    void ConfigManager::SaveOcrConfig(const std::string& ocrModelPath, const std::string& ocrMmprojPath) {
+    void ConfigManager::SaveModelConfig(const std::string& path, int gpuLayers, int port, int ctxSize, int threads) {
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            m_config.modelPath = path;
+            m_config.gpuLayers = gpuLayers;
+            m_config.translationPort = port;
+            m_config.translationCtxSize = ctxSize;
+            m_config.translationThreads = threads;
+        }
+        Save();
+    }
+
+    void ConfigManager::SaveOcrConfig(const std::string& ocrModelPath, const std::string& ocrMmprojPath, int ocrGpuLayers, int port, int ctxSize, int threads, bool ocrMmprojOffload) {
         {
             std::lock_guard<std::mutex> lock(m_mutex);
             m_config.ocrModelPath = ocrModelPath;
             m_config.ocrMmprojPath = ocrMmprojPath;
+            m_config.ocrGpuLayers = ocrGpuLayers;
+            m_config.ocrPort = port;
+            m_config.ocrCtxSize = ctxSize;
+            m_config.ocrThreads = threads;
+            m_config.ocrMmprojOffload = ocrMmprojOffload;
         }
         Save();
     }
@@ -136,7 +153,14 @@ namespace LinguaAlpaca {
         m_config.sourceLang = fileConfig.Read("/Language/SourceLang", "auto").ToUTF8().data();
         m_config.targetLang = fileConfig.Read("/Language/TargetLang", "zh").ToUTF8().data();
         m_config.gpuLayers = fileConfig.ReadLong("/Model/GpuLayers", 99);       // 99 表示全部是GPU
-        m_config.ocrGpuLayers = fileConfig.ReadLong("/OCRModel/GpuLayers", -1);  // 默认 0 (CPU 模式)，避免多模态 Vulkan 显存/TDR 崩溃
+        m_config.translationPort = fileConfig.ReadLong("/Model/Port", 0);
+        m_config.translationCtxSize = fileConfig.ReadLong("/Model/CtxSize", 2048);
+        m_config.translationThreads = fileConfig.ReadLong("/Model/Threads", 0);
+        m_config.ocrGpuLayers = fileConfig.ReadLong("/OCRModel/GpuLayers", 0);  // 默认 0 (CPU 模式)，避免多模态 Vulkan 显存/TDR 崩溃
+        m_config.ocrMmprojOffload = fileConfig.ReadBool("/OCRModel/MmprojOffload", false); // 默认 false (CPU 编码)
+        m_config.ocrPort = fileConfig.ReadLong("/OCRModel/Port", 0);
+        m_config.ocrCtxSize = fileConfig.ReadLong("/OCRModel/CtxSize", 4096);
+        m_config.ocrThreads = fileConfig.ReadLong("/OCRModel/Threads", 0);
 
         // 划词翻译配置
         m_config.selectionTranslateEnabled = fileConfig.ReadBool("/Selection/Enabled", true);
@@ -173,7 +197,14 @@ namespace LinguaAlpaca {
         fileConfig.Write("/Language/SourceLang", wxString::FromUTF8(m_config.sourceLang));
         fileConfig.Write("/Language/TargetLang", wxString::FromUTF8(m_config.targetLang));
         fileConfig.Write("/Model/GpuLayers", (long)m_config.gpuLayers);
+        fileConfig.Write("/Model/Port", (long)m_config.translationPort);
+        fileConfig.Write("/Model/CtxSize", (long)m_config.translationCtxSize);
+        fileConfig.Write("/Model/Threads", (long)m_config.translationThreads);
         fileConfig.Write("/OCRModel/GpuLayers", (long)m_config.ocrGpuLayers);
+        fileConfig.Write("/OCRModel/MmprojOffload", m_config.ocrMmprojOffload);
+        fileConfig.Write("/OCRModel/Port", (long)m_config.ocrPort);
+        fileConfig.Write("/OCRModel/CtxSize", (long)m_config.ocrCtxSize);
+        fileConfig.Write("/OCRModel/Threads", (long)m_config.ocrThreads);
 
         // 划词翻译配置
         fileConfig.Write("/Selection/Enabled", m_config.selectionTranslateEnabled);

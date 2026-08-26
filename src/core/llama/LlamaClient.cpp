@@ -150,8 +150,11 @@ void LlamaClient::TranslateStreamAsync(
                 }
             })},
             {"stream", true},
-            {"temperature", 0.0},
-            {"repetition_penalty", 1.05}
+            {"temperature", 0.7},
+            {"top_p", 0.6},
+            {"top_k", 20},
+            {"repetition_penalty", 1.05},
+            {"max_tokens", 4096}
         };
 
         std::string reqBody = body.dump();

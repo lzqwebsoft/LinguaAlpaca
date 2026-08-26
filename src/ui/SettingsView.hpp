@@ -1,9 +1,12 @@
 #pragma once
 #include <wx/wx.h>
 #include <wx/scrolwin.h>
+#include <wx/timer.h>
+#include <wx/hyperlink.h>
 #include <memory>
 #include "core/ModelManager.hpp"
 #include "core/Config.hpp"
+#include "AsyncTrackable.hpp"
 #include "widgets/CustomButton.hpp"
 #include "widgets/CustomChoice.hpp"
 #include "widgets/CustomInputBox.hpp"
@@ -13,11 +16,12 @@
 
 namespace LinguaAlpaca::UI {
 
-class SettingsView : public wxPanel {
+class SettingsView : public wxPanel, public AsyncTrackable {
 public:
     SettingsView(wxWindow* parent,
                  std::shared_ptr<ModelManager> modelManager,
                  wxWindowID id = wxID_ANY);
+    ~SettingsView();
 
     void UpdateTheme();
     void SetModelPath(const wxString& path);
@@ -31,18 +35,31 @@ private:
     void OnMouseWheel(wxMouseEvent& event);
     void BindMouseWheelRecursively(wxWindow* win);
 
+    // 翻译模型事件
     void OnBrowseModel(wxCommandEvent& event);
     void OnOpenModelDir(wxCommandEvent& event);
     void OnSaveConfig(wxCommandEvent& event);
+    void OnStartModel(wxCommandEvent& event);
+    void OnStopModel(wxCommandEvent& event);
     void OnTestModel(wxCommandEvent& event);
+    void OnCopyModelApiUrl(wxCommandEvent& event);
+    void OnModelGpuModeChanged(wxCommandEvent& event);
+    void UpdateTranslationStatus();
+
+    // OCR 模型事件
     void OnBrowseOcrModel(wxCommandEvent& event);
     void OnBrowseOcrMmproj(wxCommandEvent& event);
     void OnSaveOcrConfig(wxCommandEvent& event);
+    void OnStartOcrModel(wxCommandEvent& event);
+    void OnStopOcrModel(wxCommandEvent& event);
     void OnTestOcrModel(wxCommandEvent& event);
+    void OnCopyOcrApiUrl(wxCommandEvent& event);
+    void OnOcrGpuModeChanged(wxCommandEvent& event);
     void UpdateOcrStatus();
 
     std::shared_ptr<ModelManager> m_modelManager;
     std::shared_ptr<ConfigManager> m_configManager;
+    wxTimer m_statusTimer;
 
     // 视口容器、内容画板与自定义滚动条
     wxPanel* m_viewport{nullptr};
@@ -60,8 +77,28 @@ private:
     CustomInputBox* m_modelPathCtrl{nullptr};
     CustomButton* m_browseBtn{nullptr};
     CustomButton* m_openDirBtn{nullptr};
+
+    // 运行参数
+    wxStaticText* m_modelGpuLabel{nullptr};
+    CustomChoice* m_modelGpuModeChoice{nullptr};
+    wxStaticText* m_modelNglLabel{nullptr};
+    CustomInputBox* m_modelNglCtrl{nullptr};
+    wxStaticText* m_modelPortLabel{nullptr};
+    CustomInputBox* m_modelPortCtrl{nullptr};
+    wxStaticText* m_modelCtxLabel{nullptr};
+    CustomInputBox* m_modelCtxCtrl{nullptr};
+
+    // 本地 API 访问端点展示面板
+    wxPanel* m_modelApiPanel{nullptr};
+    wxStaticText* m_modelApiStatusText{nullptr};
+    wxStaticText* m_modelApiUrlText{nullptr};
+    CustomButton* m_modelCopyApiBtn{nullptr};
+
     CustomButton* m_saveBtn{nullptr};
+    CustomButton* m_startBtn{nullptr};
+    CustomButton* m_stopBtn{nullptr};
     CustomButton* m_testBtn{nullptr};
+    wxHyperlinkCtrl* m_transModelLink{nullptr};
 
     // UI Elements - 2. OCR 模型 Group
     wxPanel* m_ocrCard{nullptr};
@@ -76,11 +113,31 @@ private:
     CustomInputBox* m_ocrMmprojPathCtrl{nullptr};
     CustomButton* m_ocrMmprojBrowseBtn{nullptr};
 
+    // OCR 运行参数
+    wxStaticText* m_ocrGpuLabel{nullptr};
+    CustomChoice* m_ocrGpuModeChoice{nullptr};
+    wxStaticText* m_ocrNglLabel{nullptr};
+    CustomInputBox* m_ocrNglCtrl{nullptr};
+    wxStaticText* m_ocrPortLabel{nullptr};
+    CustomInputBox* m_ocrPortCtrl{nullptr};
+    wxStaticText* m_ocrCtxLabel{nullptr};
+    CustomInputBox* m_ocrCtxCtrl{nullptr};
+    wxCheckBox* m_ocrMmprojOffloadCheck{nullptr};
+
+    // OCR 本地 API 访问端点展示面板
+    wxPanel* m_ocrApiPanel{nullptr};
+    wxStaticText* m_ocrApiStatusText{nullptr};
+    wxStaticText* m_ocrApiUrlText{nullptr};
+    CustomButton* m_ocrCopyApiBtn{nullptr};
+
     CustomButton* m_ocrSaveBtn{nullptr};
+    CustomButton* m_ocrStartBtn{nullptr};
+    CustomButton* m_ocrStopBtn{nullptr};
     CustomButton* m_ocrTestBtn{nullptr};
 
     wxPanel* m_ocrFooterPanel{nullptr};
     wxStaticText* m_ocrFooterText{nullptr};
+    wxHyperlinkCtrl* m_ocrModelLink{nullptr};
 
     // UI Elements - 3. 划词翻译 Group
     wxPanel* m_selectionCard{nullptr};
@@ -110,6 +167,7 @@ private:
     wxStaticText* m_dictStatusText{nullptr};
     wxStaticText* m_dictListTitleText{nullptr};
     TextCtrl* m_dictListInfoCtrl{nullptr};
+    wxHyperlinkCtrl* m_dictDownloadLink{nullptr};
 
     void OnBrowseDictDir(wxCommandEvent& event);
     void OnOpenDictDir(wxCommandEvent& event);
@@ -134,6 +192,13 @@ private:
     // UI Elements - 6. 偏好设置 Group
     wxPanel* m_prefCard{nullptr};
     wxStaticText* m_prefTitle{nullptr};
+    wxRadioBox* m_themeRadioBox{nullptr};
+    CustomButton* m_aboutBtn{nullptr};
+    wxStaticText* m_aboutDescText{nullptr};
+
+    void OnThemeRadioChanged(wxCommandEvent& event);
+    void OnShowAboutDialog(wxCommandEvent& event);
+    void SetThemeConfig(const AppConfig& cfg);
 
     wxString m_configuredPath;
 };

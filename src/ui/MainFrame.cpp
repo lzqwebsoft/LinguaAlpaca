@@ -1,6 +1,7 @@
 #include "MainFrame.hpp"
 #include "theme/Theme.hpp"
 #include "theme/IconManager.hpp"
+#include "widgets/WelcomeModelDialog.hpp"
 #include <wx/dcbuffer.h>
 #include <wx/graphics.h>
 
@@ -61,6 +62,22 @@ namespace LinguaAlpaca::UI {
         SetMinClientSize(dip(960, 680));
         InitUI();
         Centre();
+
+        // 注册全局主题变更回调
+        ThemeManager::GetInstance().RegisterCallback([this](ThemeMode) {
+            ApplyTheme();
+        });
+
+        // 根据已保存配置初始化主题偏好
+        if (m_modelManager && m_modelManager->GetConfigManager()) {
+            auto cfg = m_modelManager->GetConfigManager()->GetConfig();
+            ThemeManager::GetInstance().SetPreferenceByString(cfg.themeMode);
+        }
+
+        // 启动完全后，如果没有配置翻译模型则弹出欢迎引导
+        CallAfter([this]() {
+            CheckAndShowWelcomeDialog();
+        });
     }
 
     void MainFrame::InitUI() {
@@ -236,6 +253,20 @@ namespace LinguaAlpaca::UI {
         }
     }
 
+    void MainFrame::CheckAndShowWelcomeDialog() {
+        if (!m_modelManager || !m_modelManager->GetConfigManager()) return;
+
+        auto config = m_modelManager->GetConfigManager()->GetConfig();
+        bool hasModel = !config.modelPath.empty() && wxFileExists(wxString::FromUTF8(config.modelPath));
+
+        if (!hasModel) {
+            WelcomeModelDialog dlg(this);
+            if (dlg.ShowModal() == wxID_OK && dlg.ShouldNavigateToSettings()) {
+                NavigateToSettings();
+            }
+        }
+    }
+
     void MainFrame::OnHeaderLeftDown(wxMouseEvent& event) {
 #ifdef __WXMSW__
         ReleaseCapture();
@@ -284,8 +315,7 @@ namespace LinguaAlpaca::UI {
         m_maxBtn->Refresh();
     }
 
-    void MainFrame::OnThemeToggle(wxCommandEvent& WXUNUSED(event)) {
-        ThemeManager::GetInstance().ToggleTheme();
+    void MainFrame::ApplyTheme() {
         auto palette = ThemeColors::GetCurrentPalette();
 
         SetBackgroundColour(palette.cardBorder);
@@ -336,6 +366,13 @@ namespace LinguaAlpaca::UI {
 
         Refresh();
         m_contentContainer->Refresh();
+    }
+
+    void MainFrame::OnThemeToggle(wxCommandEvent& WXUNUSED(event)) {
+        ThemeManager::GetInstance().ToggleTheme();
+        if (m_modelManager && m_modelManager->GetConfigManager()) {
+            m_modelManager->GetConfigManager()->SaveThemeMode(ThemeManager::GetInstance().GetPreferenceString());
+        }
     }
 
     void MainFrame::OnNavChanged(wxCommandEvent& event) {

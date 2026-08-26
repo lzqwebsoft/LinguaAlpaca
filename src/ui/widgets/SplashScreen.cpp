@@ -46,13 +46,7 @@ namespace LinguaAlpaca::UI {
 	void SplashScreen::InitUI() {
 		SetBackgroundStyle(wxBG_STYLE_PAINT);
 
-		UpdateWindowShape();
-
 		Bind(wxEVT_PAINT, &SplashScreen::OnPaint, this);
-		Bind(wxEVT_SIZE, [this](wxSizeEvent& event) {
-			UpdateWindowShape();
-			event.Skip();
-			});
 
 		// 绑定平滑插值动画定时器 (约 60fps, 16ms 间隔)
 		Bind(wxEVT_TIMER, &SplashScreen::OnAnimTimer, this, m_animTimer.GetId());
@@ -60,29 +54,6 @@ namespace LinguaAlpaca::UI {
 		Bind(wxEVT_TIMER, &SplashScreen::OnFinishTimer, this, m_finishTimer.GetId());
 
 		m_animTimer.Start(16);
-	}
-
-	void SplashScreen::UpdateWindowShape() {
-		wxSize sz = GetClientSize();
-		if (sz.x <= 0 || sz.y <= 0) return;
-
-#ifdef _WIN32
-		HWND hwnd = (HWND)GetHWND();
-		if (hwnd) {
-			int radius = (int)(14.0_dip);
-			HRGN hRgn = ::CreateRoundRectRgn(0, 0, sz.x + 1, sz.y + 1, radius * 2, radius * 2);
-			if (hRgn) {
-				::SetWindowRgn(hwnd, hRgn, TRUE);
-			}
-		}
-#else
-		wxGraphicsRenderer* renderer = wxGraphicsRenderer::GetDefaultRenderer();
-		if (renderer) {
-			wxGraphicsPath path = renderer->CreatePath();
-			path.AddRoundedRectangle(0, 0, sz.x, sz.y, 14.0_dip);
-			SetShape(path);
-		}
-#endif
 	}
 
 	void SplashScreen::SetProgress(float targetProgress, const wxString& statusText) {
@@ -263,16 +234,10 @@ namespace LinguaAlpaca::UI {
 		std::unique_ptr<wxGraphicsContext> gc(wxGraphicsContext::Create(dc));
 		if (!gc) return;
 
-		// 1. 绘制带有柔和微渐变的高端卡片底色与精细边框
-		double cornerRadius = 14.0_dip;
-
-		wxGraphicsGradientStops bgGrad;
-		bgGrad.Add(palette.cardBg, 0.0f);
-		bgGrad.Add(palette.windowBg, 1.0f);
-		wxGraphicsBrush bgBrush = gc->CreateLinearGradientBrush(0, 0, 0, size.y, bgGrad);
-		gc->SetBrush(bgBrush);
+		// 1. 绘制纯色背景与精细直角矩形边框
+		gc->SetBrush(gc->CreateBrush(wxBrush(palette.cardBg)));
 		gc->SetPen(gc->CreatePen(wxPen(palette.cardBorder, 1.0)));
-		gc->DrawRoundedRectangle(0.5, 0.5, size.x - 1.0, size.y - 1.0, cornerRadius);
+		gc->DrawRectangle(0.5, 0.5, size.x - 1.0, size.y - 1.0);
 
 		// 2. 第一行：精致 Logo (42x42) + 主标题与英文副标组合
 		wxSize logoSize = dip(42, 42);

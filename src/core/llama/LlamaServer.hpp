@@ -24,7 +24,10 @@ struct ServerConfig {
     int port = 0; // 0 表示自动查找可用端口
     std::string modelPath;
     std::string mmprojPath;
+    bool mmprojOffload = false; // 是否对 mmproj 视觉投影器启用 GPU 硬件加速
     int ngl = 99;
+    int ctxSize = 2048;
+    int threads = 0;
 };
 
 class LlamaServer {
@@ -53,9 +56,11 @@ public:
         const std::function<bool()>& shouldAbort = nullptr
     );
 
+    int GetPort() const;
     std::string GetBaseUrl() const;
     std::string GetCurrentModelPath() const;
     std::string GetCurrentMmprojPath() const;
+    ServerConfig GetConfig() const;
 
     static std::string FindLlamaServerBinary();
 

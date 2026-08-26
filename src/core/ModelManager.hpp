@@ -24,25 +24,22 @@ public:
     ModelManager(const ModelManager&) = delete;
     ModelManager& operator=(const ModelManager&) = delete;
 
-    // 异步确保/切换目标模型就绪
+    // 异步确保目标模型服务就绪 (互不影响，支持双模型同时在线)
     void EnsureModelAsync(
         TargetModelType type,
         std::function<void(const std::string& statusMsg)> onProgress = nullptr,
         std::function<void(bool success, const ServerStatusInfo& info)> onComplete = nullptr
     );
 
-    void StopModelAsync(std::function<void()> onComplete = nullptr);
+    void StopModelAsync(
+        TargetModelType type = TargetModelType::None,
+        std::function<void()> onComplete = nullptr
+    );
 
-    // 同步探针查询模型健康状态
+    // 同步探针查询指定模型健康状态及端口
     ServerStatusInfo GetHealthStatus(TargetModelType targetType) const;
 
-    TargetModelType GetActiveModelType() const {
-        return m_activeModelType.load(std::memory_order_acquire);
-    }
-
-    bool IsSwitching() const {
-        return m_isSwitching.load(std::memory_order_acquire);
-    }
+    bool IsSwitching(TargetModelType type = TargetModelType::None) const;
 
     // 统一推理调度
     void ExecuteTranslationStream(
@@ -58,28 +55,41 @@ public:
         OcrCompleteCallback onComplete
     );
 
-    void CancelInference();
+    void CancelInference(TargetModelType type = TargetModelType::None);
 
     // 历史记录操作
     void AddHistory(const HistoryRecord& record);
     std::vector<HistoryRecord> GetHistory() const;
     void ClearHistory();
 
-    std::shared_ptr<LlamaClient> GetClient() const { return m_client; }
-    std::shared_ptr<LlamaServer> GetServer() const { return m_server; }
+    std::shared_ptr<LlamaClient> GetClient(TargetModelType type = TargetModelType::Translation) const {
+        return (type == TargetModelType::Ocr) ? m_ocrClient : m_transClient;
+    }
+    std::shared_ptr<LlamaServer> GetServer(TargetModelType type = TargetModelType::Translation) const {
+        return (type == TargetModelType::Ocr) ? m_ocrServer : m_transServer;
+    }
+    std::shared_ptr<LlamaServer> GetTranslationServer() const { return m_transServer; }
+    std::shared_ptr<LlamaServer> GetOcrServer() const { return m_ocrServer; }
+    std::shared_ptr<LlamaClient> GetTranslationClient() const { return m_transClient; }
+    std::shared_ptr<LlamaClient> GetOcrClient() const { return m_ocrClient; }
+
     std::shared_ptr<ConfigManager> GetConfigManager() const { return m_configManager; }
     std::shared_ptr<DictEngine> GetDictEngine() const { return m_dictEngine; }
 
 private:
     std::shared_ptr<ConfigManager> m_configManager;
-    std::shared_ptr<LlamaServer> m_server;
-    std::shared_ptr<LlamaClient> m_client;
+    std::shared_ptr<LlamaServer> m_transServer;
+    std::shared_ptr<LlamaServer> m_ocrServer;
+    std::shared_ptr<LlamaClient> m_transClient;
+    std::shared_ptr<LlamaClient> m_ocrClient;
     std::shared_ptr<DictEngine> m_dictEngine;
 
-    std::atomic<TargetModelType> m_activeModelType{TargetModelType::None};
-    std::atomic<bool> m_isSwitching{false};
-    std::atomic<uint64_t> m_currentSessionId{0};
-    mutable std::mutex m_switchMutex;
+    std::atomic<bool> m_isTransSwitching{false};
+    std::atomic<bool> m_isOcrSwitching{false};
+    std::atomic<uint64_t> m_transSessionId{0};
+    std::atomic<uint64_t> m_ocrSessionId{0};
+    mutable std::mutex m_transSwitchMutex;
+    mutable std::mutex m_ocrSwitchMutex;
 
     mutable std::mutex m_historyMutex;
     std::vector<HistoryRecord> m_history;

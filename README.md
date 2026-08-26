@@ -5,7 +5,7 @@
 <h1 align="center">LinguaAlpaca · 译灵驼</h1>
 
 <p align="center">
-  “凭本地之智，见世界之全，守私密之心”
+  “凭本地之智，见世界之全 —— 端侧多模态全能离线翻译助手”
 </p>
 
 <br/>
@@ -18,33 +18,41 @@
   <img src="https://img.shields.io/badge/License-MIT-2E7D32?style=flat-square" alt="License" />
 </p>
 
-**LinguaAlpaca (译灵驼)** 是一款使用 C++17 与 wxWidgets 打造的现代化、高颜值的跨平台桌面离线 AI 翻译、StarDict 离线词典与多模态 OCR 助手。项目深度整合 **llama.cpp** 原生引擎与内嵌服务（默认推荐腾讯 **Hy-MT2-1.8B-GGUF** 高性能离线翻译模型与 **PaddleOCR-VL** 视觉大模型），采用模块化清晰扁平架构，具备毫秒级快速启动、按需异步调度、全局划词悬浮气泡与完整的自动化单元测试。
+**LinguaAlpaca (译灵驼)** 是一款基于 C++17 与 wxWidgets 打造的现代化、高颜值跨平台桌面离线 AI 翻译、StarDict 离线词典与多模态 OCR 视觉助手。项目深度整合 **llama.cpp** 原生引擎与内嵌后台服务（推荐搭载腾讯 **Hy-MT2-1.8B-GGUF** 高性能离线翻译模型与 **PaddleOCR-VL** 视觉大模型），采用模块化清晰扁平架构，具备毫秒级快速启动、按需异步调度、全局划词悬浮气泡、剪贴板截图实时粘贴与完整的自动化单元测试。
 
 ---
 
 ## 🌟 核心功能与亮点 (Key Features)
 
-- ⚡ **秒级无缝启动与自适应启动页 (Splash Screen)**：
-  - 无边框物理圆角裁剪（Win32 `SetWindowRgn`），零直角溢出白边。
-  - 启动 UI 毫秒级即刻显示（< 30ms），耗时的词典库与大模型初始化全部异步推进。
-  - 内置 60fps 平滑缓动渐变进度条与自适应防重叠状态反馈。
-- 🤖 **内嵌 `llama_server` 与 HTTP SSE 流式推理**：
+- ⚡ **秒级无缝启动与智能引导 (Splash Screen & Welcome Dialog)**：
+  - 现代化扁平启动页，耗时的大模型与词典加载全部异步推进，应用毫秒级快速就绪。
+  - 内置首次使用环境检测（`WelcomeModelDialog`），未配置模型时直观弹窗引导直达配置页面。
+- 🤖 **内嵌 `llama_server` 与 HTTP SSE 流式打字机推理**：
   - 基于后台独立线程与动态端口分配，通过标准 HTTP SSE 协议实现 Token 级打字机流式翻译与视觉识别。
-  - 严格对齐腾讯混元 Hy-MT2-1.8B 官方 ChatML 模版指令，输出纯净且准确。
+  - 严格对齐腾讯混元 Hy-MT2-1.8B 官方 ChatML 模版指令，深度优化采样参数（`temp:0.7, top_p:0.6, top_k:20, rep_pen:1.05`），翻译精准、地道且无多余冗余解释。
+  - 支持全文语音朗读 (TTS)、一键复制、语言快速互换与自动识别。
+- 🖼️ **多模态 PaddleOCR-VL 视觉大模型识别**：
+  - 支持通识 OCR、表格识别、公式识别、图表识别、文本定位与印章识别等多种复杂视觉文档任务。
+  - 交互体验升级：支持**点击上传**、**文件拖拽**与**系统剪贴板截图实时粘贴 (Ctrl+V)**。
+  - 内置图片全尺寸高保真平移缩放预览对话框（`ImagePreviewDialog`）。
+  - 显存安全保护策略：支持独立的 `--no-mmproj-offload` / CPU 模式与 GPU 层数精确配置，彻底防止大分辨率图像爆显存。
 - 📖 **高性能 StarDict 本地离线词典引擎**：
-  - 支持 `.idx`、`.dict`、`.dict.dz`、`.ifo` 等格式的离线词典解析。
-  - 支持前缀模糊联想、毫秒级二分快速检索与独立字典管理视图。
-- 🖼️ **多模态 PaddleOCR-VL 视觉识别**：
-  - 支持通识 OCR、表格识别、公式识别、图表识别、文本定位与印章识别等多种视觉大模型任务。
+  - 支持 `.idx`、`.dict`、`.dict.dz`、`.ifo` 等标准格式离线词典库的解析。
+  - 支持前缀智能联想补全、毫秒级二分快速检索、音标发音、词性语法富文本高亮渲染与独立字典管理视图。
 - 🖱️ **全局划词与现代悬浮翻译气泡**：
-  - 基于系统原生钩子的无感全局划词捕获（`SelectionService`）。
-  - Win32 Per-Pixel Alpha 分层平滑抗锯齿悬浮图标（`FloatingIconFrame`）与多显示器智能贴边避让气泡（`TranslationBubbleFrame`）。
+  - 基于系统原生全局钩子的无感划词监听（`SelectionService`），支持直接划词、快捷键+划词、双击划词等多种模式。
+  - 鼠标释放（弹起）点精准锚定浮动图标，Win32 Per-Pixel Alpha 分层平滑抗锯齿悬浮图标（`FloatingIconFrame`）与多显示器智能贴边避让气泡（`TranslationBubbleFrame`）。
+  - UIAutomation + 剪贴板保护双通道提取，提取过程零剪贴板内容污染。
 - 🛡️ **线程安全 UI 同步机制 (`AsyncTrackable` & `BindUi`)**：
   - 针对多线程后台回调封装了 RAII 机制的 `BindUi` 辅助器与原子生命周期令牌，彻底杜绝悬空指针与跨线程 UI 崩溃。
 - 🔄 **按需启动与无缝模型切换 (On-Demand Loading)**：
-  - 功能页面切换时异步按需拉起并加载对应模型，实时 `/health` 探针与 Badge 徽标动态联动。
-- 🎨 **现代化美学与深色模式**：
-  - 极简卡片式流式布局，自绘微渐变与发光边框，完美支持 Windows Per-Monitor V2 高分屏高 DPI 缩放（`_dip` 语法糖）。
+  - 页面导航切换时异步按需拉起并加载对应模型，实时 `/health` 探针与 Badge 状态徽标动态联动。
+- 🎨 **现代化美学与全套主题体系**：
+  - 支持「浅色」、「暗色」、「跟随系统」三种主题模式切换，统一规范的高保真 SVG 矢量图标。
+  - 极简卡片式弹性流式布局，完美自适应 Windows Per-Monitor V2 高分屏高 DPI 缩放（`_dip` 语法糖）。
+- 🔗 **便捷资源下载与关于页面**：
+  - 设置页面内置 HuggingFace 模型与 StarDict 词典库直达下载导航链接。
+  - 官方「关于」对话框展示应用初衷、项目主页与版本信息。
 
 ---
 
@@ -57,7 +65,8 @@
 │                               UI 表现层                                │
 │   - MainFrame (主窗口与路由调度)        - SplashScreen (现代启动页)   │
 │   - TextView (流式翻译视图)              - OcrView (多模态视觉识别)    │
-│   - DictView (StarDict 查词视图)        - SettingsView (设置与下载)   │
+│   - DictView (StarDict 查词视图)        - LogView (日志诊断监控视图)  │
+│   - SettingsView (设置与下载)           - WelcomeModelDialog (引导弹窗)│
 │   - FloatingIcon / TranslationBubble (全局划词悬浮组件)                │
 │   - AsyncTrackable / ThemeManager / IconManager (主题与线程安全设施)   │
 └───────────────────────────────────┬────────────────────────────────────┘
@@ -70,6 +79,8 @@
 │ ├─ LlamaClient (OpenAI 兼容的 HTTP SSE 流式通信客户端)                 │
 │ ├─ DictEngine (StarDict 离线词典索引与查询聚合引擎)                    │
 │ ├─ SelectionService (全局鼠标键盘钩子与划词文本监听服务)               │
+│ ├─ ScreenTextExtractor (UIAutomation / 剪贴板双通道文本提取器)        │
+│ ├─ ClipboardHelper / WinTtsHelper / WinMediaOcrHelper (系统能力封装)   │
 │ ├─ ConfigManager (轻量化 config.ini 持久化管理)                       │
 │ ├─ Downloader (HuggingFace / 镜像源断点续传模型下载器)                 │
 │ └─ Logger / Types.hpp (统一日志设施与数据结构规范)                     │
@@ -93,13 +104,19 @@ src/
 │   ├── Types.hpp            # 统一数据结构 (LanguageCode, ServerStatusInfo, TranslationTask 等)
 │   ├── Logger.hpp / .cpp    # 轻量化带时间戳与等级的日志系统
 │   ├── Config.hpp / .cpp    # 基于 wxFileConfig 的配置管理器 (ConfigManager)
-│   ├── dict/                # StarDict 词典核心引擎
-│   │   └── DictEngine.hpp/.cpp # 词典解压、索引建立与多词典聚合检索
-│   ├── llama/               # 嵌入式 llama_server 与 SSE 客户端
-│   │   ├── LlamaServer.hpp/.cpp # 后台服务进程守护、健康探针与自动端口分配
-│   │   └── LlamaClient.hpp/.cpp # 标准 HTTP SSE 流式打字机通信客户端
-│   ├── ModelManager.hpp/.cpp# ★ 统一模型管理中枢 (生命周期管理、按需模型加载与推理调度)
+│   ├── ClipboardHelper.hpp/.cpp # Win32 剪贴板保护读写辅助工具
+│   ├── ScreenTextExtractor.hpp/.cpp # 屏幕划词多通道文本提取器
 │   ├── SelectionService.hpp/.cpp # Win32 全局划词捕获监听服务
+│   ├── WinUIAutomationHelper.hpp/.cpp # Windows UI Automation 无障碍选区提取
+│   ├── WinMediaOcrHelper.hpp/.cpp     # Windows 原生 OCR 提取辅助
+│   ├── WinTtsHelper.hpp/.cpp          # Windows SAPI / WinRT 离线语音合成朗读
+│   ├── dict/                # StarDict 词典核心引擎
+│   │   ├── DictEngine.hpp/.cpp   # 词典解压、索引建立与多词典聚合检索
+│   │   └── DictFormatter.hpp/.cpp# Pango/MediaWiki/Kingsoft 等字典标记富文本解析
+│   ├── llama/               # 嵌入式 llama_server 与 SSE 客户端
+│   │   ├── LlamaServer.hpp/.cpp  # 后台服务进程守护、健康探针与自动端口分配
+│   │   └── LlamaClient.hpp/.cpp  # 标准 HTTP SSE 流式打字机通信客户端
+│   ├── ModelManager.hpp/.cpp# ★ 统一模型管理中枢 (生命周期管理、按需模型加载与推理调度)
 │   └── Downloader.hpp/.cpp  # 异步 HTTP 模型断点续传下载器
 │
 ├── engine/                  # 【原生引擎层】(保留 100% 原生 C API 离线实现，供深入学习参考)
@@ -112,22 +129,31 @@ src/
 │   ├── theme/               # 主题调色板、DPI 语法糖与 SVG 矢量图标库
 │   │   ├── Theme.hpp        # 调色板代币规范与主题管理器 (ThemeManager)
 │   │   ├── Dpi.hpp          # Modern C++ DPI 缩放语法糖 (_dip / dip)
-│   │   ├── AppIcons.hpp     # 统一 SVG 矢量图标常量
+│   │   ├── AppIcons.hpp     # 统一 SVG 矢量图标常量规范
 │   │   └── IconManager.hpp/.cpp # SVG 矢量图标高质量抗锯齿渲染器
 │   ├── widgets/             # 自定义复用组件库
-│   │   ├── SplashScreen.hpp/.cpp        # ★ 物理圆角现代启动页
+│   │   ├── SplashScreen.hpp/.cpp        # ★ 现代自适应启动页
+│   │   ├── WelcomeModelDialog.hpp/.cpp  # 首次使用模型配置引导对话框
+│   │   ├── AboutDialog.hpp/.cpp         # 官方关于与主页介绍对话框
 │   │   ├── FloatingIconFrame.hpp/.cpp   # 分层抗锯齿悬浮划词图标
 │   │   ├── TranslationBubbleFrame.hpp/.cpp # 多显示器智能贴边悬浮翻译气泡
 │   │   ├── CustomButton.hpp/.cpp        # 自绘制圆角胶囊按钮
-│   │   ├── SidebarNav.hpp/.cpp          # 侧边导航栏 (文本, OCR, 词典, 设置)
+│   │   ├── CustomChoice.hpp/.cpp        # 自绘制圆角下拉选择框
+│   │   ├── CustomInputBox.hpp/.cpp      # 自绘制文本输入框
+│   │   ├── TextCtrl.hpp/.cpp            # 现代化多行富文本编辑器
+│   │   ├── CardPanel.hpp/.cpp           # 现代化卡片容器组件
+│   │   ├── StatusBadge.hpp/.cpp         # 实时服务状态彩色徽标
+│   │   ├── SidebarNav.hpp/.cpp          # 侧边导航栏 (文本, OCR, 词典, 日志, 设置)
 │   │   ├── LanguageBar.hpp/.cpp         # 语言选择器与一键互换条
-│   │   ├── CardPanel.hpp/.cpp           # 现代化卡片容器
-│   │   ├── WelcomeModelDialog.hpp/.cpp  # 首次使用模型引导对话框
+│   │   ├── ScrollBar.hpp/.cpp           # 现代化细条滚动条
+│   │   ├── SplitterWindow.hpp/.cpp      # 分割窗口容器
+│   │   ├── SuggestListBox.hpp/.cpp      # 词典前缀补全下拉列表
 │   │   └── ImagePreviewDialog.hpp/.cpp  # 图片大图平移缩放预览对话框
 │   ├── TextView.hpp/.cpp    # 文本流式翻译视图 (打字机效果、实时状态 Badge)
-│   ├── OcrView.hpp/.cpp     # 图片 OCR 视觉识别视图 (拖拽上传、多类型切换)
+│   ├── OcrView.hpp/.cpp     # 图片 OCR 视觉识别视图 (拖拽/剪贴板粘贴上传、多任务切换)
 │   ├── DictView.hpp/.cpp    # StarDict 离线词典检索与管理视图
-│   ├── SettingsView.hpp/.cpp# 模型配置、词典目录与下载设置视图
+│   ├── LogView.hpp/.cpp     # 系统运行与服务诊断实时日志视图
+│   ├── SettingsView.hpp/.cpp# 模型配置、硬件加速、划词、词典与主题设置视图
 │   ├── PlaceholderView.hpp  # 通用占位视图
 │   └── MainFrame.hpp/.cpp   # 主窗口框架 (路由切换与按需模型加载驱动)
 │
@@ -143,7 +169,7 @@ src/
 - **操作系统**：Windows 10 / 11 (x64)
 - **编译器**：Visual Studio 2022 (MSVC v143) 或更高，支持 C++17
 - **构建工具**：CMake 3.20+
-- **Vulkan SDK** *(可选，用于 GPU 加速推理)*
+- **Vulkan SDK** _(可选，用于 GPU 加速推理)_
 
 ### 2. 初始化 Git 子模块
 
@@ -172,7 +198,7 @@ cmake --build build --config Debug --target LinguaAlpaca
 
 ### 5. 运行自动化单元测试
 
-项目集成了 Catch2 单元测试套件，覆盖了核心配置、语言转换、词典加载与检索等逻辑：
+项目集成了 Catch2 单元测试套件，覆盖核心配置、语言转换、词典加载与检索、划词提取与坐标计算等关键逻辑：
 
 ```powershell
 # 编译单元测试
@@ -189,6 +215,7 @@ cmake --build build --config Debug --target unit_tests
 - **[wxWidgets 3.3.4](https://www.wxwidgets.org/)**：跨平台 GUI 原生组件、Direct2D/GDI+ 绘图、High-DPI 缩放及 `wxStandardPaths` 支持。
 - **[llama.cpp](https://github.com/ggerganov/llama.cpp)**：提供高效的嵌入式 `llama_server`、CPU/Vulkan GPU 后端推理引擎与多模态 mtmd 视觉支持。
 - **[Tencent Hy-MT2](https://huggingface.co/tencent/Hy-MT2-1.8B-GGUF)**：腾讯开源的高性能 1.8B 离线翻译模型。
-- **[PaddleOCR-VL](https://github.com/PaddlePaddle/PaddleOCR)**：多模态端到端视觉文档解析模型。
+- **[PaddleOCR-VL](https://huggingface.co/PaddlePaddle/PaddleOCR-VL-1.6-GGUF)**：多模态端到端视觉文档解析模型。
+- **[StarDict 离线词典库](https://stardict.uber.space/)**：免费丰富的跨语言离线词典资源。
 - **[nlohmann/json](https://github.com/nlohmann/json)**：现代 C++ JSON 序列化与解析库。
 - **[Catch2](https://github.com/catchorg/Catch2)**：现代化 C++ 单元测试框架。

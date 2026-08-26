@@ -344,7 +344,7 @@ namespace LinguaAlpaca::UI {
 		wxFont sloganFont(8.5, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei");
 		gc->SetFont(sloganFont, palette.textSecondary);
 
-		wxString sloganText = L"凭本地之智，见世界之全，守私密之心";
+		wxString sloganText = L"凭本地之智，见世界之全 —— 端侧多模态全能离线翻译助手";
 		double sw = 0, sh = 0;
 		gc->GetTextExtent(sloganText, &sw, &sh);
 		double sloganX = (size.x - sw) / 2.0;

@@ -40,7 +40,7 @@ namespace LinguaAlpaca::UI {
         nameRow->Add(nameText, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8_dip);
         nameRow->Add(versionBadge, 0, wxALIGN_CENTER_VERTICAL);
 
-        wxStaticText* sloganText = new wxStaticText(this, wxID_ANY, L"本地智能，沟通无界 —— 端侧多模态全能离线翻译助手");
+        wxStaticText* sloganText = new wxStaticText(this, wxID_ANY, L"凭本地之智，见世界之全 —— 端侧多模态全能离线翻译助手");
         sloganText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
         sloganText->SetForegroundColour(palette.accentPrimary);
 

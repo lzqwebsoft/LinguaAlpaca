@@ -36,7 +36,7 @@ namespace LinguaAlpaca::UI {
         mainSizer->AddSpacer(6_dip);
 
         // 3. 副标题口号说明
-        wxStaticText* subtitleText = new wxStaticText(this, wxID_ANY, L"本地智能，沟通无界 —— 端侧多模态全能离线翻译助手");
+        wxStaticText* subtitleText = new wxStaticText(this, wxID_ANY, L"凭本地之智，见世界之全 —— 端侧多模态全能离线翻译助手");
         subtitleText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
         subtitleText->SetForegroundColour(palette.accentPrimary);
         mainSizer->Add(subtitleText, 0, wxALIGN_CENTER);

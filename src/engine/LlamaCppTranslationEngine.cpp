@@ -109,6 +109,7 @@ bool LlamaCppTranslationEngine::LoadModel(const std::string& modelPath) {
     }
 
     llama_model_params model_params = llama_model_default_params();
+    model_params.n_gpu_layers = 99;
     m_model = llama_model_load_from_file(modelPath.c_str(), model_params);
 
     if (m_model) {

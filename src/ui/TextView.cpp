@@ -1,4 +1,5 @@
 #include "TextView.hpp"
+#include "core/ClipboardHelper.hpp"
 #include "core/WinTtsHelper.hpp"
 #include "theme/IconManager.hpp"
 #include "theme/Theme.hpp"
@@ -36,7 +37,7 @@ namespace LinguaAlpaca::UI {
 		// 1. 顶栏：SVG 图标 + 标题 (文本翻译) + 状态标签 (● 监听中)
 		wxBoxSizer* headerSizer = new wxBoxSizer(wxHORIZONTAL);
 
-		wxBitmapBundle titleBundle = IconManager::GetIconBundle(SVG::TEXT, dip(22, 22), palette.accentPrimary);
+		wxBitmapBundle titleBundle = IconManager::GetIconBundle(SVG::TEXT, wxSize(22, 22), palette.accentPrimary);
 		wxStaticBitmap* titleIcon = new wxStaticBitmap(this, wxID_ANY, titleBundle);
 
 		m_titleText = new wxStaticText(this, wxID_ANY, L"文本翻译");
@@ -91,13 +92,9 @@ namespace LinguaAlpaca::UI {
 			WinTtsHelper::GetInstance().Speak(text.ToStdWstring(), srcLang);
 			});
 		m_sourceCard->AddToolIcon(2, SVG::PASTE, L"粘贴文本", [this]() {
-			if (wxTheClipboard->Open()) {
-				if (wxTheClipboard->IsSupported(wxDF_TEXT)) {
-					wxTextDataObject data;
-					wxTheClipboard->GetData(data);
-					m_sourceCard->GetTextCtrl()->SetValue(data.GetText());
-				}
-				wxTheClipboard->Close();
+			std::string text = ClipboardHelper::GetClipboardText();
+			if (!text.empty()) {
+				m_sourceCard->GetTextCtrl()->SetValue(wxString::FromUTF8(text));
 			}
 			});
 		m_sourceCard->AddToolIcon(3, SVG::CLEAR, L"清空原文", [this]() {
@@ -119,9 +116,8 @@ namespace LinguaAlpaca::UI {
 			});
 		m_targetCard->AddToolIcon(2, SVG::COPY, L"复制译文", [this]() {
 			wxString text = m_targetCard->GetTextCtrl()->GetValue();
-			if (!text.IsEmpty() && wxTheClipboard->Open()) {
-				wxTheClipboard->SetData(new wxTextDataObject(text));
-				wxTheClipboard->Close();
+			if (!text.IsEmpty()) {
+				ClipboardHelper::SetClipboardText(text.ToUTF8().data());
 			}
 			});
 
@@ -380,9 +376,7 @@ namespace LinguaAlpaca::UI {
 		if (text.IsEmpty())
 			return;
 
-		if (wxTheClipboard->Open()) {
-			wxTheClipboard->SetData(new wxTextDataObject(text));
-			wxTheClipboard->Close();
+		if (ClipboardHelper::SetClipboardText(text.ToUTF8().data())) {
 			wxMessageBox(L"译文已成功复制到剪贴板！", L"提示",
 				wxOK | wxICON_INFORMATION, this);
 		}

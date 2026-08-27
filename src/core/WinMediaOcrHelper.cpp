@@ -117,19 +117,26 @@ bool WinMediaOcrHelper::TryExtract(int startX, int startY, int endX, int endY, s
             height
         );
 
-        // 3. 运行 Windows 原生 Media.Ocr
-        auto engine = winrt::Windows::Media::Ocr::OcrEngine::TryCreateFromUserProfileLanguages();
-        if (!engine) {
-            engine = winrt::Windows::Media::Ocr::OcrEngine::TryCreateFromLanguage(
-                winrt::Windows::Globalization::Language(L"zh-Hans-CN")
-            );
-        }
+        // 3. 运行 Windows 原生 Media.Ocr (缓存引擎单例，避免每次提取时重复加载模型消耗 100~300ms)
+        static winrt::Windows::Media::Ocr::OcrEngine s_engine = []() {
+            try {
+                auto eng = winrt::Windows::Media::Ocr::OcrEngine::TryCreateFromUserProfileLanguages();
+                if (!eng) {
+                    eng = winrt::Windows::Media::Ocr::OcrEngine::TryCreateFromLanguage(
+                        winrt::Windows::Globalization::Language(L"zh-Hans-CN")
+                    );
+                }
+                return eng;
+            } catch (...) {
+                return winrt::Windows::Media::Ocr::OcrEngine{nullptr};
+            }
+        }();
 
-        if (!engine) {
+        if (!s_engine) {
             return false;
         }
 
-        auto ocrResult = engine.RecognizeAsync(softwareBitmap).get();
+        auto ocrResult = s_engine.RecognizeAsync(softwareBitmap).get();
         if (!ocrResult) {
             return false;
         }

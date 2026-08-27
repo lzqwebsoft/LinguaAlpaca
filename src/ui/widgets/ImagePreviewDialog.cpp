@@ -32,7 +32,7 @@ void ImagePreviewDialog::InitUI() {
 
     wxBoxSizer* topSizer = new wxBoxSizer(wxHORIZONTAL);
 
-    wxBitmapBundle eyeBundle = IconManager::GetIconBundle(SVG::EYE, dip(16, 16), palette.accentPrimary);
+    wxBitmapBundle eyeBundle = IconManager::GetIconBundle(SVG::EYE, wxSize(16, 16), palette.accentPrimary);
     wxStaticBitmap* titleIcon = new wxStaticBitmap(m_topBar, wxID_ANY, eyeBundle);
 
     wxStaticText* titleText = new wxStaticText(m_topBar, wxID_ANY, L"图片预览 (支持滚轮缩放 / 拖拽平移)");

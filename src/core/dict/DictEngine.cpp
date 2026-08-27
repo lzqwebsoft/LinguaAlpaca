@@ -389,22 +389,23 @@ bool StarDictBook::InitDictReader() {
     return true;
 }
 
-std::vector<uint8_t> StarDictBook::GetDecompressedChunk(uint32_t chunkIndex) {
-    if (chunkIndex >= m_chunkCount) return {};
+std::shared_ptr<const std::vector<uint8_t>> StarDictBook::GetDecompressedChunk(uint32_t chunkIndex) {
+    if (chunkIndex >= m_chunkCount) return nullptr;
 
     std::lock_guard<std::mutex> lock(m_cacheMutex);
     for (auto it = m_chunkCache.begin(); it != m_chunkCache.end(); ++it) {
         if (it->chunkIndex == chunkIndex) {
-            ChunkCacheEntry entry = *it;
+            auto dataPtr = it->data;
+            ChunkCacheEntry entry = { it->chunkIndex, it->data };
             m_chunkCache.erase(it);
-            m_chunkCache.push_back(entry);
-            return entry.data;
+            m_chunkCache.push_back(std::move(entry));
+            return dataPtr;
         }
     }
 
     wxLogNull noLog;
     wxFile file(wxString::FromUTF8(m_info.dictPath), wxFile::read);
-    if (!file.IsOpened()) return {};
+    if (!file.IsOpened()) return nullptr;
 
     uint64_t chunkOffset = m_chunkOffsets[chunkIndex];
     uint32_t chunkSize = m_chunkSizes[chunkIndex];
@@ -412,13 +413,13 @@ std::vector<uint8_t> StarDictBook::GetDecompressedChunk(uint32_t chunkIndex) {
     file.Seek(chunkOffset);
     std::vector<uint8_t> compressed(chunkSize);
     if (file.Read(compressed.data(), chunkSize) != chunkSize) {
-        return {};
+        return nullptr;
     }
     file.Close();
 
-    std::vector<uint8_t> decompressed;
-    if (!InflateData(compressed.data(), compressed.size(), m_chunkLen, decompressed)) {
-        return {};
+    auto decompressed = std::make_shared<std::vector<uint8_t>>();
+    if (!InflateData(compressed.data(), compressed.size(), m_chunkLen, *decompressed)) {
+        return nullptr;
     }
 
     if (m_chunkCache.size() >= MAX_CHUNK_CACHE) {
@@ -442,7 +443,7 @@ std::string StarDictBook::ReadDictData(uint64_t offset, uint32_t size) {
         return buffer;
     }
 
-    // DictZip 分块按需提取
+    // DictZip 分块按需提取 (零拷贝共享指针)
     uint32_t startChunk = static_cast<uint32_t>(offset / m_chunkLen);
     uint32_t endChunk = static_cast<uint32_t>((offset + size - 1) / m_chunkLen);
 
@@ -450,16 +451,16 @@ std::string StarDictBook::ReadDictData(uint64_t offset, uint32_t size) {
     result.reserve(size);
 
     for (uint32_t c = startChunk; c <= endChunk; ++c) {
-        std::vector<uint8_t> chunkData = GetDecompressedChunk(c);
-        if (chunkData.empty()) continue;
+        auto chunkData = GetDecompressedChunk(c);
+        if (!chunkData || chunkData->empty()) continue;
 
         uint64_t chunkStartOffset = static_cast<uint64_t>(c) * m_chunkLen;
         uint64_t readStart = (offset > chunkStartOffset) ? (offset - chunkStartOffset) : 0;
-        uint64_t readEnd = ((offset + size) < (chunkStartOffset + chunkData.size())) ?
-                           (offset + size - chunkStartOffset) : chunkData.size();
+        uint64_t readEnd = ((offset + size) < (chunkStartOffset + chunkData->size())) ?
+                           (offset + size - chunkStartOffset) : chunkData->size();
 
-        if (readStart < chunkData.size() && readEnd > readStart) {
-            result.append(reinterpret_cast<const char*>(&chunkData[readStart]), readEnd - readStart);
+        if (readStart < chunkData->size() && readEnd > readStart) {
+            result.append(reinterpret_cast<const char*>(&(*chunkData)[readStart]), readEnd - readStart);
         }
     }
 

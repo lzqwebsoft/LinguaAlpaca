@@ -92,16 +92,16 @@ private:
     std::vector<uint64_t> m_chunkOffsets; // 每个分块在压缩文件中的绝对偏移
     uint64_t m_dataStartOffset{0};
 
-    // 简单 LRU 分块解压缓存
+    // 简单 LRU 分块解压缓存 (使用 shared_ptr 避免 64KB vector 频繁深度复制)
     mutable std::mutex m_cacheMutex;
     struct ChunkCacheEntry {
         uint32_t chunkIndex;
-        std::vector<uint8_t> data;
+        std::shared_ptr<const std::vector<uint8_t>> data;
     };
     std::vector<ChunkCacheEntry> m_chunkCache;
     static constexpr size_t MAX_CHUNK_CACHE = 8;
 
-    std::vector<uint8_t> GetDecompressedChunk(uint32_t chunkIndex);
+    std::shared_ptr<const std::vector<uint8_t>> GetDecompressedChunk(uint32_t chunkIndex);
 };
 
 /**

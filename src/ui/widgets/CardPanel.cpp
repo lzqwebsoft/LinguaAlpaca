@@ -106,7 +106,7 @@ namespace LinguaAlpaca::UI {
 		for (int i = (int)m_tools.size() - 1; i >= 0; --i) {
 			toolX -= toolIconSz.x;
 			wxColour toolColor = (m_hoverToolIndex == i) ? palette.accentPrimary : palette.textSecondary;
-			wxBitmapBundle bundle = IconManager::GetIconBundle(m_tools[i].svgContent, toolIconSz, toolColor);
+			wxBitmapBundle bundle = IconManager::GetIconBundle(m_tools[i].svgContent, wxSize(16, 16), toolColor);
 			wxBitmap bmp = bundle.GetBitmap(toolIconSz);
 			if (bmp.IsOk()) {
 				gc->DrawBitmap(bmp, toolX, 12_dip, toolIconSz.x, toolIconSz.y);

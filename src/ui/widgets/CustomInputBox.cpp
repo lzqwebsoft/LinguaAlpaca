@@ -143,7 +143,7 @@ void CustomInputBox::OnPaint(wxPaintEvent &WXUNUSED(event)) {
     wxColour iconColor =
         m_isFocused ? palette.accentPrimary : palette.textSecondary;
     wxBitmapBundle iconBundle =
-        IconManager::GetIconBundle(m_prefixSvg, m_prefixIconSize, iconColor);
+        IconManager::GetIconBundle(m_prefixSvg, wxSize(16, 16), iconColor);
     wxBitmap iconBmp = iconBundle.GetBitmap(m_prefixIconSize);
     if (iconBmp.IsOk()) {
       int iconX = 11_dip;
@@ -173,7 +173,7 @@ void CustomInputBox::OnPaint(wxPaintEvent &WXUNUSED(event)) {
         m_isClearHovered ? palette.accentPrimary : palette.textSecondary;
     wxSize clearIconSize = dip(11, 11);
     wxBitmapBundle closeBundle =
-        IconManager::GetIconBundle(SVG::CLOSE, clearIconSize, clearColor);
+        IconManager::GetIconBundle(SVG::CLOSE, wxSize(11, 11), clearColor);
     wxBitmap closeBmp = closeBundle.GetBitmap(clearIconSize);
     if (closeBmp.IsOk()) {
       int cx = clearRect.x + (clearRect.width - clearIconSize.x) / 2;

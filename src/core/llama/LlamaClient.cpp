@@ -7,6 +7,7 @@
 #include <iostream>
 #include <nlohmann/json.hpp>
 #include <sstream>
+#include <string_view>
 #include <vector>
 
 #include <http.h>
@@ -194,14 +195,22 @@ void LlamaClient::TranslateStreamAsync(
                     buffer.append(data, len);
                     size_t pos;
                     while ((pos = buffer.find("\n\n")) != std::string::npos) {
-                        std::string eventBlock = buffer.substr(0, pos);
-                        buffer.erase(0, pos + 2);
+                        std::string_view eventBlock(buffer.data(), pos);
 
-                        std::istringstream stream(eventBlock);
-                        std::string line;
-                        while (std::getline(stream, line)) {
+                        size_t lineStart = 0;
+                        while (lineStart < eventBlock.size()) {
+                            size_t lineEnd = eventBlock.find('\n', lineStart);
+                            if (lineEnd == std::string_view::npos) {
+                                lineEnd = eventBlock.size();
+                            }
+                            std::string_view line = eventBlock.substr(lineStart, lineEnd - lineStart);
+                            if (!line.empty() && line.back() == '\r') {
+                                line.remove_suffix(1);
+                            }
+                            lineStart = lineEnd + 1;
+
                             if (line.rfind("data: ", 0) == 0) {
-                                std::string jsonStr = line.substr(6);
+                                std::string_view jsonStr = line.substr(6);
                                 if (jsonStr == "[DONE]") {
                                     break;
                                 }
@@ -222,6 +231,7 @@ void LlamaClient::TranslateStreamAsync(
                                 }
                             }
                         }
+                        buffer.erase(0, pos + 2);
                     }
                     return true;
                 }
@@ -340,14 +350,22 @@ void LlamaClient::RecognizeStream(
                     buffer.append(data, len);
                     size_t pos;
                     while ((pos = buffer.find("\n\n")) != std::string::npos) {
-                        std::string eventBlock = buffer.substr(0, pos);
-                        buffer.erase(0, pos + 2);
+                        std::string_view eventBlock(buffer.data(), pos);
 
-                        std::istringstream stream(eventBlock);
-                        std::string line;
-                        while (std::getline(stream, line)) {
+                        size_t lineStart = 0;
+                        while (lineStart < eventBlock.size()) {
+                            size_t lineEnd = eventBlock.find('\n', lineStart);
+                            if (lineEnd == std::string_view::npos) {
+                                lineEnd = eventBlock.size();
+                            }
+                            std::string_view line = eventBlock.substr(lineStart, lineEnd - lineStart);
+                            if (!line.empty() && line.back() == '\r') {
+                                line.remove_suffix(1);
+                            }
+                            lineStart = lineEnd + 1;
+
                             if (line.rfind("data: ", 0) == 0) {
-                                std::string jsonStr = line.substr(6);
+                                std::string_view jsonStr = line.substr(6);
                                 if (jsonStr == "[DONE]") {
                                     break;
                                 }
@@ -368,6 +386,7 @@ void LlamaClient::RecognizeStream(
                                 }
                             }
                         }
+                        buffer.erase(0, pos + 2);
                     }
                     return true;
                 }

@@ -47,7 +47,7 @@ void DictView::InitUI() {
     wxBoxSizer* headerTopSizer = new wxBoxSizer(wxHORIZONTAL);
 
     wxBitmapBundle titleBundle = IconManager::GetIconBundle(
-        SVG::DICTIONARY, dip(24, 24), palette.accentPrimary);
+        SVG::DICTIONARY, wxSize(24, 24), palette.accentPrimary);
     wxStaticBitmap* titleIcon = new wxStaticBitmap(m_headerPanel, wxID_ANY, titleBundle);
 
     m_titleText = new wxStaticText(m_headerPanel, wxID_ANY, L"词典查询");
@@ -137,7 +137,7 @@ void DictView::InitUI() {
     m_suggestHeaderBar->SetBackgroundColour(palette.cardBg);
 
     wxBoxSizer* suggestHeaderSizer = new wxBoxSizer(wxHORIZONTAL);
-    wxBitmapBundle suggestIconBundle = IconManager::GetIconBundle(SVG::BROWSE, dip(16, 16), palette.accentPrimary);
+    wxBitmapBundle suggestIconBundle = IconManager::GetIconBundle(SVG::BROWSE, wxSize(16, 16), palette.accentPrimary);
     m_suggestIcon = new wxStaticBitmap(m_suggestHeaderBar, wxID_ANY, suggestIconBundle);
 
     m_suggestTitle = new wxStaticText(m_suggestHeaderBar, wxID_ANY, L"联想词列表");
@@ -185,7 +185,7 @@ void DictView::InitUI() {
     m_wordHeaderBar->SetBackgroundColour(palette.cardBg);
 
     wxBoxSizer* wordHeaderSizer = new wxBoxSizer(wxHORIZONTAL);
-    wxBitmapBundle resultIconBundle = IconManager::GetIconBundle(SVG::TEXT, dip(16, 16), palette.accentPrimary);
+    wxBitmapBundle resultIconBundle = IconManager::GetIconBundle(SVG::TEXT, wxSize(16, 16), palette.accentPrimary);
     m_resultIcon = new wxStaticBitmap(m_wordHeaderBar, wxID_ANY, resultIconBundle);
 
     m_headwordText = new wxStaticText(m_wordHeaderBar, wxID_ANY, L"输入单词开始查询");
@@ -234,7 +234,7 @@ void DictView::InitUI() {
 
     wxBoxSizer* emptySizer = new wxBoxSizer(wxVERTICAL);
     wxBitmapBundle emptyBundle = IconManager::GetIconBundle(
-        SVG::DICTIONARY, dip(48, 48), palette.textSecondary);
+        SVG::DICTIONARY, wxSize(48, 48), palette.textSecondary);
     m_emptyIcon = new wxStaticBitmap(m_emptyStateCard, wxID_ANY, emptyBundle);
 
     m_emptyTitle = new wxStaticText(m_emptyStateCard, wxID_ANY, L"欢迎使用 StarDict 本地词典");
@@ -578,7 +578,7 @@ void DictView::UpdateTheme() {
         m_suggestHeaderBar->Refresh();
     }
     if (m_suggestIcon) {
-        wxBitmapBundle suggestIconBundle = IconManager::GetIconBundle(SVG::BROWSE, dip(16, 16), palette.accentPrimary);
+        wxBitmapBundle suggestIconBundle = IconManager::GetIconBundle(SVG::BROWSE, wxSize(16, 16), palette.accentPrimary);
         m_suggestIcon->SetBitmap(suggestIconBundle);
     }
     if (m_suggestTitle) {
@@ -599,7 +599,7 @@ void DictView::UpdateTheme() {
         m_wordHeaderBar->Refresh();
     }
     if (m_resultIcon) {
-        wxBitmapBundle resultIconBundle = IconManager::GetIconBundle(SVG::TEXT, dip(16, 16), palette.accentPrimary);
+        wxBitmapBundle resultIconBundle = IconManager::GetIconBundle(SVG::TEXT, wxSize(16, 16), palette.accentPrimary);
         m_resultIcon->SetBitmap(resultIconBundle);
     }
     if (m_headwordText) {

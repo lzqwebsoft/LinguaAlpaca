@@ -72,7 +72,7 @@ void SidebarNav::OnPaint(wxPaintEvent& WXUNUSED(event)) {
         wxColour iconTextColour = isSelected ? *wxWHITE : (isHovered ? palette.textPrimary : palette.textSecondary);
 
         // SVG Vector Icon
-        wxBitmapBundle bundle = IconManager::GetIconBundle(item.svgContent, dip(20, 20), iconTextColour);
+        wxBitmapBundle bundle = IconManager::GetIconBundle(item.svgContent, wxSize(20, 20), iconTextColour);
         wxBitmap bmp = bundle.GetBitmap(dip(20, 20));
         if (bmp.IsOk()) {
             gc->DrawBitmap(bmp, (size.x - bmp.GetWidth()) / 2.0, yPos + 8_dip, bmp.GetWidth(), bmp.GetHeight());

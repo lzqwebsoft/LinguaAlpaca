@@ -1,13 +1,16 @@
 #include "OcrView.hpp"
+#include "core/ClipboardHelper.hpp"
 #include "core/WinTtsHelper.hpp"
 #include "theme/IconManager.hpp"
 #include "theme/Theme.hpp"
+#include <base64.hpp>
 #include <wx/clipbrd.h>
 #include <wx/dataobj.h>
 #include <wx/dcbuffer.h>
 #include <wx/filedlg.h>
 #include <wx/filename.h>
 #include <wx/graphics.h>
+#include <wx/mstream.h>
 #include <wx/stdpaths.h>
 
 namespace LinguaAlpaca::UI {
@@ -42,7 +45,7 @@ namespace LinguaAlpaca::UI {
 		wxBoxSizer* headerSizer = new wxBoxSizer(wxHORIZONTAL);
 
 		wxBitmapBundle titleBundle = IconManager::GetIconBundle(
-			SVG::OCR, dip(24, 24), palette.accentPrimary);
+			SVG::OCR, wxSize(24, 24), palette.accentPrimary);
 		wxStaticBitmap* titleIcon = new wxStaticBitmap(this, wxID_ANY, titleBundle);
 
 		m_titleText = new wxStaticText(this, wxID_ANY, L"图片 OCR 识别");
@@ -96,7 +99,7 @@ namespace LinguaAlpaca::UI {
 
 		wxBoxSizer* dropSizer = new wxBoxSizer(wxVERTICAL);
 
-		wxBitmapBundle uploadBundle = IconManager::GetIconBundle(SVG::CLOUD_UPLOAD, dip(44, 44), palette.accentPrimary);
+		wxBitmapBundle uploadBundle = IconManager::GetIconBundle(SVG::CLOUD_UPLOAD, wxSize(44, 44), palette.accentPrimary);
 		m_uploadIconBmp = new wxStaticBitmap(m_dropzonePanel, wxID_ANY, uploadBundle);
 
 		m_dropTextPrimary = new wxStaticText(m_dropzonePanel, wxID_ANY, L"点击上传 或 拖拽/粘贴图片至此");
@@ -183,7 +186,7 @@ namespace LinguaAlpaca::UI {
 						gc->DrawRoundedRectangle(topBtnX, topBtnY, topBtnW, topBtnH, 6.0_dip);
 
 						wxSize topIconSz = dip(14, 14);
-						wxBitmapBundle eyeBundle = IconManager::GetIconBundle(SVG::EYE, topIconSz, topText);
+						wxBitmapBundle eyeBundle = IconManager::GetIconBundle(SVG::EYE, wxSize(14, 14), topText);
 						wxBitmap eyeBmp = eyeBundle.GetBitmap(topIconSz);
 
 						wxFont topFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei");
@@ -213,7 +216,7 @@ namespace LinguaAlpaca::UI {
 						gc->DrawRoundedRectangle(centerBtnX, centerBtnY, centerBtnW, centerBtnH, 10.0_dip);
 
 						wxSize centerIconSz = dip(16, 16);
-						wxBitmapBundle cloudBundle = IconManager::GetIconBundle(SVG::CLOUD_UPLOAD, centerIconSz, *wxWHITE);
+						wxBitmapBundle cloudBundle = IconManager::GetIconBundle(SVG::CLOUD_UPLOAD, wxSize(16, 16), *wxWHITE);
 						wxBitmap cloudBmp = cloudBundle.GetBitmap(centerIconSz);
 
 						wxFont centerFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei");
@@ -272,9 +275,7 @@ namespace LinguaAlpaca::UI {
 			if (text.IsEmpty())
 				return;
 
-			if (wxTheClipboard->Open()) {
-				wxTheClipboard->SetData(new wxTextDataObject(text));
-				wxTheClipboard->Close();
+			if (ClipboardHelper::SetClipboardText(text.ToUTF8().data())) {
 				wxMessageBox(L"识别结果已复制到剪贴板！", L"提示",
 					wxOK | wxICON_INFORMATION, this);
 			}
@@ -412,8 +413,8 @@ namespace LinguaAlpaca::UI {
 			m_resultCard->UpdateTheme();
 
 		if (m_uploadIconBmp) {
-			wxBitmapBundle uploadBundle = IconManager::GetIconBundle(SVG::CLOUD_UPLOAD, dip(44, 44), palette.accentPrimary);
-			m_uploadIconBmp->SetBitmap(uploadBundle.GetBitmap(dip(44, 44)));
+			wxBitmapBundle uploadBundle = IconManager::GetIconBundle(SVG::CLOUD_UPLOAD, wxSize(44, 44), palette.accentPrimary);
+			m_uploadIconBmp->SetBitmap(uploadBundle);
 		}
 
 		if (m_recognizeBtn)
@@ -514,7 +515,7 @@ namespace LinguaAlpaca::UI {
 		if (m_currentState == OcrTaskState::Recognizing)
 			return;
 
-		if (m_loadedImage.IsOk() && !m_loadedImagePath.IsEmpty()) {
+		if (m_loadedImage.IsOk()) {
 			wxPoint pt = event.GetPosition();
 			if (m_previewBtnRect.Contains(pt)) {
 				OpenImagePreview();
@@ -557,18 +558,11 @@ namespace LinguaAlpaca::UI {
 				if (bmp.IsOk()) {
 					wxImage img = bmp.ConvertToImage();
 					if (img.IsOk()) {
-						wxString cacheDir = wxStandardPaths::Get().GetUserDataDir() + wxFileName::GetPathSeparator() + "cache";
-						if (!wxDirExists(cacheDir)) {
-							wxFileName::Mkdir(cacheDir, 0777, wxPATH_MKDIR_FULL);
-						}
-						wxString tempPath = cacheDir + wxFileName::GetPathSeparator() + "clipboard_ocr_temp.png";
-						if (img.SaveFile(tempPath, wxBITMAP_TYPE_PNG)) {
-							m_loadedImagePath = tempPath;
-							m_imageFileName = L"剪贴板截图.png";
-							m_loadedImage = img;
-							UpdateDropzoneUI();
-							handled = true;
-						}
+						m_loadedImagePath = L"[剪贴板截图]";
+						m_imageFileName = L"剪贴板截图.png";
+						m_loadedImage = img;
+						UpdateDropzoneUI();
+						handled = true;
 					}
 				}
 			}
@@ -600,7 +594,7 @@ namespace LinguaAlpaca::UI {
 		wxMenu menu;
 		menu.Append(1001, L"粘贴图片 (Ctrl+V)");
 		menu.Append(1002, L"选择本地图片...");
-		if (m_loadedImage.IsOk() && !m_loadedImagePath.IsEmpty()) {
+		if (m_loadedImage.IsOk()) {
 			menu.AppendSeparator();
 			menu.Append(1003, L"预览图片");
 			menu.Append(1004, L"清除图片");
@@ -633,7 +627,7 @@ namespace LinguaAlpaca::UI {
 	}
 
 	void OcrView::UpdateDropzoneUI() {
-		bool hasImage = m_loadedImage.IsOk() && !m_loadedImagePath.IsEmpty();
+		bool hasImage = m_loadedImage.IsOk();
 
 		if (hasImage) {
 			if (m_uploadIconBmp)
@@ -699,8 +693,8 @@ namespace LinguaAlpaca::UI {
 		if (m_currentState != OcrTaskState::Idle)
 			return;
 
-		if (m_loadedImagePath.IsEmpty()) {
-			wxMessageBox(L"请先上传或拖拽一张待识别的图片！", L"提示",
+		if (!m_loadedImage.IsOk()) {
+			wxMessageBox(L"请先上传、拖拽或从剪贴板粘贴一张待识别的图片！", L"提示",
 				wxOK | wxICON_INFORMATION, this);
 			return;
 		}
@@ -763,8 +757,48 @@ namespace LinguaAlpaca::UI {
 			m_resultCard->SetCharacterCount(0);
 		}
 
+		// 纯内存智能等比缩放与 JPEG 压缩（完全不写入磁盘缓存）：
+		// 1. 若图片尺寸过大 (如长边超过 1536px)，在内存中进行高质量双三次等比缩放；
+		// 2. 统一通过 wxMemoryOutputStream 在内存中压缩为质量 88 的 JPEG 数据流；
+		// 3. 内存直接 base64 编码构造 data:image/jpeg;base64,... 并送入模型，零磁盘 I/O、零临时文件。
+		std::string dataUri;
+		if (m_loadedImage.IsOk()) {
+			int origW = m_loadedImage.GetWidth();
+			int origH = m_loadedImage.GetHeight();
+			constexpr int MAX_OCR_DIM = 1536;
+
+			wxImage targetImg;
+			if (origW > MAX_OCR_DIM || origH > MAX_OCR_DIM) {
+				double scale = static_cast<double>(MAX_OCR_DIM) / std::max(origW, origH);
+				int newW = std::max(1, static_cast<int>(origW * scale));
+				int newH = std::max(1, static_cast<int>(origH * scale));
+				targetImg = m_loadedImage.Scale(newW, newH, wxIMAGE_QUALITY_HIGH);
+			}
+			else {
+				targetImg = m_loadedImage.Copy();
+			}
+
+			if (targetImg.IsOk()) {
+				wxMemoryOutputStream memStream;
+				targetImg.SetOption(wxIMAGE_OPTION_QUALITY, 88);
+				if (targetImg.SaveFile(memStream, wxBITMAP_TYPE_JPEG)) {
+					wxStreamBuffer* buf = memStream.GetOutputStreamBuffer();
+					if (buf && buf->GetBufferSize() > 0) {
+						std::string rawData(static_cast<const char*>(buf->GetBufferStart()), buf->GetBufferSize());
+						std::string b64 = base64::encode(rawData);
+						dataUri = "data:image/jpeg;base64," + b64;
+					}
+				}
+			}
+		}
+
+		// 回退容错：若内存编码失败则使用原路径
+		if (dataUri.empty() && !imgPath.empty()) {
+			dataUri = imgPath;
+		}
+
 		m_modelManager->ExecuteOcrStream(
-			imgPath, taskType,
+			dataUri, taskType,
 			BindUi([this](const std::string& token) {
 				if (!m_resultCard || !m_resultCard->GetTextCtrl()) return;
 				m_resultCard->GetTextCtrl()->AppendText(wxString::FromUTF8(token));

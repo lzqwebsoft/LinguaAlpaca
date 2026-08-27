@@ -45,7 +45,7 @@ void LanguageBar::InitUI() {
     m_targetChoice->SetStringSelection(L"中文");
 
     // 交换按钮 (SVG Swap)
-    wxBitmapBundle swapBundle = IconManager::GetIconBundle(SVG::SWAP, dip(16, 16), palette.textPrimary);
+    wxBitmapBundle swapBundle = IconManager::GetIconBundle(SVG::SWAP, wxSize(16, 16), palette.textPrimary);
     m_swapBtn = new wxBitmapButton(this, wxID_ANY, swapBundle, wxDefaultPosition, dip(36, 30), wxBORDER_NONE);
     m_swapBtn->SetBackgroundColour(palette.windowBg);
     m_swapBtn->SetToolTip(L"互换源语言与目标语言");
@@ -80,7 +80,7 @@ void LanguageBar::UpdateTheme() {
     }
 
     if (m_swapBtn) {
-        wxBitmapBundle swapBundle = IconManager::GetIconBundle(SVG::SWAP, dip(16, 16), palette.textPrimary);
+        wxBitmapBundle swapBundle = IconManager::GetIconBundle(SVG::SWAP, wxSize(16, 16), palette.textPrimary);
         m_swapBtn->SetBitmap(swapBundle);
         m_swapBtn->SetBackgroundColour(palette.windowBg);
         m_swapBtn->Refresh();

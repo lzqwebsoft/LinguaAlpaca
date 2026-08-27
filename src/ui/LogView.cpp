@@ -1,4 +1,5 @@
 #include "LogView.hpp"
+#include "core/ClipboardHelper.hpp"
 #include "theme/Theme.hpp"
 #include "theme/IconManager.hpp"
 #include <wx/clipbrd.h>
@@ -46,7 +47,7 @@ void LogView::InitUI() {
     wxBoxSizer* headerSizer = new wxBoxSizer(wxHORIZONTAL);
 
     // 标题与图标
-    wxBitmapBundle logIconBundle = IconManager::GetIconBundle(SVG::LOG, dip(20, 20), palette.accentPrimary);
+    wxBitmapBundle logIconBundle = IconManager::GetIconBundle(SVG::LOG, wxSize(20, 20), palette.accentPrimary);
     m_titleIcon = new wxStaticBitmap(m_headerPanel, wxID_ANY, logIconBundle);
 
     m_titleText = new wxStaticText(m_headerPanel, wxID_ANY, L"运行与诊断日志");
@@ -221,10 +222,7 @@ void LogView::OnCopyAll(wxCommandEvent& WXUNUSED(event)) {
     wxString text = m_logTextCtrl->GetValue();
     if (text.IsEmpty()) return;
 
-    if (wxTheClipboard->Open()) {
-        wxTheClipboard->SetData(new wxTextDataObject(text));
-        wxTheClipboard->Close();
-    }
+    ClipboardHelper::SetClipboardText(text.ToUTF8().data());
 }
 
 void LogView::OnOpenLogDir(wxCommandEvent& WXUNUSED(event)) {

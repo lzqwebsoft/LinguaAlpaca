@@ -1,4 +1,5 @@
 #include "IconManager.hpp"
+#include <unordered_map>
 #include <wx/mstream.h>
 #include <wx/image.h>
 #include <wx/iconbndl.h>
@@ -6,6 +7,28 @@
 #include <wx/filename.h>
 
 namespace LinguaAlpaca::UI {
+
+struct IconCacheKey {
+    const void* svgPtr;
+    int w;
+    int h;
+    uint32_t colorRgb;
+
+    bool operator==(const IconCacheKey& other) const noexcept {
+        return svgPtr == other.svgPtr && w == other.w && h == other.h && colorRgb == other.colorRgb;
+    }
+};
+
+struct IconCacheKeyHash {
+    size_t operator()(const IconCacheKey& k) const noexcept {
+        size_t h1 = std::hash<const void*>{}(k.svgPtr);
+        size_t h2 = std::hash<int>{}(k.w ^ (k.h << 16));
+        size_t h3 = std::hash<uint32_t>{}(k.colorRgb);
+        return h1 ^ (h2 << 1) ^ (h3 << 2);
+    }
+};
+
+static std::unordered_map<IconCacheKey, wxBitmapBundle, IconCacheKeyHash> s_bundleCache;
 
 static wxString ResolveResourcePath(const wxString& relativePath) {
     // 1. 尝试可执行文件所在目录
@@ -40,19 +63,30 @@ wxBitmapBundle IconManager::GetIconBundle(
         return wxBitmapBundle();
     }
 
+    uint32_t colorKey = tintColor.IsOk() ? (tintColor.GetRGB() | 0xFF000000) : 0;
+    IconCacheKey key{ static_cast<const void*>(svgContent), size.x, size.y, colorKey };
+
+    auto it = s_bundleCache.find(key);
+    if (it != s_bundleCache.end()) {
+        return it->second;
+    }
+
     std::string svgStr(svgContent);
 
     if (tintColor.IsOk()) {
-        std::string hexColor = wxString::Format("#%02X%02X%02X", tintColor.Red(), tintColor.Green(), tintColor.Blue()).ToStdString();
+        char hexBuf[16];
+        snprintf(hexBuf, sizeof(hexBuf), "#%02X%02X%02X", tintColor.Red(), tintColor.Green(), tintColor.Blue());
         
         size_t pos = 0;
         while ((pos = svgStr.find("currentColor", pos)) != std::string::npos) {
-            svgStr.replace(pos, 12, hexColor);
-            pos += hexColor.length();
+            svgStr.replace(pos, 12, hexBuf);
+            pos += 7;
         }
     }
 
-    return wxBitmapBundle::FromSVG(svgStr.c_str(), size);
+    wxBitmapBundle bundle = wxBitmapBundle::FromSVG(svgStr.c_str(), size);
+    s_bundleCache.emplace(key, bundle);
+    return bundle;
 }
 
 #ifdef _WIN32

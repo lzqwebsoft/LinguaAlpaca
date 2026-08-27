@@ -1,5 +1,6 @@
 #include "SettingsView.hpp"
 #include "widgets/AboutDialog.hpp"
+#include "core/ClipboardHelper.hpp"
 #include "core/Downloader.hpp"
 #include "theme/IconManager.hpp"
 #include "theme/Theme.hpp"
@@ -58,7 +59,7 @@ namespace LinguaAlpaca::UI {
 		// 1. Header Bar: Settings Icon + Title (系统设置)
 		wxBoxSizer* headerSizer = new wxBoxSizer(wxHORIZONTAL);
 
-		wxBitmapBundle titleBundle = IconManager::GetIconBundle(SVG::SETTINGS, dip(24, 24), palette.accentPrimary);
+		wxBitmapBundle titleBundle = IconManager::GetIconBundle(SVG::SETTINGS, wxSize(24, 24), palette.accentPrimary);
 		wxStaticBitmap* titleIcon = new wxStaticBitmap(m_contentPanel, wxID_ANY, titleBundle);
 
 		m_titleText = new wxStaticText(m_contentPanel, wxID_ANY, L"系统设置");
@@ -81,7 +82,7 @@ namespace LinguaAlpaca::UI {
 		// 卡片标题 + 状态指示
 		wxBoxSizer* cardTitleSizer = new wxBoxSizer(wxHORIZONTAL);
 
-		wxBitmapBundle cardTitleBundle = IconManager::GetIconBundle(SVG::MODEL_LOAD, dip(18, 18), palette.textPrimary);
+		wxBitmapBundle cardTitleBundle = IconManager::GetIconBundle(SVG::MODEL_LOAD, wxSize(18, 18), palette.textPrimary);
 		wxStaticBitmap* cardTitleIcon = new wxStaticBitmap(m_modelCard, wxID_ANY, cardTitleBundle);
 
 		m_modelCardTitle = new wxStaticText(m_modelCard, wxID_ANY, L"翻译模型 (Text Translation Model)");
@@ -207,7 +208,7 @@ namespace LinguaAlpaca::UI {
 
 		// 底部模型下载链接说明
 		wxBoxSizer* modelFooterSizer = new wxBoxSizer(wxHORIZONTAL);
-		wxBitmapBundle modelInfoBundle = IconManager::GetIconBundle(SVG::INFO, dip(15, 15), palette.accentPrimary);
+		wxBitmapBundle modelInfoBundle = IconManager::GetIconBundle(SVG::INFO, wxSize(15, 15), palette.accentPrimary);
 		wxStaticBitmap* modelInfoIcon = new wxStaticBitmap(m_modelCard, wxID_ANY, modelInfoBundle);
 
 		wxStaticText* modelFooterLabel = new wxStaticText(m_modelCard, wxID_ANY, L"模型下载：");
@@ -240,7 +241,7 @@ namespace LinguaAlpaca::UI {
 		// 卡片标题 + 状态指示
 		wxBoxSizer* ocrTitleSizer = new wxBoxSizer(wxHORIZONTAL);
 
-		wxBitmapBundle ocrTitleBundle = IconManager::GetIconBundle(SVG::OCR, dip(18, 18), palette.textPrimary);
+		wxBitmapBundle ocrTitleBundle = IconManager::GetIconBundle(SVG::OCR, wxSize(18, 18), palette.textPrimary);
 		wxStaticBitmap* ocrTitleIcon = new wxStaticBitmap(m_ocrCard, wxID_ANY, ocrTitleBundle);
 
 		m_ocrTitleText = new wxStaticText(m_ocrCard, wxID_ANY, L"OCR 视觉识别模型 (Vision OCR Model)");
@@ -395,7 +396,7 @@ namespace LinguaAlpaca::UI {
 		m_ocrFooterPanel->SetBackgroundColour(palette.cardBg);
 		wxBoxSizer* ocrFooterSizer = new wxBoxSizer(wxHORIZONTAL);
 
-		wxBitmapBundle infoBundle = IconManager::GetIconBundle(SVG::INFO, dip(15, 15), palette.accentPrimary);
+		wxBitmapBundle infoBundle = IconManager::GetIconBundle(SVG::INFO, wxSize(15, 15), palette.accentPrimary);
 		wxStaticBitmap* infoIcon = new wxStaticBitmap(m_ocrFooterPanel, wxID_ANY, infoBundle);
 
 		m_ocrFooterText = new wxStaticText(m_ocrFooterPanel, wxID_ANY, L"提示: 视觉模型需配合 mmproj 使用 (<= 8GB 显存建议 CPU 模式)。");
@@ -432,7 +433,7 @@ namespace LinguaAlpaca::UI {
 		wxBoxSizer* selSizer = new wxBoxSizer(wxVERTICAL);
 
 		wxBoxSizer* selTitleSizer = new wxBoxSizer(wxHORIZONTAL);
-		wxBitmapBundle selBundle = IconManager::GetIconBundle(SVG::TRANSLATE, dip(18, 18), palette.accentPrimary);
+		wxBitmapBundle selBundle = IconManager::GetIconBundle(SVG::TRANSLATE, wxSize(18, 18), palette.accentPrimary);
 		wxStaticBitmap* selIcon = new wxStaticBitmap(m_selectionCard, wxID_ANY, selBundle);
 
 		m_selectionTitleText = new wxStaticText(m_selectionCard, wxID_ANY, L"全局划词翻译设置");
@@ -505,7 +506,7 @@ namespace LinguaAlpaca::UI {
 		wxBoxSizer* dictSizer = new wxBoxSizer(wxVERTICAL);
 
 		wxBoxSizer* dictTitleSizer = new wxBoxSizer(wxHORIZONTAL);
-		wxBitmapBundle dictBundle = IconManager::GetIconBundle(SVG::DICTIONARY, dip(18, 18), palette.accentPrimary);
+		wxBitmapBundle dictBundle = IconManager::GetIconBundle(SVG::DICTIONARY, wxSize(18, 18), palette.accentPrimary);
 		wxStaticBitmap* dictIcon = new wxStaticBitmap(m_dictCard, wxID_ANY, dictBundle);
 
 		m_dictTitleText = new wxStaticText(m_dictCard, wxID_ANY, L"本地 StarDict 词典设置");
@@ -574,7 +575,7 @@ namespace LinguaAlpaca::UI {
 
 		// 底部词典下载链接说明
 		wxBoxSizer* dictFooterSizer = new wxBoxSizer(wxHORIZONTAL);
-		wxBitmapBundle dictInfoBundle = IconManager::GetIconBundle(SVG::INFO, dip(15, 15), palette.accentPrimary);
+		wxBitmapBundle dictInfoBundle = IconManager::GetIconBundle(SVG::INFO, wxSize(15, 15), palette.accentPrimary);
 		wxStaticBitmap* dictInfoIcon = new wxStaticBitmap(m_dictCard, wxID_ANY, dictInfoBundle);
 
 		wxStaticText* dictFooterLabel = new wxStaticText(m_dictCard, wxID_ANY, L"免费词典库下载：");
@@ -604,7 +605,7 @@ namespace LinguaAlpaca::UI {
 		wxBoxSizer* logSizer = new wxBoxSizer(wxVERTICAL);
 
 		wxBoxSizer* logTitleSizer = new wxBoxSizer(wxHORIZONTAL);
-		wxBitmapBundle logBundle = IconManager::GetIconBundle(SVG::LOG, dip(18, 18), palette.accentPrimary);
+		wxBitmapBundle logBundle = IconManager::GetIconBundle(SVG::LOG, wxSize(18, 18), palette.accentPrimary);
 		wxStaticBitmap* logIcon = new wxStaticBitmap(m_logCard, wxID_ANY, logBundle);
 
 		m_logTitleText = new wxStaticText(m_logCard, wxID_ANY, L"运行日志与诊断设置");
@@ -654,7 +655,7 @@ namespace LinguaAlpaca::UI {
 		wxBoxSizer* prefSizer = new wxBoxSizer(wxVERTICAL);
 
 		wxBoxSizer* prefTitleSizer = new wxBoxSizer(wxHORIZONTAL);
-		wxBitmapBundle moonBundle = IconManager::GetIconBundle(SVG::MOON, dip(18, 18), palette.textPrimary);
+		wxBitmapBundle moonBundle = IconManager::GetIconBundle(SVG::MOON, wxSize(18, 18), palette.textPrimary);
 		wxStaticBitmap* moonIcon = new wxStaticBitmap(m_prefCard, wxID_ANY, moonBundle);
 
 		m_prefTitle = new wxStaticText(m_prefCard, wxID_ANY, L"界面外观与关于");
@@ -1012,9 +1013,7 @@ namespace LinguaAlpaca::UI {
 		}
 		wxString url = (port > 0) ? wxString::Format("http://127.0.0.1:%d/v1/chat/completions", port) : "http://127.0.0.1:<port>/v1/chat/completions";
 
-		if (wxTheClipboard->Open()) {
-			wxTheClipboard->SetData(new wxTextDataObject(url));
-			wxTheClipboard->Close();
+		if (ClipboardHelper::SetClipboardText(url.ToUTF8().data())) {
 			wxMessageBox(L"翻译模型 API 接口端点已复制到剪贴板：\n" + url, L"复制成功", wxOK | wxICON_INFORMATION, this);
 		}
 	}
@@ -1030,9 +1029,7 @@ namespace LinguaAlpaca::UI {
 		}
 		wxString url = (port > 0) ? wxString::Format("http://127.0.0.1:%d/v1/chat/completions", port) : "http://127.0.0.1:<port>/v1/chat/completions";
 
-		if (wxTheClipboard->Open()) {
-			wxTheClipboard->SetData(new wxTextDataObject(url));
-			wxTheClipboard->Close();
+		if (ClipboardHelper::SetClipboardText(url.ToUTF8().data())) {
 			wxMessageBox(L"OCR 视觉模型 API 接口端点已复制到剪贴板：\n" + url, L"复制成功", wxOK | wxICON_INFORMATION, this);
 		}
 	}

@@ -18,7 +18,8 @@ namespace LinguaAlpaca {
 	}
 
 	ModelManager::ModelManager(std::shared_ptr<ConfigManager> configManager)
-		: m_configManager(std::move(configManager)) {
+		: m_configManager(std::move(configManager)),
+		  m_aliveToken(std::make_shared<std::atomic<bool>>(true)) {
 		m_transServer = std::make_shared<LlamaServer>();
 		m_ocrServer = std::make_shared<LlamaServer>();
 		m_transClient = std::make_shared<LlamaClient>(m_transServer);
@@ -34,13 +35,29 @@ namespace LinguaAlpaca {
 	}
 
 	ModelManager::~ModelManager() {
-		++m_transSessionId;
-		++m_ocrSessionId;
-		if (m_transServer) {
-			m_transServer->Stop();
+		if (m_aliveToken) {
+			m_aliveToken->store(false);
 		}
-		if (m_ocrServer) {
-			m_ocrServer->Stop();
+		StopModel(TargetModelType::None);
+	}
+
+	void ModelManager::StopModel(TargetModelType type) {
+		if (type == TargetModelType::Translation || type == TargetModelType::None) {
+			++m_transSessionId;
+			std::lock_guard<std::mutex> lock(m_transSwitchMutex);
+			if (m_transServer && m_transServer->IsAlive()) {
+				m_transServer->Stop();
+			}
+			m_isTransSwitching.store(false, std::memory_order_release);
+		}
+
+		if (type == TargetModelType::Ocr || type == TargetModelType::None) {
+			++m_ocrSessionId;
+			std::lock_guard<std::mutex> lock(m_ocrSwitchMutex);
+			if (m_ocrServer && m_ocrServer->IsAlive()) {
+				m_ocrServer->Stop();
+			}
+			m_isOcrSwitching.store(false, std::memory_order_release);
 		}
 	}
 
@@ -112,11 +129,12 @@ namespace LinguaAlpaca {
 
 			uint64_t sessionId = ++m_transSessionId;
 			m_isTransSwitching.store(true, std::memory_order_release);
+			auto aliveToken = m_aliveToken;
 
-			std::thread([this, sessionId, type, serverConfig, onProgress, onComplete]() {
+			std::thread([this, aliveToken, sessionId, type, serverConfig, onProgress, onComplete]() {
 				std::lock_guard<std::mutex> lock(m_transSwitchMutex);
 
-				if (sessionId != m_transSessionId.load(std::memory_order_acquire)) {
+				if (!aliveToken->load() || sessionId != m_transSessionId.load(std::memory_order_acquire)) {
 					return;
 				}
 
@@ -124,13 +142,13 @@ namespace LinguaAlpaca {
 					onProgress("正在启动并装载翻译模型...");
 				}
 
-				auto shouldAbort = [this, sessionId]() {
-					return sessionId != m_transSessionId.load(std::memory_order_acquire);
+				auto shouldAbort = [this, aliveToken, sessionId]() {
+					return !aliveToken->load() || sessionId != m_transSessionId.load(std::memory_order_acquire);
 				};
 
 				bool ok = m_transServer->EnsureModelRunning(serverConfig, onProgress, shouldAbort);
 
-				if (sessionId != m_transSessionId.load(std::memory_order_acquire)) {
+				if (!aliveToken->load() || sessionId != m_transSessionId.load(std::memory_order_acquire)) {
 					return;
 				}
 
@@ -152,7 +170,7 @@ namespace LinguaAlpaca {
 
 				m_isTransSwitching.store(false, std::memory_order_release);
 
-				if (onComplete) {
+				if (aliveToken->load() && onComplete) {
 					onComplete(ok, finalInfo);
 				}
 			}).detach();
@@ -203,11 +221,12 @@ namespace LinguaAlpaca {
 
 			uint64_t sessionId = ++m_ocrSessionId;
 			m_isOcrSwitching.store(true, std::memory_order_release);
+			auto aliveToken = m_aliveToken;
 
-			std::thread([this, sessionId, type, serverConfig, onProgress, onComplete]() {
+			std::thread([this, aliveToken, sessionId, type, serverConfig, onProgress, onComplete]() {
 				std::lock_guard<std::mutex> lock(m_ocrSwitchMutex);
 
-				if (sessionId != m_ocrSessionId.load(std::memory_order_acquire)) {
+				if (!aliveToken->load() || sessionId != m_ocrSessionId.load(std::memory_order_acquire)) {
 					return;
 				}
 
@@ -215,13 +234,13 @@ namespace LinguaAlpaca {
 					onProgress("正在启动并装载 OCR 视觉识别引擎...");
 				}
 
-				auto shouldAbort = [this, sessionId]() {
-					return sessionId != m_ocrSessionId.load(std::memory_order_acquire);
+				auto shouldAbort = [this, aliveToken, sessionId]() {
+					return !aliveToken->load() || sessionId != m_ocrSessionId.load(std::memory_order_acquire);
 				};
 
 				bool ok = m_ocrServer->EnsureModelRunning(serverConfig, onProgress, shouldAbort);
 
-				if (sessionId != m_ocrSessionId.load(std::memory_order_acquire)) {
+				if (!aliveToken->load() || sessionId != m_ocrSessionId.load(std::memory_order_acquire)) {
 					return;
 				}
 
@@ -243,7 +262,7 @@ namespace LinguaAlpaca {
 
 				m_isOcrSwitching.store(false, std::memory_order_release);
 
-				if (onComplete) {
+				if (aliveToken->load() && onComplete) {
 					onComplete(ok, finalInfo);
 				}
 			}).detach();
@@ -251,31 +270,11 @@ namespace LinguaAlpaca {
 	}
 
 	void ModelManager::StopModelAsync(TargetModelType type, std::function<void()> onComplete) {
-		if (type == TargetModelType::Translation || type == TargetModelType::None) {
-			++m_transSessionId;
-		}
-		if (type == TargetModelType::Ocr || type == TargetModelType::None) {
-			++m_ocrSessionId;
-		}
-
-		std::thread([this, type, onComplete]() {
-			if (type == TargetModelType::Translation || type == TargetModelType::None) {
-				std::lock_guard<std::mutex> lock(m_transSwitchMutex);
-				if (m_transServer && m_transServer->IsAlive()) {
-					m_transServer->Stop();
-				}
-				m_isTransSwitching.store(false, std::memory_order_release);
-			}
-
-			if (type == TargetModelType::Ocr || type == TargetModelType::None) {
-				std::lock_guard<std::mutex> lock(m_ocrSwitchMutex);
-				if (m_ocrServer && m_ocrServer->IsAlive()) {
-					m_ocrServer->Stop();
-				}
-				m_isOcrSwitching.store(false, std::memory_order_release);
-			}
-
-			if (onComplete) {
+		auto aliveToken = m_aliveToken;
+		std::thread([this, aliveToken, type, onComplete]() {
+			if (!aliveToken->load()) return;
+			StopModel(type);
+			if (aliveToken->load() && onComplete) {
 				onComplete();
 			}
 		}).detach();

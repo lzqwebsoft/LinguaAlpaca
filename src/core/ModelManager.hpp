@@ -36,6 +36,9 @@ public:
         std::function<void()> onComplete = nullptr
     );
 
+    // 同步停止模型服务 (安全退出使用，不派生 detached 线程)
+    void StopModel(TargetModelType type = TargetModelType::None);
+
     // 同步探针查询指定模型健康状态及端口
     ServerStatusInfo GetHealthStatus(TargetModelType targetType) const;
 
@@ -84,6 +87,7 @@ private:
     std::shared_ptr<LlamaClient> m_ocrClient;
     std::shared_ptr<DictEngine> m_dictEngine;
 
+    std::shared_ptr<std::atomic<bool>> m_aliveToken;
     std::atomic<bool> m_isTransSwitching{false};
     std::atomic<bool> m_isOcrSwitching{false};
     std::atomic<uint64_t> m_transSessionId{0};

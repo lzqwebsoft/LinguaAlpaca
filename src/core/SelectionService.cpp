@@ -33,7 +33,8 @@ LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
 } // namespace
 
 SelectionService::SelectionService(std::shared_ptr<ConfigManager> configManager)
-    : m_configManager(std::move(configManager)) {
+    : m_configManager(std::move(configManager)),
+      m_aliveToken(std::make_shared<std::atomic<bool>>(true)) {
     if (m_configManager) {
         ApplyConfig(m_configManager->GetConfig());
     }
@@ -46,6 +47,12 @@ SelectionService::~SelectionService() {
 bool SelectionService::Start() {
     if (m_isRunning.load()) {
         return true;
+    }
+
+    if (!m_aliveToken) {
+        m_aliveToken = std::make_shared<std::atomic<bool>>(true);
+    } else {
+        m_aliveToken->store(true);
     }
 
     g_activeService = this;
@@ -68,11 +75,14 @@ bool SelectionService::Start() {
 }
 
 void SelectionService::Stop() {
-    if (!m_isRunning.load()) {
+    if (m_aliveToken) {
+        m_aliveToken->store(false);
+    }
+
+    if (!m_isRunning.exchange(false)) {
         return;
     }
 
-    m_isRunning.store(false);
     if (g_mouseHook) {
         UnhookWindowsHookEx(g_mouseHook);
         g_mouseHook = nullptr;
@@ -312,10 +322,14 @@ bool SelectionService::ShouldIgnoreMouseEvent(int startX, int startY, int endX, 
 
 void SelectionService::ProcessSelectionAsync(int startX, int startY, int endX, int endY) {
     bool preserve = m_preserveClipboard.load();
+    auto aliveToken = m_aliveToken;
 
-    std::thread([this, startX, startY, endX, endY, preserve]() {
+    std::thread([this, aliveToken, startX, startY, endX, endY, preserve]() {
         // 短暂延迟 30ms 确保被划词的宿主窗口完成 MouseUp 并进入选中高亮状态
         std::this_thread::sleep_for(std::chrono::milliseconds(30));
+        if (!aliveToken->load()) {
+            return;
+        }
 
 #ifdef _WIN32
         DWORD currentPid = GetCurrentProcessId();
@@ -326,14 +340,20 @@ void SelectionService::ProcessSelectionAsync(int startX, int startY, int endX, i
 #endif
 
         ExtractedSelection extracted = ScreenTextExtractor::ExtractSelection(startX, startY, endX, endY, preserve);
+        if (!aliveToken->load()) {
+            return;
+        }
 
         if (extracted.text.empty() || extracted.text.size() > 8000) {
             return;
         }
 
         // 投递回调到 UI 线程
-        if (wxTheApp) {
-            wxTheApp->CallAfter([this, extracted]() {
+        if (wxTheApp && aliveToken->load()) {
+            wxTheApp->CallAfter([this, aliveToken, extracted]() {
+                if (!aliveToken->load()) {
+                    return;
+                }
                 SelectionDetectedCallback cb;
                 {
                     std::lock_guard<std::mutex> lock(m_callbackMutex);

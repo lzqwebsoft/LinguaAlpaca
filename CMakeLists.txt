@@ -142,6 +142,8 @@ set(UI_SOURCES
     src/ui/widgets/SuggestListBox.cpp
     src/ui/widgets/SplashScreen.hpp
     src/ui/widgets/SplashScreen.cpp
+    src/ui/widgets/AppTaskBarIcon.hpp
+    src/ui/widgets/AppTaskBarIcon.cpp
     src/ui/TextView.hpp
     src/ui/TextView.cpp
     src/ui/OcrView.hpp
@@ -188,6 +190,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 target_link_libraries(${PROJECT_NAME} PRIVATE
     wx::core
     wx::base
+    wx::adv
     wxzlib
     llama
     llama-common

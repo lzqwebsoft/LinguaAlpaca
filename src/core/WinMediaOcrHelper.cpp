@@ -69,11 +69,20 @@ bool WinMediaOcrHelper::TryExtract(int startX, int startY, int endX, int endY, s
         }
 
         // 1. 使用 GDI 截取选区屏幕图像
-        HDC hdcScreen = GetDC(nullptr);
-        HDC hdcMem = CreateCompatibleDC(hdcScreen);
-        if (!hdcScreen || !hdcMem) {
-            if (hdcMem) DeleteDC(hdcMem);
-            if (hdcScreen) ReleaseDC(nullptr, hdcScreen);
+        struct GdiScope {
+            HDC hdcScreen{nullptr};
+            HDC hdcMem{nullptr};
+            HBITMAP hbm{nullptr};
+            ~GdiScope() {
+                if (hbm) DeleteObject(hbm);
+                if (hdcMem) DeleteDC(hdcMem);
+                if (hdcScreen) ReleaseDC(nullptr, hdcScreen);
+            }
+        } gdi;
+
+        gdi.hdcScreen = GetDC(nullptr);
+        gdi.hdcMem = CreateCompatibleDC(gdi.hdcScreen);
+        if (!gdi.hdcScreen || !gdi.hdcMem) {
             return false;
         }
 
@@ -86,17 +95,14 @@ bool WinMediaOcrHelper::TryExtract(int startX, int startY, int endX, int endY, s
         bmi.bmiHeader.biCompression = BI_RGB;
 
         void* pPixels = nullptr;
-        HBITMAP hbm = CreateDIBSection(hdcMem, &bmi, DIB_RGB_COLORS, &pPixels, nullptr, 0);
-        if (!hbm || !pPixels) {
-            if (hbm) DeleteObject(hbm);
-            DeleteDC(hdcMem);
-            ReleaseDC(nullptr, hdcScreen);
+        gdi.hbm = CreateDIBSection(gdi.hdcMem, &bmi, DIB_RGB_COLORS, &pPixels, nullptr, 0);
+        if (!gdi.hbm || !pPixels) {
             return false;
         }
 
-        HGDIOBJ oldBmp = SelectObject(hdcMem, hbm);
-        BitBlt(hdcMem, 0, 0, width, height, hdcScreen, minX, minY, SRCCOPY);
-        SelectObject(hdcMem, oldBmp);
+        HGDIOBJ oldBmp = SelectObject(gdi.hdcMem, gdi.hbm);
+        BitBlt(gdi.hdcMem, 0, 0, width, height, gdi.hdcScreen, minX, minY, SRCCOPY);
+        SelectObject(gdi.hdcMem, oldBmp);
 
         // 2. 将像素数据传入 WinRT SoftwareBitmap
         size_t totalBytes = static_cast<size_t>(width) * height * 4;
@@ -110,10 +116,6 @@ bool WinMediaOcrHelper::TryExtract(int startX, int startY, int endX, int endY, s
             width,
             height
         );
-
-        DeleteObject(hbm);
-        DeleteDC(hdcMem);
-        ReleaseDC(nullptr, hdcScreen);
 
         // 3. 运行 Windows 原生 Media.Ocr
         auto engine = winrt::Windows::Media::Ocr::OcrEngine::TryCreateFromUserProfileLanguages();

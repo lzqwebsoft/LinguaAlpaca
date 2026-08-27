@@ -112,21 +112,26 @@ public:
             m_selectionService->Stop();
             m_selectionService.reset();
         }
+        if (m_modelManager) {
+            LOG_INFO("App", "Stopping model manager...");
+            m_modelManager->StopModel();
+            m_modelManager.reset();
+        }
         if (m_floatingIcon) {
-            m_floatingIcon->Destroy();
+            m_floatingIcon->Hide();
+            delete m_floatingIcon;
             m_floatingIcon = nullptr;
         }
         if (m_translationBubble) {
-            m_translationBubble->Destroy();
+            m_translationBubble->Hide();
+            delete m_translationBubble;
             m_translationBubble = nullptr;
         }
         if (m_splashScreen) {
-            m_splashScreen->Destroy();
+            delete m_splashScreen;
             m_splashScreen = nullptr;
         }
-        if (m_modelManager) {
-            LOG_INFO("App", "Stopping model manager...");
-        }
+        UI::ThemeManager::GetInstance().ClearCallbacks();
         return wxApp::OnExit();
     }
 };

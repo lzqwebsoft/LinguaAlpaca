@@ -130,6 +130,10 @@ public:
         m_callbacks.push_back(cb);
     }
 
+    void ClearCallbacks() {
+        m_callbacks.clear();
+    }
+
     static ThemePalette GetPalette(ThemeMode mode) {
         ThemePalette p;
         if (mode == ThemeMode::Light) {

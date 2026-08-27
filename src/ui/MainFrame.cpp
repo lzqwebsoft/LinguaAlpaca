@@ -2,6 +2,7 @@
 #include "theme/Theme.hpp"
 #include "theme/IconManager.hpp"
 #include "widgets/WelcomeModelDialog.hpp"
+#include "widgets/AppTaskBarIcon.hpp"
 #include <wx/dcbuffer.h>
 #include <wx/graphics.h>
 
@@ -63,6 +64,9 @@ namespace LinguaAlpaca::UI {
         InitUI();
         Centre();
 
+        // 创建系统托盘图标
+        m_taskBarIcon = std::make_unique<AppTaskBarIcon>(this);
+
         // 注册全局主题变更回调
         ThemeManager::GetInstance().RegisterCallback([this](ThemeMode) {
             ApplyTheme();
@@ -78,6 +82,13 @@ namespace LinguaAlpaca::UI {
         CallAfter([this]() {
             CheckAndShowWelcomeDialog();
         });
+    }
+
+    MainFrame::~MainFrame() {
+        if (m_taskBarIcon) {
+            m_taskBarIcon->RemoveIcon();
+            m_taskBarIcon.reset();
+        }
     }
 
     void MainFrame::InitUI() {
@@ -117,7 +128,7 @@ namespace LinguaAlpaca::UI {
 
         m_minBtn = new wxBitmapButton(m_topHeaderPanel, wxID_ANY, minBundle, wxDefaultPosition, dip(32, 32), wxBORDER_NONE);
         m_minBtn->SetBackgroundColour(palette.sidebarBg);
-        m_minBtn->SetToolTip(L"最小化");
+        m_minBtn->SetToolTip(L"最小化到系统托盘");
 
         m_maxBtn = new wxBitmapButton(m_topHeaderPanel, wxID_ANY, maxBundle, wxDefaultPosition, dip(32, 32), wxBORDER_NONE);
         m_maxBtn->SetBackgroundColour(palette.sidebarBg);
@@ -195,7 +206,7 @@ namespace LinguaAlpaca::UI {
         m_sidebar->Bind(EVT_SIDEBAR_NAV_CHANGED, &MainFrame::OnNavChanged, this);
 
         // 绑定窗口控制按钮事件
-        m_minBtn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { Iconize(true); });
+        m_minBtn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { Hide(); });
         m_maxBtn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
             Maximize(!IsMaximized());
             UpdateMaxButtonState();
@@ -219,6 +230,12 @@ namespace LinguaAlpaca::UI {
         m_appNameText->Bind(wxEVT_LEFT_DCLICK, &MainFrame::OnHeaderDoubleClick, this);
 
         Bind(wxEVT_CLOSE_WINDOW, &MainFrame::OnClose, this);
+        Bind(wxEVT_ICONIZE, [this](wxIconizeEvent& event) {
+            if (event.IsIconized()) {
+                Hide();
+            }
+            event.Skip();
+        });
         Bind(wxEVT_MAXIMIZE, [this](wxMaximizeEvent& event) {
             UpdateMaxButtonState();
             event.Skip();
@@ -234,14 +251,43 @@ namespace LinguaAlpaca::UI {
         }
     }
 
-    void MainFrame::OnClose(wxCloseEvent& event) {
+    void MainFrame::OnClose(wxCloseEvent& WXUNUSED(event)) {
+        if (m_taskBarIcon) {
+            m_taskBarIcon->RemoveIcon();
+        }
         if (m_modelManager) {
-            m_modelManager->StopModelAsync();
+            m_modelManager->StopModel();
         }
         if (wxTheApp) {
             wxTheApp->ExitMainLoop();
         }
-        event.Skip();
+        Destroy();
+    }
+
+    void MainFrame::RestoreAndFocus() {
+        if (!IsShown()) {
+            Show(true);
+        }
+        if (IsIconized()) {
+            Iconize(false);
+        }
+        Raise();
+#ifdef __WXMSW__
+        HWND hwnd = (HWND)GetHWND();
+        if (hwnd) {
+            ::SetForegroundWindow(hwnd);
+        }
+#endif
+    }
+
+    void MainFrame::QuitApplication() {
+        if (wxTheApp) {
+            wxTheApp->CallAfter([this]() {
+                Close(true);
+            });
+        } else {
+            Close(true);
+        }
     }
 
     void MainFrame::NavigateToSettings() {
@@ -420,6 +466,21 @@ namespace LinguaAlpaca::UI {
 
 #ifdef __WXMSW__
     WXLRESULT MainFrame::MSWWindowProc(WXUINT nMsg, WXWPARAM wParam, WXLPARAM lParam) {
+        if (nMsg == WM_QUERYENDSESSION) {
+            return TRUE;
+        }
+        if (nMsg == WM_ENDSESSION) {
+            if (wParam) {
+                if (m_taskBarIcon) {
+                    m_taskBarIcon->RemoveIcon();
+                }
+                if (m_modelManager) {
+                    m_modelManager->StopModel();
+                }
+            }
+            return 0;
+        }
+
         WXLRESULT rc = wxFrame::MSWWindowProc(nMsg, wParam, lParam);
         if (nMsg == WM_GETMINMAXINFO) {
             MINMAXINFO* mmi = reinterpret_cast<MINMAXINFO*>(lParam);

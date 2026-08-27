@@ -69,6 +69,7 @@ private:
     std::mutex m_callbackMutex;
     SelectionDetectedCallback m_callback;
 
+    std::shared_ptr<std::atomic<bool>> m_aliveToken;
     void* m_hookHandle{nullptr};
 };
 

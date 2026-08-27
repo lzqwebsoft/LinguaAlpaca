@@ -14,10 +14,12 @@ namespace LinguaAlpaca::UI {
 class MainFrame : public wxFrame {
 public:
     explicit MainFrame(std::shared_ptr<ModelManager> modelManager);
-    ~MainFrame() override = default;
+    ~MainFrame() override;
 
     void NavigateToSettings();
     void CheckAndShowWelcomeDialog();
+    void RestoreAndFocus();
+    void QuitApplication();
 
 private:
     void InitUI();
@@ -38,6 +40,7 @@ private:
 #endif
 
     std::shared_ptr<ModelManager> m_modelManager;
+    std::unique_ptr<class AppTaskBarIcon> m_taskBarIcon;
 
     // UI Elements
     wxPanel* m_topHeaderPanel{nullptr};

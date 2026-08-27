@@ -54,6 +54,7 @@ private:
     std::shared_ptr<LlamaServer> m_server;
     std::string m_baseUrl;
 
+    std::shared_ptr<std::atomic<bool>> m_aliveToken;
     std::atomic<bool> m_shouldStop{false};
     std::atomic<bool> m_isRunning{false};
     mutable std::mutex m_mutex;

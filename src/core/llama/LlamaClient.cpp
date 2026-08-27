@@ -63,16 +63,21 @@ static std::string FormatImageUrl(const std::string& imagePath) {
 }
 
 LlamaClient::LlamaClient(std::shared_ptr<LlamaServer> server)
-    : m_server(std::move(server)) {
+    : m_server(std::move(server)),
+      m_aliveToken(std::make_shared<std::atomic<bool>>(true)) {
     if (m_server) {
         m_baseUrl = m_server->GetBaseUrl();
     }
 }
 
 LlamaClient::LlamaClient(std::string baseUrl)
-    : m_baseUrl(std::move(baseUrl)) {}
+    : m_baseUrl(std::move(baseUrl)),
+      m_aliveToken(std::make_shared<std::atomic<bool>>(true)) {}
 
 LlamaClient::~LlamaClient() {
+    if (m_aliveToken) {
+        m_aliveToken->store(false);
+    }
     CancelCurrentTask();
 }
 
@@ -127,12 +132,17 @@ void LlamaClient::TranslateStreamAsync(
     CancelCurrentTask();
     m_shouldStop.store(false);
     m_isRunning.store(true);
+    auto aliveToken = m_aliveToken;
 
-    std::thread([this, task, onToken, onComplete]() {
+    std::thread([this, aliveToken, task, onToken, onComplete]() {
+        if (!aliveToken->load()) {
+            return;
+        }
+
         std::string currentBaseUrl = GetBaseUrl();
         if (currentBaseUrl.empty()) {
             m_isRunning.store(false);
-            if (onComplete) onComplete(false, "", "服务地址为空或未启动");
+            if (aliveToken->load() && onComplete) onComplete(false, "", "服务地址为空或未启动");
             return;
         }
 
@@ -177,7 +187,7 @@ void LlamaClient::TranslateStreamAsync(
                 reqBody,
                 "application/json",
                 [&](const char* data, size_t len) {
-                    if (m_shouldStop.load()) {
+                    if (!aliveToken->load() || m_shouldStop.load()) {
                         return false;
                     }
 
@@ -200,14 +210,16 @@ void LlamaClient::TranslateStreamAsync(
                                     if (parsed.contains("choices") && !parsed["choices"].empty()) {
                                         auto& choice = parsed["choices"][0];
                                         if (choice.contains("delta") && choice["delta"].contains("content")) {
-                                            std::string delta = choice["delta"]["content"].get<std::string>();
-                                            accumulatedText += delta;
-                                            if (onToken) {
-                                                onToken(delta);
+                                            std::string token = choice["delta"]["content"].get<std::string>();
+                                            accumulatedText += token;
+                                            if (aliveToken->load() && onToken) {
+                                                onToken(token);
                                             }
                                         }
                                     }
-                                } catch (...) {}
+                                } catch (...) {
+                                    // 忽略格式不完整的临时 SSE 片段
+                                }
                             }
                         }
                     }
@@ -232,6 +244,10 @@ void LlamaClient::TranslateStreamAsync(
 
         m_isRunning.store(false);
 
+        if (!aliveToken->load()) {
+            return;
+        }
+
         if (m_shouldStop.load()) {
             if (onComplete) onComplete(false, accumulatedText, "已手动取消");
         } else if (hasError) {
@@ -253,12 +269,17 @@ void LlamaClient::RecognizeStream(
     CancelCurrentTask();
     m_shouldStop.store(false);
     m_isRunning.store(true);
+    auto aliveToken = m_aliveToken;
 
-    std::thread([this, imagePath, taskType, onToken, onComplete]() {
+    std::thread([this, aliveToken, imagePath, taskType, onToken, onComplete]() {
+        if (!aliveToken->load()) {
+            return;
+        }
+
         std::string currentBaseUrl = GetBaseUrl();
         if (currentBaseUrl.empty()) {
             m_isRunning.store(false);
-            if (onComplete) onComplete("", false, "服务地址为空或未启动");
+            if (aliveToken->load() && onComplete) onComplete("", false, "服务地址为空或未启动");
             return;
         }
 
@@ -286,7 +307,9 @@ void LlamaClient::RecognizeStream(
                 }
             })},
             {"stream", true},
-            {"temperature", 0.0},
+            {"temperature", 0.1},
+            {"top_p", 0.9},
+            {"max_tokens", 4096},
             {"repetition_penalty", 1.05}
         };
 
@@ -310,7 +333,7 @@ void LlamaClient::RecognizeStream(
                 reqBody,
                 "application/json",
                 [&](const char* data, size_t len) {
-                    if (m_shouldStop.load()) {
+                    if (!aliveToken->load() || m_shouldStop.load()) {
                         return false;
                     }
 
@@ -333,14 +356,16 @@ void LlamaClient::RecognizeStream(
                                     if (parsed.contains("choices") && !parsed["choices"].empty()) {
                                         auto& choice = parsed["choices"][0];
                                         if (choice.contains("delta") && choice["delta"].contains("content")) {
-                                            std::string delta = choice["delta"]["content"].get<std::string>();
-                                            accumulatedText += delta;
-                                            if (onToken) {
-                                                onToken(delta);
+                                            std::string token = choice["delta"]["content"].get<std::string>();
+                                            accumulatedText += token;
+                                            if (aliveToken->load() && onToken) {
+                                                onToken(token);
                                             }
                                         }
                                     }
-                                } catch (...) {}
+                                } catch (...) {
+                                    // 忽略格式不完整的临时 SSE 片段
+                                }
                             }
                         }
                     }
@@ -364,6 +389,10 @@ void LlamaClient::RecognizeStream(
         }
 
         m_isRunning.store(false);
+
+        if (!aliveToken->load()) {
+            return;
+        }
 
         if (m_shouldStop.load()) {
             if (onComplete) onComplete(accumulatedText, false, "已手动取消");

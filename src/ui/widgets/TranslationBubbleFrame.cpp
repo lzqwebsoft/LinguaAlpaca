@@ -856,9 +856,11 @@ namespace LinguaAlpaca::UI {
 
 	void TranslationBubbleFrame::OnRetry(wxCommandEvent& WXUNUSED(event)) {
 		WinTtsHelper::GetInstance().Stop();
+		UpdateLanguageBadge();
+
 		std::string textToTranslate;
 		if (m_sourceCtrl) {
-			textToTranslate = m_sourceCtrl->GetValue().ToStdString();
+			textToTranslate = m_sourceCtrl->GetValue().ToUTF8().data();
 		}
 		if (textToTranslate.empty()) {
 			textToTranslate = m_lastSourceText;
@@ -867,6 +869,7 @@ namespace LinguaAlpaca::UI {
 			return;
 		}
 		m_lastSourceText = textToTranslate;
+		m_currentFullText.clear();
 
 		if (m_targetCtrl) {
 			m_targetCtrl->SetValue(L"正在重新连接模型并翻译...");

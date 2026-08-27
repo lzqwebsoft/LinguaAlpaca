@@ -154,7 +154,6 @@ set(UI_SOURCES
     src/ui/LogView.cpp
     src/ui/SettingsView.hpp
     src/ui/SettingsView.cpp
-    src/ui/PlaceholderView.hpp
     src/ui/MainFrame.hpp
     src/ui/MainFrame.cpp
 )

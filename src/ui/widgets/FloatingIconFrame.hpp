@@ -46,6 +46,10 @@ private:
 
     wxTimer m_autoHideTimer;
     FloatingIconClickCallback m_onClickCallback;
+
+#ifdef _WIN32
+    WXLRESULT MSWWindowProc(WXUINT nMsg, WXWPARAM wParam, WXLPARAM lParam) override;
+#endif
 };
 
 } // namespace LinguaAlpaca::UI

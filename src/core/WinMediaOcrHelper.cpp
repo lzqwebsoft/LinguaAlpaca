@@ -51,20 +51,46 @@ bool WinMediaOcrHelper::TryExtract(int startX, int startY, int endX, int endY, s
         int minY = (std::min)(startY, endY) - 8;
         int maxY = (std::max)(startY, endY) + 8;
 
-        // 如果只是单点点击或极小位移，扩大采样区域
-        if (maxX - minX < 80) {
-            minX -= 40;
-            maxX += 40;
+        int screenLeft = GetSystemMetrics(SM_XVIRTUALSCREEN);
+        int screenTop = GetSystemMetrics(SM_YVIRTUALSCREEN);
+        int screenW = GetSystemMetrics(SM_CXVIRTUALSCREEN);
+        int screenH = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+
+        // 如果是多行划选 (高度超过单行常规高度 ~20px)，自动对齐目标窗口/终端的完整可见水平宽度，杜绝切断单行文本
+        if (maxY - minY > 22) {
+            POINT ptEnd = { endX, endY };
+            HWND hwndTarget = WindowFromPoint(ptEnd);
+            if (hwndTarget) {
+                RECT rcWnd = { 0 };
+                if (GetWindowRect(hwndTarget, &rcWnd) && (rcWnd.right - rcWnd.left > 80)) {
+                    minX = (std::max)(screenLeft, (int)rcWnd.left + 2);
+                    maxX = (std::min)(screenLeft + screenW, (int)rcWnd.right - 2);
+                } else {
+                    minX -= 200;
+                    maxX += 200;
+                }
+            } else {
+                minX -= 200;
+                maxX += 200;
+            }
+        } else {
+            // 单行划词小位移自适应填充
+            if (maxX - minX < 80) {
+                minX -= 30;
+                maxX += 30;
+            }
         }
-        if (maxY - minY < 40) {
-            minY -= 20;
-            maxY += 20;
-        }
+
+        // 屏幕边界安全裁剪
+        minX = (std::max)(screenLeft, minX);
+        minY = (std::max)(screenTop, minY);
+        maxX = (std::min)(screenLeft + screenW, maxX);
+        maxY = (std::min)(screenTop + screenH, maxY);
 
         int width = maxX - minX;
         int height = maxY - minY;
 
-        if (width <= 10 || height <= 10 || width > 1600 || height > 1200) {
+        if (width <= 10 || height <= 10 || width > 3840 || height > 2160) {
             return false;
         }
 
@@ -117,16 +143,20 @@ bool WinMediaOcrHelper::TryExtract(int startX, int startY, int endX, int endY, s
             height
         );
 
-        // 3. 运行 Windows 原生 Media.Ocr (缓存引擎单例，避免每次提取时重复加载模型消耗 100~300ms)
+        // 3. 运行 Windows 原生 Media.Ocr
+        // 优先使用 en-US / 用户语言，保证代码、路径与英文字符零乱码识别
         static winrt::Windows::Media::Ocr::OcrEngine s_engine = []() {
             try {
-                auto eng = winrt::Windows::Media::Ocr::OcrEngine::TryCreateFromUserProfileLanguages();
-                if (!eng) {
-                    eng = winrt::Windows::Media::Ocr::OcrEngine::TryCreateFromLanguage(
-                        winrt::Windows::Globalization::Language(L"zh-Hans-CN")
+                if (winrt::Windows::Media::Ocr::OcrEngine::IsLanguageSupported(winrt::Windows::Globalization::Language(L"en-US"))) {
+                    return winrt::Windows::Media::Ocr::OcrEngine::TryCreateFromLanguage(
+                        winrt::Windows::Globalization::Language(L"en-US")
                     );
                 }
-                return eng;
+                auto eng = winrt::Windows::Media::Ocr::OcrEngine::TryCreateFromUserProfileLanguages();
+                if (eng) return eng;
+                return winrt::Windows::Media::Ocr::OcrEngine::TryCreateFromLanguage(
+                    winrt::Windows::Globalization::Language(L"zh-Hans-CN")
+                );
             } catch (...) {
                 return winrt::Windows::Media::Ocr::OcrEngine{nullptr};
             }
@@ -141,8 +171,18 @@ bool WinMediaOcrHelper::TryExtract(int startX, int startY, int endX, int endY, s
             return false;
         }
 
-        std::wstring rawText = ocrResult.Text().c_str();
-        std::string text = Trim(WideToUtf8(rawText));
+        // 精确按行重组文本，保留终端各行的换行格式
+        std::wstring reconstructed;
+        for (const auto& line : ocrResult.Lines()) {
+            std::wstring lineStr = line.Text().c_str();
+            if (lineStr.empty()) continue;
+            if (!reconstructed.empty()) {
+                reconstructed += L"\n";
+            }
+            reconstructed += lineStr;
+        }
+
+        std::string text = Trim(WideToUtf8(reconstructed));
         if (text.empty()) {
             return false;
         }

@@ -325,8 +325,8 @@ void SelectionService::ProcessSelectionAsync(int startX, int startY, int endX, i
     auto aliveToken = m_aliveToken;
 
     std::thread([this, aliveToken, startX, startY, endX, endY, preserve]() {
-        // 短暂延迟 30ms 确保被划词的宿主窗口完成 MouseUp 并进入选中高亮状态
-        std::this_thread::sleep_for(std::chrono::milliseconds(30));
+        // 短暂延迟 35ms 确保被划词的宿主窗口完成 MouseUp 并进入选中高亮状态
+        std::this_thread::sleep_for(std::chrono::milliseconds(35));
         if (!aliveToken->load()) {
             return;
         }

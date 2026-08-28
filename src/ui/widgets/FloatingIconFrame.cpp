@@ -235,6 +235,7 @@ namespace LinguaAlpaca::UI {
         if (hwnd) {
             ::SetWindowPos(hwnd, HWND_TOPMOST, targetX, targetY, iconSize, iconSize,
                 SWP_NOACTIVATE | SWP_SHOWWINDOW);
+            ::ShowWindow(hwnd, SW_SHOWNOACTIVATE);
         }
 #endif
 
@@ -433,6 +434,22 @@ namespace LinguaAlpaca::UI {
             Hide();
         }
     }
+
+#ifdef _WIN32
+    WXLRESULT FloatingIconFrame::MSWWindowProc(WXUINT nMsg, WXWPARAM wParam, WXLPARAM lParam) {
+        if (nMsg == WM_MOUSEACTIVATE) {
+            // 极简 O(1) 拦截：鼠标划过/点击悬浮球时禁止激活窗体，杜绝抢占宿主终端焦点导致文本取消选中
+            return MA_NOACTIVATE;
+        }
+        if (nMsg == WM_ACTIVATE && LOWORD(wParam) != WA_INACTIVE) {
+            return 0; // 阻止窗体获得激活状态
+        }
+        if (nMsg == WM_NCACTIVATE && wParam != FALSE) {
+            return 0; // 阻止非客户区激活
+        }
+        return wxFrame::MSWWindowProc(nMsg, wParam, lParam);
+    }
+#endif
 
 } // namespace LinguaAlpaca::UI
 

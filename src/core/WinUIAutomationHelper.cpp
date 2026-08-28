@@ -35,8 +35,8 @@ std::string Trim(const std::string& str) {
 bool TryExtractFromElement(IUIAutomationElement* pElement, std::string& outText, int& outAnchorX, int& outAnchorY) {
     if (!pElement) return false;
 
-    IUIAutomationTextPattern* pTextPattern = nullptr;
-    if (SUCCEEDED(pElement->GetCurrentPatternAs(UIA_TextPatternId, IID_IUIAutomationTextPattern, (void**)&pTextPattern)) && pTextPattern) {
+    auto extractFromPattern = [&](IUIAutomationTextPattern* pTextPattern) -> bool {
+        if (!pTextPattern) return false;
         IUIAutomationTextRangeArray* pSelectionArray = nullptr;
         if (SUCCEEDED(pTextPattern->GetSelection(&pSelectionArray)) && pSelectionArray) {
             int length = 0;
@@ -61,7 +61,6 @@ bool TryExtractFromElement(IUIAutomationElement* pElement, std::string& outText,
                                     long uBound = 0;
                                     SafeArrayGetUBound(pRects, 1, &uBound);
                                     if (uBound >= 3) {
-                                        // 每个矩形有 4 个 double: left, top, width, height
                                         double left = pData[0];
                                         double top = pData[1];
                                         double width = pData[2];
@@ -75,7 +74,6 @@ bool TryExtractFromElement(IUIAutomationElement* pElement, std::string& outText,
                             }
                             pRange->Release();
                             pSelectionArray->Release();
-                            pTextPattern->Release();
                             return true;
                         }
                     }
@@ -84,8 +82,25 @@ bool TryExtractFromElement(IUIAutomationElement* pElement, std::string& outText,
             }
             pSelectionArray->Release();
         }
+        return false;
+    };
+
+    // 1. 尝试标准 UIA_TextPatternId
+    IUIAutomationTextPattern* pTextPattern = nullptr;
+    if (SUCCEEDED(pElement->GetCurrentPatternAs(UIA_TextPatternId, IID_IUIAutomationTextPattern, (void**)&pTextPattern)) && pTextPattern) {
+        bool res = extractFromPattern(pTextPattern);
         pTextPattern->Release();
+        if (res) return true;
     }
+
+    // 2. 尝试 UIA_TextPattern2Id (Windows Terminal / 现代 Windows 10/11 核心控件)
+    IUIAutomationTextPattern2* pTextPattern2 = nullptr;
+    if (SUCCEEDED(pElement->GetCurrentPatternAs(UIA_TextPattern2Id, IID_IUIAutomationTextPattern2, (void**)&pTextPattern2)) && pTextPattern2) {
+        bool res = extractFromPattern((IUIAutomationTextPattern*)pTextPattern2);
+        pTextPattern2->Release();
+        if (res) return true;
+    }
+
     return false;
 }
 
@@ -102,42 +117,69 @@ bool WinUIAutomationHelper::TryExtract(int x, int y, std::string& outText, int& 
         return false;
     }
 
-    bool success = false;
     POINT pt = { x, y };
 
-    // 优先 1：从鼠标释放坐标处的元素直接提取
+    // 唤醒目标窗口（特别是 Chromium / Electron / VS Code）内部的无障碍渲染引擎
+    HWND hwndUnderMouse = WindowFromPoint(pt);
+    if (hwndUnderMouse) {
+        IAccessible* pAcc = nullptr;
+        if (SUCCEEDED(AccessibleObjectFromWindow(hwndUnderMouse, OBJID_CLIENT, IID_IAccessible, (void**)&pAcc)) && pAcc) {
+            pAcc->Release();
+        }
+    }
+
+    IUIAutomationTreeWalker* pWalker = nullptr;
+    pAutomation->get_ControlViewWalker(&pWalker);
+
+    // 极简高效祖先回溯：最大深度 10 层，首个有效节点即 O(1) 短路退出
+    auto tryWithAncestors = [&](IUIAutomationElement* pStart) -> bool {
+        if (!pStart) return false;
+        IUIAutomationElement* pCurr = pStart;
+        pCurr->AddRef();
+
+        for (int depth = 0; depth < 10 && pCurr; ++depth) {
+            if (TryExtractFromElement(pCurr, outText, outAnchorX, outAnchorY)) {
+                pCurr->Release();
+                return true;
+            }
+
+            IUIAutomationElement* pParent = nullptr;
+            if (pWalker && SUCCEEDED(pWalker->GetParentElement(pCurr, &pParent)) && pParent) {
+                pCurr->Release();
+                pCurr = pParent;
+            } else {
+                pCurr->Release();
+                pCurr = nullptr;
+                break;
+            }
+        }
+        if (pCurr) pCurr->Release();
+        return false;
+    };
+
+    bool success = false;
+
+    // 优先 1：从鼠标释放坐标处的元素及祖先节点提取 (精确覆盖 Windows Terminal 的 TermControl 及 Web/VS Code 容器)
     IUIAutomationElement* pElement = nullptr;
     if (SUCCEEDED(pAutomation->ElementFromPoint(pt, &pElement)) && pElement) {
-        if (TryExtractFromElement(pElement, outText, outAnchorX, outAnchorY)) {
+        if (tryWithAncestors(pElement)) {
             success = true;
-        } else {
-            // 尝试向上追溯父级元素 (例如文本在父级容器/编辑框中)
-            IUIAutomationTreeWalker* pWalker = nullptr;
-            if (SUCCEEDED(pAutomation->get_ControlViewWalker(&pWalker)) && pWalker) {
-                IUIAutomationElement* pParent = nullptr;
-                if (SUCCEEDED(pWalker->GetParentElement(pElement, &pParent)) && pParent) {
-                    if (TryExtractFromElement(pParent, outText, outAnchorX, outAnchorY)) {
-                        success = true;
-                    }
-                    pParent->Release();
-                }
-                pWalker->Release();
-            }
         }
         pElement->Release();
     }
 
-    // 优先 2：如果点选元素未提取到，尝试从当前拥有焦点的元素提取 (如 Chrome, VS Code, Word, 编辑器等)
+    // 优先 2：未命中时从当前拥有焦点的元素及祖先节点提取
     if (!success) {
         IUIAutomationElement* pFocused = nullptr;
         if (SUCCEEDED(pAutomation->GetFocusedElement(&pFocused)) && pFocused) {
-            if (TryExtractFromElement(pFocused, outText, outAnchorX, outAnchorY)) {
+            if (tryWithAncestors(pFocused)) {
                 success = true;
             }
             pFocused->Release();
         }
     }
 
+    if (pWalker) pWalker->Release();
     pAutomation->Release();
     if (shouldUninit) CoUninitialize();
     return success;

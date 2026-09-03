@@ -260,24 +260,38 @@ namespace LinguaAlpaca::UI {
 		m_resultCard->GetTextCtrl()->SetHint(L"上传图片后，识别结果将自动显示在这里...");
 
 		m_resultCard->AddToolIcon(1, SVG::SPEAKER, L"朗读内容", [this]() {
-			if (!m_resultCard || !m_resultCard->GetTextCtrl())
-				return;
-			wxString text = m_resultCard->GetTextCtrl()->GetValue();
-			if (text.IsEmpty())
-				return;
-			WinTtsHelper::GetInstance().Speak(text.ToStdWstring(), LanguageCode::AutoDetect);
-			});
-
-		m_resultCard->AddToolIcon(2, SVG::COPY, L"复制文本", [this]() {
 			if (!m_resultCard)
 				return;
-			wxString text = m_resultCard->GetTextCtrl()->GetValue();
-			if (text.IsEmpty())
+			if (m_resultCard->HasTableData() && m_resultCard->GetViewMode() == CardViewMode::Table) {
+				std::string speech = TableParser::ToSpeechText(m_resultCard->GetTableData());
+				if (!speech.empty()) {
+					WinTtsHelper::GetInstance().Speak(wxString::FromUTF8(speech).ToStdWstring(), LanguageCode::AutoDetect);
+				}
 				return;
+			}
+			if (m_resultCard->GetTextCtrl()) {
+				wxString text = m_resultCard->GetTextCtrl()->GetValue();
+				if (!text.IsEmpty()) {
+					WinTtsHelper::GetInstance().Speak(text.ToStdWstring(), LanguageCode::AutoDetect);
+				}
+			}
+			});
 
-			if (ClipboardHelper::SetClipboardText(text.ToUTF8().data())) {
-				wxMessageBox(L"识别结果已复制到剪贴板！", L"提示",
-					wxOK | wxICON_INFORMATION, this);
+		m_resultCard->AddToolIcon(2, SVG::COPY, L"复制内容", [this]() {
+			if (!m_resultCard)
+				return;
+			if (m_resultCard->HasTableData() && m_resultCard->GetViewMode() == CardViewMode::Table) {
+				if (m_resultCard->GetTableView()) {
+					m_resultCard->GetTableView()->CopyAsExcel();
+				}
+				return;
+			}
+			if (m_resultCard->GetTextCtrl()) {
+				wxString text = m_resultCard->GetTextCtrl()->GetValue();
+				if (!text.IsEmpty() && ClipboardHelper::SetClipboardText(text.ToUTF8().data())) {
+					wxMessageBox(L"识别结果已复制到剪贴板！", L"提示",
+						wxOK | wxICON_INFORMATION, this);
+				}
 			}
 			});
 
@@ -285,8 +299,7 @@ namespace LinguaAlpaca::UI {
 			if (!m_resultCard)
 				return;
 			WinTtsHelper::GetInstance().Stop();
-			m_resultCard->GetTextCtrl()->Clear();
-			m_resultCard->SetCharacterCount(0);
+			m_resultCard->Clear();
 			});
 
 		contentSizer->Add(m_resultCard, 55, wxEXPAND);
@@ -811,16 +824,18 @@ namespace LinguaAlpaca::UI {
 				if (!m_resultCard || !m_resultCard->GetTextCtrl()) return;
 
 				if (success) {
-					wxString wClean = wxString::FromUTF8(fullText);
-					m_resultCard->GetTextCtrl()->SetValue(wClean);
-					m_resultCard->SetCharacterCount(wClean.Length());
+					m_resultCard->SetContent(fullText);
 				}
 				else if (!error.empty()) {
 					if (error == "已取消") {
-						m_resultCard->GetTextCtrl()->AppendText(L"\n\n[⏹ OCR 识别已被用户中断]");
+						if (m_resultCard->GetTextCtrl()) {
+							m_resultCard->GetTextCtrl()->AppendText(L"\n\n[⏹ OCR 识别已被用户中断]");
+						}
 					}
 					else {
-						m_resultCard->GetTextCtrl()->SetValue(wxString::FromUTF8("识别出现提示/错误: " + error));
+						if (m_resultCard->GetTextCtrl()) {
+							m_resultCard->GetTextCtrl()->SetValue(wxString::FromUTF8("识别出现提示/错误: " + error));
+						}
 					}
 				}
 				})

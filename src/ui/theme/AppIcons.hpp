@@ -288,6 +288,58 @@ inline constexpr const char *TEST = R"(
 </svg>
 )";
 
+// 34. 表格视图 (Table / Grid)
+inline constexpr const char *TABLE = R"(
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <rect width="18" height="18" x="3" y="3" rx="2"/>
+  <path d="M3 9h18"/>
+  <path d="M3 15h18"/>
+  <path d="M12 3v18"/>
+</svg>
+)";
+
+// 35. 纯文本 / 代码视图 (Code / Raw)
+inline constexpr const char *CODE = R"(
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <polyline points="16 18 22 12 16 6"/>
+  <polyline points="8 6 2 12 8 18"/>
+</svg>
+)";
+
+// 36. 电子表格 / Excel 导出 (Spreadsheet / File)
+inline constexpr const char *SPREADSHEET = R"(
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+  <polyline points="14 2 14 8 20 8"/>
+  <path d="M8 13h2"/>
+  <path d="M14 13h2"/>
+  <path d="M8 17h2"/>
+  <path d="M14 17h2"/>
+</svg>
+)";
+
+// 37. 字体放大与缩小 (Zoom In / Zoom Out / Font Size)
+inline constexpr const char *ZOOM_IN = R"(
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <circle cx="11" cy="11" r="8"/>
+  <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+  <line x1="11" y1="8" x2="11" y2="14"/>
+  <line x1="8" y1="11" x2="14" y2="11"/>
+</svg>
+)";
+
+inline constexpr const char *ZOOM_OUT = R"(
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <circle cx="11" cy="11" r="8"/>
+  <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+  <line x1="8" y1="11" x2="14" y2="11"/>
+</svg>
+)";
+
+inline constexpr const char *FONT_INCREASE = ZOOM_IN;
+inline constexpr const char *FONT_DECREASE = ZOOM_OUT;
+
 } // namespace SVG
 
 } // namespace LinguaAlpaca::UI
+

@@ -56,7 +56,24 @@ namespace LinguaAlpaca::UI {
 		m_langBadge = new StatusBadge(m_headerPanel, wxID_ANY);
 		UpdateLanguageBadge();
 
-		// 按钮：Pin、重试、复制、关闭 (统一使用 wxBitmapButton / wxBORDER_NONE 扁平无边框风格，贴合 MainFrame)
+		// 读取配置中的字号大小
+		if (m_modelManager && m_modelManager->GetConfigManager()) {
+			m_currentFontSize = m_modelManager->GetConfigManager()->GetConfig().bubbleFontSize;
+		}
+		if (m_currentFontSize < 8) m_currentFontSize = 8;
+		if (m_currentFontSize > 22) m_currentFontSize = 22;
+
+		// 按钮：字体缩小、字体放大、Pin、重试、复制、关闭 (统一使用 wxBitmapButton / wxBORDER_NONE 扁平无边框风格，贴合 MainFrame)
+		wxBitmapBundle fontDecBundle = IconManager::GetIconBundle(SVG::ZOOM_OUT, wxSize(15, 15), palette.textSecondary);
+		m_fontDecreaseBtn = new wxBitmapButton(m_headerPanel, wxID_ANY, fontDecBundle, wxDefaultPosition, dip(30, 30), wxBORDER_NONE);
+		m_fontDecreaseBtn->SetBackgroundColour(palette.sidebarBg);
+		m_fontDecreaseBtn->SetToolTip(L"缩小字体 (A-)");
+
+		wxBitmapBundle fontIncBundle = IconManager::GetIconBundle(SVG::ZOOM_IN, wxSize(15, 15), palette.textSecondary);
+		m_fontIncreaseBtn = new wxBitmapButton(m_headerPanel, wxID_ANY, fontIncBundle, wxDefaultPosition, dip(30, 30), wxBORDER_NONE);
+		m_fontIncreaseBtn->SetBackgroundColour(palette.sidebarBg);
+		m_fontIncreaseBtn->SetToolTip(L"放大字体 (A+)");
+
 		wxBitmapBundle pinBundle = IconManager::GetIconBundle(SVG::PIN, wxSize(15, 15), palette.textSecondary);
 		m_pinBtn = new wxBitmapButton(m_headerPanel, wxID_ANY, pinBundle, wxDefaultPosition, dip(30, 30), wxBORDER_NONE);
 		m_pinBtn->SetBackgroundColour(palette.sidebarBg);
@@ -81,6 +98,8 @@ namespace LinguaAlpaca::UI {
 		headerSizer->Add(m_titleText, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 6_dip);
 		headerSizer->Add(m_langBadge, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 8_dip);
 		headerSizer->AddStretchSpacer(1);
+		headerSizer->Add(m_fontDecreaseBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 2_dip);
+		headerSizer->Add(m_fontIncreaseBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4_dip);
 		headerSizer->Add(m_pinBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4_dip);
 		headerSizer->Add(m_retryBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4_dip);
 		headerSizer->Add(m_copyBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4_dip);
@@ -101,7 +120,7 @@ namespace LinguaAlpaca::UI {
 
 		m_sourceCtrl = new TextCtrl(m_sourcePanel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize,
 			wxTE_MULTILINE | wxBORDER_NONE | wxTE_RICH2);
-		m_sourceCtrl->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+		m_sourceCtrl->SetFont(wxFont(std::max(8, m_currentFontSize - 1), wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
 		m_sourceCtrl->SetBackgroundColour(palette.windowBg);
 		m_sourceCtrl->SetForegroundColour(palette.textPrimary);
 		m_sourceCtrl->SetHint(L"输入或编辑待翻译文本 (Ctrl+Enter 翻译)...");
@@ -132,7 +151,7 @@ namespace LinguaAlpaca::UI {
 
 		m_targetCtrl = new TextCtrl(m_targetPanel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize,
 			wxTE_MULTILINE | wxTE_READONLY | wxBORDER_NONE | wxTE_RICH2);
-		m_targetCtrl->SetFont(wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+		m_targetCtrl->SetFont(wxFont(m_currentFontSize, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
 		m_targetCtrl->SetBackgroundColour(palette.cardBg);
 		m_targetCtrl->SetForegroundColour(palette.textPrimary);
 		targetSizer->Add(m_targetCtrl, 1, wxEXPAND);
@@ -161,6 +180,13 @@ namespace LinguaAlpaca::UI {
 				wxSize btnSz = m_targetSpeakBtn->GetSize();
 				m_targetSpeakBtn->Move(sz.x - btnSz.x - 6_dip, 4_dip);
 				m_targetSpeakBtn->Raise();
+			}
+		});
+
+		m_targetPanel->Bind(wxEVT_LEFT_DOWN, [this](wxMouseEvent& event) {
+			event.Skip();
+			if (m_targetCtrl && m_targetCtrl->GetInnerCtrl()) {
+				m_targetCtrl->GetInnerCtrl()->SetFocus();
 			}
 		});
 
@@ -265,6 +291,8 @@ namespace LinguaAlpaca::UI {
 		m_resizeGrip->Bind(wxEVT_LEFT_UP, &TranslationBubbleFrame::OnGripLeftUp, this);
 
 		// 按钮操作事件
+		m_fontDecreaseBtn->Bind(wxEVT_BUTTON, &TranslationBubbleFrame::OnDecreaseFontSize, this);
+		m_fontIncreaseBtn->Bind(wxEVT_BUTTON, &TranslationBubbleFrame::OnIncreaseFontSize, this);
 		m_copyBtn->Bind(wxEVT_BUTTON, &TranslationBubbleFrame::OnCopyResult, this);
 		m_pinBtn->Bind(wxEVT_BUTTON, &TranslationBubbleFrame::OnTogglePin, this);
 		m_retryBtn->Bind(wxEVT_BUTTON, &TranslationBubbleFrame::OnRetry, this);
@@ -275,6 +303,15 @@ namespace LinguaAlpaca::UI {
 		WinTtsHelper::GetInstance().Stop();
 		m_lastSourceText = sourceText;
 		UpdateLanguageBadge();
+
+		// 同步加载最新字号设置
+		if (m_modelManager && m_modelManager->GetConfigManager()) {
+			int cfgFontSize = m_modelManager->GetConfigManager()->GetConfig().bubbleFontSize;
+			if (cfgFontSize >= 8 && cfgFontSize <= 22 && cfgFontSize != m_currentFontSize) {
+				ApplyFontSize(cfgFontSize, false);
+			}
+		}
+
 		m_sourceCtrl->SetValue(wxString::FromUTF8(sourceText));
 		m_targetCtrl->SetValue(L"正在启动翻译引擎...");
 		m_statusText->SetLabel(L"正在翻译...");
@@ -415,8 +452,8 @@ namespace LinguaAlpaca::UI {
 			BindUi([this](bool success, const std::string& fullText, const std::string& error) {
 				if (!m_targetCtrl) return;
 				if (success) {
-					m_targetCtrl->SetValue(wxString::FromUTF8(fullText));
 					m_currentFullText = fullText;
+					m_targetCtrl->SetMarkdown(fullText);
 					if (m_statusText) {
 						m_statusText->SetLabel(L"翻译完成 (Hy-MT2)");
 					}
@@ -472,6 +509,16 @@ namespace LinguaAlpaca::UI {
 			m_footerPanel->Refresh();
 		}
 		if (m_statusText) m_statusText->SetForegroundColour(palette.textSecondary);
+		if (m_fontDecreaseBtn) {
+			m_fontDecreaseBtn->SetBackgroundColour(palette.sidebarBg);
+			wxBitmapBundle fontDecBundle = IconManager::GetIconBundle(SVG::ZOOM_OUT, wxSize(15, 15), palette.textSecondary);
+			m_fontDecreaseBtn->SetBitmap(fontDecBundle);
+		}
+		if (m_fontIncreaseBtn) {
+			m_fontIncreaseBtn->SetBackgroundColour(palette.sidebarBg);
+			wxBitmapBundle fontIncBundle = IconManager::GetIconBundle(SVG::ZOOM_IN, wxSize(15, 15), palette.textSecondary);
+			m_fontIncreaseBtn->SetBitmap(fontIncBundle);
+		}
 		if (m_pinBtn) {
 			m_pinBtn->SetBackgroundColour(palette.sidebarBg);
 			wxColour pinColor = m_isPinned ? palette.accentPrimary : palette.textSecondary;
@@ -833,10 +880,25 @@ namespace LinguaAlpaca::UI {
 	}
 
 	void TranslationBubbleFrame::OnCopyResult(wxCommandEvent& WXUNUSED(event)) {
+		if (m_targetCtrl) {
+			wxString sel = m_targetCtrl->GetStringSelection();
+			if (!sel.IsEmpty()) {
+				ClipboardHelper::SetClipboardText(sel.ToUTF8().data());
+				if (m_statusText) {
+					m_statusText->SetLabel(L"已复制选中文本！");
+				}
+				return;
+			}
+		}
 		if (!m_currentFullText.empty()) {
 			ClipboardHelper::SetClipboardText(m_currentFullText);
 			if (m_statusText) {
-				m_statusText->SetLabel(L"已复制到剪贴板！");
+				m_statusText->SetLabel(L"已复制译文到剪贴板！");
+			}
+		} else if (m_targetCtrl && !m_targetCtrl->GetValue().IsEmpty()) {
+			ClipboardHelper::SetClipboardText(m_targetCtrl->GetValue().ToUTF8().data());
+			if (m_statusText) {
+				m_statusText->SetLabel(L"已复制译文到剪贴板！");
 			}
 		}
 	}
@@ -929,6 +991,35 @@ namespace LinguaAlpaca::UI {
 
 	void TranslationBubbleFrame::OnCloseBtn(wxCommandEvent& WXUNUSED(event)) {
 		Dismiss();
+	}
+
+	void TranslationBubbleFrame::OnIncreaseFontSize(wxCommandEvent& WXUNUSED(event)) {
+		if (m_currentFontSize < 22) {
+			m_currentFontSize++;
+			ApplyFontSize(m_currentFontSize, true);
+		}
+	}
+
+	void TranslationBubbleFrame::OnDecreaseFontSize(wxCommandEvent& WXUNUSED(event)) {
+		if (m_currentFontSize > 8) {
+			m_currentFontSize--;
+			ApplyFontSize(m_currentFontSize, true);
+		}
+	}
+
+	void TranslationBubbleFrame::ApplyFontSize(int fontSize, bool saveToConfig) {
+		m_currentFontSize = std::clamp(fontSize, 8, 22);
+		if (m_sourceCtrl) {
+			m_sourceCtrl->SetFont(wxFont(std::max(8, m_currentFontSize - 1), wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+			m_sourceCtrl->Refresh();
+		}
+		if (m_targetCtrl) {
+			m_targetCtrl->SetFont(wxFont(m_currentFontSize, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+			m_targetCtrl->Refresh();
+		}
+		if (saveToConfig && m_modelManager && m_modelManager->GetConfigManager()) {
+			m_modelManager->GetConfigManager()->SaveBubbleFontSize(m_currentFontSize);
+		}
 	}
 
 } // namespace LinguaAlpaca::UI

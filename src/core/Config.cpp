@@ -122,6 +122,14 @@ namespace LinguaAlpaca {
         Save();
     }
 
+    void ConfigManager::SaveBubbleFontSize(int fontSize) {
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            m_config.bubbleFontSize = fontSize;
+        }
+        Save();
+    }
+
     void ConfigManager::SaveLogConfig(bool saveLogToFile) {
         {
             std::lock_guard<std::mutex> lock(m_mutex);
@@ -150,6 +158,9 @@ namespace LinguaAlpaca {
         m_config.themeMode = fileConfig.Read("/UI/Theme", "Light").ToUTF8().data();
         m_config.autoRead = fileConfig.ReadBool("/UI/AutoRead", false);
         m_config.selectionAutoTranslate = fileConfig.ReadBool("/UI/SelectionAutoTranslate", true);
+        m_config.bubbleFontSize = fileConfig.ReadLong("/UI/BubbleFontSize", 10);
+        if (m_config.bubbleFontSize < 8) m_config.bubbleFontSize = 8;
+        if (m_config.bubbleFontSize > 24) m_config.bubbleFontSize = 24;
         m_config.sourceLang = fileConfig.Read("/Language/SourceLang", "auto").ToUTF8().data();
         m_config.targetLang = fileConfig.Read("/Language/TargetLang", "zh").ToUTF8().data();
         m_config.gpuLayers = fileConfig.ReadLong("/Model/GpuLayers", 99);       // 99 表示全部是GPU
@@ -194,6 +205,7 @@ namespace LinguaAlpaca {
         fileConfig.Write("/UI/Theme", wxString::FromUTF8(m_config.themeMode));
         fileConfig.Write("/UI/AutoRead", m_config.autoRead);
         fileConfig.Write("/UI/SelectionAutoTranslate", m_config.selectionAutoTranslate);
+        fileConfig.Write("/UI/BubbleFontSize", (long)m_config.bubbleFontSize);
         fileConfig.Write("/Language/SourceLang", wxString::FromUTF8(m_config.sourceLang));
         fileConfig.Write("/Language/TargetLang", wxString::FromUTF8(m_config.targetLang));
         fileConfig.Write("/Model/GpuLayers", (long)m_config.gpuLayers);

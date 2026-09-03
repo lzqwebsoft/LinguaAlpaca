@@ -77,6 +77,9 @@ private:
     void EndResize();
 
     // 按钮操作
+    void OnIncreaseFontSize(wxCommandEvent& event);
+    void OnDecreaseFontSize(wxCommandEvent& event);
+    void ApplyFontSize(int fontSize, bool saveToConfig = true);
     void OnCopyResult(wxCommandEvent& event);
     void OnTogglePin(wxCommandEvent& event);
     void OnRetry(wxCommandEvent& event);
@@ -91,6 +94,8 @@ private:
     wxPanel* m_headerPanel{nullptr};
     wxStaticText* m_titleText{nullptr};
     StatusBadge* m_langBadge{nullptr};
+    wxBitmapButton* m_fontDecreaseBtn{nullptr};
+    wxBitmapButton* m_fontIncreaseBtn{nullptr};
     wxBitmapButton* m_pinBtn{nullptr};
     wxBitmapButton* m_retryBtn{nullptr};
     wxBitmapButton* m_copyBtn{nullptr};
@@ -124,6 +129,9 @@ private:
     wxSize m_resizeStartFrameSize;
     wxSize m_bubbleSize;
     wxWindow* m_resizeCaptureWin{nullptr};
+
+    // 字体大小
+    int m_currentFontSize{10};
 };
 
 } // namespace LinguaAlpaca::UI

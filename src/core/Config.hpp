@@ -34,6 +34,7 @@ struct AppConfig {
     int selectionModifierKey{0}; // 0: Ctrl, 1: Alt, 2: Shift
     bool preserveClipboard{true}; // 保护剪贴板 (复制提取后恢复原剪贴板内容)
     std::string selectionTargetLang{"zh"};
+    int bubbleFontSize{10}; // 划词翻译悬浮窗字体大小 (pt)
 
     // 日志配置
     bool saveLogToFile{false};
@@ -61,6 +62,7 @@ public:
     void SaveOcrConfig(const std::string& ocrModelPath, const std::string& ocrMmprojPath, int ocrGpuLayers = 0, int port = 0, int ctxSize = 4096, int threads = 0, bool ocrMmprojOffload = false);
     void SaveThemeMode(const std::string& themeMode);
     void SaveSelectionConfig(bool enabled, int mode, int modifierKey, bool preserveClip);
+    void SaveBubbleFontSize(int fontSize);
     void SaveLogConfig(bool saveLogToFile);
     void SaveDictDir(const std::string& path);
 

@@ -5,6 +5,7 @@
 #include <memory>
 #include <string>
 #include "ScrollBar.hpp"
+#include "../../core/markdown/MarkdownFormatter.hpp"
 
 namespace LinguaAlpaca::UI {
 
@@ -15,6 +16,8 @@ namespace LinguaAlpaca::UI {
  * - 嵌入定制的极简圆角高亮滑动条 (ScrollBar)，完全替代系统陈旧原生滚动条
  * - 支持可编辑模式 (Editable) 与只读模式 (Read-Only)
  * - 深度集成 ThemePalette 主题色，支持背景色、前景色、字体自定义与实时主题刷新
+ * - 提供完整的 Markdown 富文本格式渲染支持 (SetMarkdown)
+ * - 完整支持鼠标划词选区、双击选词、右键上下文快捷菜单 (复制/全选等)
  * - 提供完整的文本处理接口 (SetValue, GetValue, AppendText, Clear, WriteText 等)
  */
 class TextCtrl : public wxPanel {
@@ -37,6 +40,12 @@ public:
     void ShowPosition(long pos);
     long GetLastPosition() const;
 
+    // Markdown 富文本渲染
+    void SetMarkdown(const std::string& markdownText);
+    void SetMarkdown(const wxString& markdownText);
+    bool IsMarkdownMode() const { return m_isMarkdownMode; }
+    const std::string& GetRawMarkdown() const { return m_rawMarkdown; }
+
     // 编辑状态控制 (可编辑与不可编辑)
     void SetEditable(bool editable);
     bool IsEditable() const;
@@ -47,6 +56,15 @@ public:
     void SetInsertionPointEnd();
     long GetInsertionPoint() const;
     void SelectAll();
+    wxString GetStringSelection() const;
+    void GetSelection(long* from, long* to) const;
+    void SetSelection(long from, long to);
+    void Copy();
+    void Cut();
+    void Paste();
+    bool CanCopy() const;
+    bool CanCut() const;
+    bool CanPaste() const;
 
     // 样式与主题
     bool SetFont(const wxFont& font) override;
@@ -66,6 +84,7 @@ private:
     void OnMiddleDown(wxMouseEvent& event);
     void OnMiddleUp(wxMouseEvent& event);
     void OnMouseMove(wxMouseEvent& event);
+    void OnContextMenu(wxContextMenuEvent& event);
 
     wxTextCtrl* m_textCtrl{nullptr};
     ScrollBar* m_scrollBar{nullptr};
@@ -73,6 +92,10 @@ private:
     bool m_isMiddleDragging{false};
     int m_middleDragStartY{0};
     int m_middleDragStartFirstLine{0};
+
+    // Markdown 模式与缓存
+    bool m_isMarkdownMode{false};
+    std::string m_rawMarkdown;
 };
 
 } // namespace LinguaAlpaca::UI

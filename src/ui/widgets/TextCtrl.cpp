@@ -2,6 +2,7 @@
 #include "TextCtrl.hpp"
 #include "ScrollBar.hpp"
 #include "../theme/Theme.hpp"
+#include "../../core/ClipboardHelper.hpp"
 #include <algorithm>
 #include <wx/dcbuffer.h>
 
@@ -73,6 +74,25 @@ void TextCtrl::InitUI(const wxString& value, long style) {
     Bind(wxEVT_MIDDLE_UP, &TextCtrl::OnMiddleUp, this);
     Bind(wxEVT_MOTION, &TextCtrl::OnMouseMove, this);
 
+    // 右键上下文快捷菜单绑定
+    m_textCtrl->Bind(wxEVT_CONTEXT_MENU, &TextCtrl::OnContextMenu, this);
+    Bind(wxEVT_CONTEXT_MENU, &TextCtrl::OnContextMenu, this);
+
+    Bind(wxEVT_MENU, [this](wxCommandEvent& event) {
+        int id = event.GetId();
+        if (id == wxID_COPY) {
+            Copy();
+        } else if (id == wxID_SELECTALL) {
+            SelectAll();
+        } else if (id == wxID_CUT) {
+            Cut();
+        } else if (id == wxID_PASTE) {
+            Paste();
+        } else if (id == wxID_CLEAR) {
+            Clear();
+        }
+    });
+
     m_textCtrl->Bind(wxEVT_TEXT, [this](wxCommandEvent& event) {
         event.Skip();
         UpdateScrollInfo();
@@ -98,6 +118,35 @@ void TextCtrl::InitUI(const wxString& value, long style) {
             wxTheApp->CallAfter([this]() { UpdateScrollInfo(); });
         }
     });
+}
+
+void TextCtrl::OnContextMenu(wxContextMenuEvent& WXUNUSED(event)) {
+    wxMenu menu;
+    menu.Append(wxID_COPY, L"复制\tCtrl+C");
+    menu.Append(wxID_SELECTALL, L"全选\tCtrl+A");
+
+    if (m_isEditable) {
+        menu.AppendSeparator();
+        menu.Append(wxID_CUT, L"剪切\tCtrl+X");
+        menu.Append(wxID_PASTE, L"粘贴\tCtrl+V");
+        menu.Append(wxID_CLEAR, L"清空");
+    }
+
+    bool hasSel = false;
+    if (m_textCtrl) {
+        long from = 0, to = 0;
+        m_textCtrl->GetSelection(&from, &to);
+        hasSel = (from != to);
+    }
+
+    menu.Enable(wxID_COPY, hasSel || (m_textCtrl && !m_textCtrl->GetValue().IsEmpty()));
+    if (m_isEditable) {
+        menu.Enable(wxID_CUT, hasSel);
+        menu.Enable(wxID_PASTE, m_textCtrl && m_textCtrl->CanPaste());
+        menu.Enable(wxID_CLEAR, m_textCtrl && !m_textCtrl->GetValue().IsEmpty());
+    }
+
+    PopupMenu(&menu);
 }
 
 void TextCtrl::OnMouseWheel(wxMouseEvent& event) {
@@ -172,6 +221,8 @@ void TextCtrl::OnMouseMove(wxMouseEvent& event) {
 }
 
 void TextCtrl::SetValue(const wxString& value) {
+    m_isMarkdownMode = false;
+    m_rawMarkdown.clear();
     if (m_textCtrl) {
         m_textCtrl->SetValue(value);
         UpdateScrollInfo();
@@ -190,6 +241,8 @@ void TextCtrl::AppendText(const wxString& text) {
 }
 
 void TextCtrl::Clear() {
+    m_isMarkdownMode = false;
+    m_rawMarkdown.clear();
     if (m_textCtrl) {
         m_textCtrl->Clear();
         UpdateScrollInfo();
@@ -227,6 +280,121 @@ long TextCtrl::GetLastPosition() const {
     return m_textCtrl ? m_textCtrl->GetLastPosition() : 0;
 }
 
+void TextCtrl::SetMarkdown(const std::string& markdownText) {
+    m_isMarkdownMode = true;
+    m_rawMarkdown = markdownText;
+
+    if (!m_textCtrl) return;
+
+    m_textCtrl->Freeze();
+    m_textCtrl->Clear();
+
+    if (markdownText.empty()) {
+        m_textCtrl->Thaw();
+        UpdateScrollInfo();
+        return;
+    }
+
+    ThemePalette palette = ThemeManager::GetCurrentPalette();
+
+    // 基础字体与尺寸规范 (高DPI友好)
+    wxFont baseFont = m_textCtrl->GetFont();
+    if (!baseFont.IsOk()) {
+        baseFont = wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei");
+    }
+    int basePt = baseFont.GetPointSize();
+    if (basePt <= 0) basePt = 10;
+    wxString faceName = baseFont.GetFaceName();
+    if (faceName.IsEmpty()) faceName = "Microsoft YaHei";
+
+    // 字体层级定义
+    wxFont defaultFont(basePt, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, faceName);
+    wxFont boldFont(basePt, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, faceName);
+    wxFont italicFont(basePt, wxFONTFAMILY_SWISS, wxFONTSTYLE_ITALIC, wxFONTWEIGHT_NORMAL, false, faceName);
+    wxFont boldItalicFont(basePt, wxFONTFAMILY_SWISS, wxFONTSTYLE_ITALIC, wxFONTWEIGHT_BOLD, false, faceName);
+    wxFont codeFont(std::max(8, basePt - 1), wxFONTFAMILY_TELETYPE, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Consolas");
+    wxFont codeBlockFont(std::max(8, basePt - 1), wxFONTFAMILY_TELETYPE, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Consolas");
+
+    // 标题逐级字号
+    wxFont h1Font(basePt + 4, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, faceName);
+    wxFont h2Font(basePt + 3, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, faceName);
+    wxFont h3Font(basePt + 2, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, faceName);
+    wxFont h4Font(basePt + 1, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, faceName);
+    wxFont h5Font(basePt, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, faceName);
+    wxFont h6Font(std::max(8, basePt - 1), wxFONTFAMILY_SWISS, wxFONTSTYLE_ITALIC, wxFONTWEIGHT_BOLD, false, faceName);
+
+    // 样式属性定义
+    wxTextAttr defaultAttr(palette.textPrimary, palette.cardBg, defaultFont);
+    wxTextAttr h1Attr(palette.accentPrimary, palette.cardBg, h1Font);
+    wxTextAttr h2Attr(palette.accentPrimary, palette.cardBg, h2Font);
+    wxTextAttr h3Attr(palette.textPrimary, palette.cardBg, h3Font);
+    wxTextAttr h4Attr(palette.textPrimary, palette.cardBg, h4Font);
+    wxTextAttr h5Attr(palette.textSecondary, palette.cardBg, h5Font);
+    wxTextAttr h6Attr(palette.textSecondary, palette.cardBg, h6Font);
+
+    wxTextAttr boldAttr(palette.textPrimary, palette.cardBg, boldFont);
+    wxTextAttr italicAttr(palette.textSecondary, palette.cardBg, italicFont);
+    wxTextAttr boldItalicAttr(palette.textPrimary, palette.cardBg, boldItalicFont);
+
+    // 行内代码与代码块
+    wxTextAttr inlineCodeAttr(palette.bannerText, palette.bannerBg, codeFont);
+    wxTextAttr codeBlockAttr(palette.textPrimary, palette.windowBg, codeBlockFont);
+
+    // 引用
+    wxTextAttr blockquoteBarAttr(palette.accentPrimary, palette.cardBg, boldFont);
+    wxTextAttr blockquoteAttr(palette.textSecondary, palette.cardBg, italicFont);
+
+    // 列表与分割线
+    wxTextAttr listBulletAttr(palette.accentPrimary, palette.cardBg, boldFont);
+    wxTextAttr listNumAttr(palette.accentPrimary, palette.cardBg, boldFont);
+    wxTextAttr dividerAttr(palette.cardBorderActive, palette.cardBg, defaultFont);
+
+    // 链接与删除线
+    wxTextAttr linkAttr(palette.accentPrimary, palette.cardBg, defaultFont);
+    linkAttr.SetFontUnderlined(true);
+    wxTextAttr strikeAttr(palette.textSecondary, palette.cardBg, defaultFont);
+    strikeAttr.SetFontStrikethrough(true);
+
+    auto getStyleAttr = [&](MarkdownStyle style) -> const wxTextAttr& {
+        switch (style) {
+            case MarkdownStyle::Heading1:      return h1Attr;
+            case MarkdownStyle::Heading2:      return h2Attr;
+            case MarkdownStyle::Heading3:      return h3Attr;
+            case MarkdownStyle::Heading4:      return h4Attr;
+            case MarkdownStyle::Heading5:      return h5Attr;
+            case MarkdownStyle::Heading6:      return h6Attr;
+            case MarkdownStyle::Bold:          return boldAttr;
+            case MarkdownStyle::Italic:        return italicAttr;
+            case MarkdownStyle::BoldItalic:    return boldItalicAttr;
+            case MarkdownStyle::InlineCode:    return inlineCodeAttr;
+            case MarkdownStyle::CodeBlock:     return codeBlockAttr;
+            case MarkdownStyle::Blockquote:    return blockquoteAttr;
+            case MarkdownStyle::BlockquoteBar: return blockquoteBarAttr;
+            case MarkdownStyle::ListBullet:    return listBulletAttr;
+            case MarkdownStyle::ListNumber:    return listNumAttr;
+            case MarkdownStyle::Divider:       return dividerAttr;
+            case MarkdownStyle::LinkText:      return linkAttr;
+            case MarkdownStyle::Strikethrough: return strikeAttr;
+            case MarkdownStyle::Default:
+            default:                           return defaultAttr;
+        }
+    };
+
+    auto segments = MarkdownFormatter::Parse(markdownText);
+    for (const auto& seg : segments) {
+        m_textCtrl->SetDefaultStyle(getStyleAttr(seg.style));
+        m_textCtrl->AppendText(wxString::FromUTF8(seg.text));
+    }
+
+    m_textCtrl->Thaw();
+    ScrollToLine(0);
+    UpdateScrollInfo();
+}
+
+void TextCtrl::SetMarkdown(const wxString& markdownText) {
+    SetMarkdown(std::string(markdownText.ToUTF8().data()));
+}
+
 void TextCtrl::SetEditable(bool editable) {
     m_isEditable = editable;
     if (m_textCtrl) {
@@ -262,12 +430,72 @@ void TextCtrl::SelectAll() {
     }
 }
 
+wxString TextCtrl::GetStringSelection() const {
+    return m_textCtrl ? m_textCtrl->GetStringSelection() : wxString();
+}
+
+void TextCtrl::GetSelection(long* from, long* to) const {
+    if (m_textCtrl) {
+        m_textCtrl->GetSelection(from, to);
+    }
+}
+
+void TextCtrl::SetSelection(long from, long to) {
+    if (m_textCtrl) {
+        m_textCtrl->SetSelection(from, to);
+    }
+}
+
+void TextCtrl::Copy() {
+    if (!m_textCtrl) return;
+    wxString sel = m_textCtrl->GetStringSelection();
+    if (!sel.IsEmpty()) {
+        ClipboardHelper::SetClipboardText(sel.ToUTF8().data());
+    } else {
+        wxString val = m_textCtrl->GetValue();
+        if (!val.IsEmpty()) {
+            ClipboardHelper::SetClipboardText(val.ToUTF8().data());
+        }
+    }
+}
+
+void TextCtrl::Cut() {
+    if (m_textCtrl && m_isEditable) {
+        m_textCtrl->Cut();
+        UpdateScrollInfo();
+    }
+}
+
+void TextCtrl::Paste() {
+    if (m_textCtrl && m_isEditable) {
+        m_textCtrl->Paste();
+        UpdateScrollInfo();
+    }
+}
+
+bool TextCtrl::CanCopy() const {
+    if (!m_textCtrl) return false;
+    return m_textCtrl->CanCopy() || !m_textCtrl->GetValue().IsEmpty();
+}
+
+bool TextCtrl::CanCut() const {
+    return m_textCtrl && m_isEditable && m_textCtrl->CanCut();
+}
+
+bool TextCtrl::CanPaste() const {
+    return m_textCtrl && m_isEditable && m_textCtrl->CanPaste();
+}
+
 bool TextCtrl::SetFont(const wxFont& font) {
     bool res = wxPanel::SetFont(font);
     if (m_textCtrl) {
         m_textCtrl->SetFont(font);
     }
-    UpdateScrollInfo();
+    if (m_isMarkdownMode && !m_rawMarkdown.empty()) {
+        SetMarkdown(m_rawMarkdown);
+    } else {
+        UpdateScrollInfo();
+    }
     return res;
 }
 
@@ -280,6 +508,9 @@ bool TextCtrl::SetBackgroundColour(const wxColour& colour) {
         m_scrollBar->SetBackgroundColour(colour);
         m_scrollBar->Refresh();
     }
+    if (m_isMarkdownMode && !m_rawMarkdown.empty()) {
+        SetMarkdown(m_rawMarkdown);
+    }
     return res;
 }
 
@@ -287,6 +518,9 @@ bool TextCtrl::SetForegroundColour(const wxColour& colour) {
     bool res = wxPanel::SetForegroundColour(colour);
     if (m_textCtrl) {
         m_textCtrl->SetForegroundColour(colour);
+    }
+    if (m_isMarkdownMode && !m_rawMarkdown.empty()) {
+        SetMarkdown(m_rawMarkdown);
     }
     return res;
 }

@@ -93,6 +93,10 @@ set(CORE_SOURCES
     src/core/dict/DictFormatter.cpp
     src/core/dict/DictEngine.hpp
     src/core/dict/DictEngine.cpp
+    src/core/markdown/MarkdownFormatter.hpp
+    src/core/markdown/MarkdownFormatter.cpp
+    src/core/table/TableParser.hpp
+    src/core/table/TableParser.cpp
 )
 
 set(ENGINE_SOURCES
@@ -120,6 +124,8 @@ set(UI_SOURCES
     src/ui/widgets/SidebarNav.cpp
     src/ui/widgets/CardPanel.hpp
     src/ui/widgets/CardPanel.cpp
+    src/ui/widgets/CustomTableView.hpp
+    src/ui/widgets/CustomTableView.cpp
     src/ui/widgets/LanguageBar.hpp
     src/ui/widgets/LanguageBar.cpp
     src/ui/widgets/WelcomeModelDialog.hpp

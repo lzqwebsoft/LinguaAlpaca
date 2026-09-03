@@ -6,6 +6,8 @@ add_executable(unit_tests
     SelectionTranslateTest.cpp
     DictEngineTest.cpp
     DictFormatterTest.cpp
+    MarkdownFormatterTest.cpp
+    TableParserTest.cpp
     ${CMAKE_SOURCE_DIR}/src/core/Logger.cpp
     ${CMAKE_SOURCE_DIR}/src/core/Config.cpp
     ${CMAKE_SOURCE_DIR}/src/core/ClipboardHelper.cpp
@@ -19,6 +21,8 @@ add_executable(unit_tests
     ${CMAKE_SOURCE_DIR}/src/core/WinTtsHelper.cpp
     ${CMAKE_SOURCE_DIR}/src/core/dict/DictFormatter.cpp
     ${CMAKE_SOURCE_DIR}/src/core/dict/DictEngine.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/markdown/MarkdownFormatter.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/table/TableParser.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/LlamaCppTranslationEngine.cpp
 )
 

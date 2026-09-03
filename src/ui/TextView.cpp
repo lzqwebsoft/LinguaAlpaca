@@ -330,9 +330,8 @@ namespace LinguaAlpaca::UI {
 				if (!m_targetCard || !m_targetCard->GetTextCtrl()) return;
 
 				if (success) {
-					wxString wClean = wxString::FromUTF8(fullText);
-					m_targetCard->GetTextCtrl()->SetValue(wClean);
-					m_targetCard->SetCharacterCount(wClean.Length());
+					m_targetCard->GetTextCtrl()->SetMarkdown(fullText);
+					m_targetCard->SetCharacterCount(wxString::FromUTF8(fullText).Length());
 				}
 				else if (!error.empty()) {
 					if (error == "已取消") {

@@ -120,85 +120,92 @@ static bool SendCopyKey(WORD vkKey) {
 
   std::vector<INPUT> inputs;
 
-  // 2. 如果用户当前按住了 Shift / Alt / Win，先临时发送释放，避免冲突
-  if (shiftPhysicallyDown) {
+  auto addKey = [&](WORD vk, DWORD flags) {
     INPUT in = {};
     in.type = INPUT_KEYBOARD;
-    in.ki.wVk = VK_SHIFT;
-    in.ki.dwFlags = KEYEVENTF_KEYUP;
+    in.ki.wVk = vk;
+    in.ki.wScan = static_cast<WORD>(MapVirtualKeyW(vk, MAPVK_VK_TO_VSC));
+    in.ki.dwFlags = flags;
     inputs.push_back(in);
-  }
-  if (altPhysicallyDown) {
-    INPUT in = {};
-    in.type = INPUT_KEYBOARD;
-    in.ki.wVk = VK_MENU;
-    in.ki.dwFlags = KEYEVENTF_KEYUP;
-    inputs.push_back(in);
-  }
-  if (winPhysicallyDown) {
-    INPUT in = {};
-    in.type = INPUT_KEYBOARD;
-    in.ki.wVk = VK_LWIN;
-    in.ki.dwFlags = KEYEVENTF_KEYUP;
-    inputs.push_back(in);
-  }
+  };
+
+  // 2. 如果用户当前按住了 Shift / Alt / Win，先临时发送释放，避免快捷键冲突
+  if (shiftPhysicallyDown) addKey(VK_SHIFT, KEYEVENTF_KEYUP);
+  if (altPhysicallyDown) addKey(VK_MENU, KEYEVENTF_KEYUP);
+  if (winPhysicallyDown) addKey(VK_LWIN, KEYEVENTF_KEYUP);
 
   // 3. 确保 Ctrl 处于按下状态
   if (!ctrlPhysicallyDown) {
-    INPUT in = {};
-    in.type = INPUT_KEYBOARD;
-    in.ki.wVk = VK_CONTROL;
-    inputs.push_back(in);
+    addKey(VK_CONTROL, 0);
+    SendInput(static_cast<UINT>(inputs.size()), inputs.data(), sizeof(INPUT));
+    inputs.clear();
+    std::this_thread::sleep_for(std::chrono::milliseconds(2));
   }
 
-  // 4. 模拟按下并释放目标键 (如 VK_INSERT 或 'C')
-  {
-    INPUT inDown = {};
-    inDown.type = INPUT_KEYBOARD;
-    inDown.ki.wVk = vkKey;
-    inputs.push_back(inDown);
-
-    INPUT inUp = {};
-    inUp.type = INPUT_KEYBOARD;
-    inUp.ki.wVk = vkKey;
-    inUp.ki.dwFlags = KEYEVENTF_KEYUP;
-    inputs.push_back(inUp);
-  }
+  // 4. 模拟按下并释放目标键 (携带真实硬件扫描码，确保 Adobe Acrobat / 沙箱应用完整接收)
+  addKey(vkKey, 0);
+  addKey(vkKey, KEYEVENTF_KEYUP);
+  SendInput(static_cast<UINT>(inputs.size()), inputs.data(), sizeof(INPUT));
+  inputs.clear();
 
   // 5. 释放 Ctrl (仅在用户物理上未按 Ctrl 时)
   if (!ctrlPhysicallyDown) {
-    INPUT in = {};
-    in.type = INPUT_KEYBOARD;
-    in.ki.wVk = VK_CONTROL;
-    in.ki.dwFlags = KEYEVENTF_KEYUP;
-    inputs.push_back(in);
+    std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    addKey(VK_CONTROL, KEYEVENTF_KEYUP);
   }
 
   // 6. 恢复用户原本按住的 Shift / Alt / Win 物理按键状态
-  if (shiftPhysicallyDown) {
-    INPUT in = {};
-    in.type = INPUT_KEYBOARD;
-    in.ki.wVk = VK_SHIFT;
-    inputs.push_back(in);
+  if (shiftPhysicallyDown) addKey(VK_SHIFT, 0);
+  if (altPhysicallyDown) addKey(VK_MENU, 0);
+  if (winPhysicallyDown) addKey(VK_LWIN, 0);
+
+  if (!inputs.empty()) {
+    SendInput(static_cast<UINT>(inputs.size()), inputs.data(), sizeof(INPUT));
   }
-  if (altPhysicallyDown) {
-    INPUT in = {};
-    in.type = INPUT_KEYBOARD;
-    in.ki.wVk = VK_MENU;
-    inputs.push_back(in);
-  }
-  if (winPhysicallyDown) {
-    INPUT in = {};
-    in.type = INPUT_KEYBOARD;
-    in.ki.wVk = VK_LWIN;
-    inputs.push_back(in);
+  return true;
+}
+
+static bool IsPdfReaderWindow(HWND hwnd) {
+  if (!hwnd) return false;
+
+  // 1. 类名检测
+  wchar_t className[128] = { 0 };
+  if (GetClassNameW(hwnd, className, 128)) {
+    if (_wcsicmp(className, L"AcrobatSDIWindow") == 0 ||
+        _wcsicmp(className, L"AVL_AVView") == 0 ||
+        _wcsicmp(className, L"FoxitReader") == 0 ||
+        _wcsicmp(className, L"SumatraPDF") == 0 ||
+        _wcsicmp(className, L"PDFXEdit") == 0) {
+      return true;
+    }
   }
 
-  if (inputs.empty())
-    return false;
-  UINT sent =
-      SendInput(static_cast<UINT>(inputs.size()), inputs.data(), sizeof(INPUT));
-  return sent == inputs.size();
+  // 2. 进程路径与可执行文件名检测
+  DWORD pid = 0;
+  GetWindowThreadProcessId(hwnd, &pid);
+  if (pid != 0) {
+    HANDLE hProc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (hProc) {
+      wchar_t fullPath[MAX_PATH] = { 0 };
+      DWORD size = MAX_PATH;
+      if (QueryFullProcessImageNameW(hProc, 0, fullPath, &size)) {
+        std::wstring path(fullPath);
+        for (auto& c : path) c = towlower(c);
+        if (path.find(L"acrobat.exe") != std::wstring::npos ||
+            path.find(L"acrord32.exe") != std::wstring::npos ||
+            path.find(L"foxit") != std::wstring::npos ||
+            path.find(L"sumatrapdf.exe") != std::wstring::npos ||
+            path.find(L"pdfxedit.exe") != std::wstring::npos ||
+            path.find(L"cajviewer.exe") != std::wstring::npos ||
+            path.find(L"wpspdf.exe") != std::wstring::npos) {
+          CloseHandle(hProc);
+          return true;
+        }
+      }
+      CloseHandle(hProc);
+    }
+  }
+  return false;
 }
 #endif
 
@@ -299,42 +306,18 @@ ClipboardHelper::GetSelectedTextViaSendInput(bool preserveClipboard) {
   std::string selectedText;
   DWORD copySeq = 0;
 
-  // 2. 阶段 A：首选发送无破坏性的 Ctrl+Insert (Windows 全局工业标准复制快捷键)
-  // 关键优势：在 VS Code 终端 (xterm.js)、各类终端及主流文本编辑器中，
-  // Ctrl+Insert 会直接由浏览器/系统层执行复制，而绝不触发 xterm.js 绑定的
-  // Ctrl+C 取消选区 (clearSelection) 行为！
 #ifdef _WIN32
-  SendCopyKey(VK_INSERT);
+  HWND fgWnd = GetForegroundWindow();
+  bool targetIsPdf = IsPdfReaderWindow(fgWnd);
 
-  // 快速检测剪贴板是否更新 (最长 60ms)
-  for (int i = 0; i < 6; ++i) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    DWORD currentSeq = GetClipboardSequenceNumber();
-    if (currentSeq != origSeq) {
-      copySeq = currentSeq;
-      if (OpenClipboardWithRetry(nullptr, 4, 6)) {
-        HANDLE hData = GetClipboardData(CF_UNICODETEXT);
-        if (hData) {
-          LPCWSTR pText = static_cast<LPCWSTR>(GlobalLock(hData));
-          if (pText && wcslen(pText) > 0) {
-            selectedText = WideToUtf8(std::wstring(pText));
-          }
-          GlobalUnlock(hData);
-        }
-        CloseClipboard();
-      }
-      break;
-    }
-  }
-
-  // 阶段 B：如果目标程序不响应 Ctrl+Insert，回退发送传统 Ctrl+C
-  if (selectedText.empty()) {
-    SendCopyKey('C');
-    for (int i = 0; i < 12; ++i) {
+  // 2. 阶段 1：除专有 PDF 阅读器以外的全部软件（VS Code 终端、编辑器、浏览器、Office 等），
+  // 优先发送无破坏性的 Ctrl+Insert（极大拓宽无破坏性复制的适用面，绝不误清除终端或网页选区）
+  if (!targetIsPdf) {
+    SendCopyKey(VK_INSERT);
+    for (int i = 0; i < 8; ++i) {
       std::this_thread::sleep_for(std::chrono::milliseconds(10));
       DWORD currentSeq = GetClipboardSequenceNumber();
       if (currentSeq != origSeq) {
-        copySeq = currentSeq;
         if (OpenClipboardWithRetry(nullptr, 4, 6)) {
           HANDLE hData = GetClipboardData(CF_UNICODETEXT);
           if (hData) {
@@ -346,7 +329,47 @@ ClipboardHelper::GetSelectedTextViaSendInput(bool preserveClipboard) {
           }
           CloseClipboard();
         }
-        break;
+        if (!selectedText.empty()) {
+          copySeq = currentSeq;
+          break;
+        }
+      }
+    }
+  }
+
+  // 3. 阶段 2：针对 PDF 阅读器（如 Adobe Acrobat/Reader、Foxit 等）或者非 PDF 软件未响应 Ctrl+Insert 时：
+  // 发送标准硬件扫描码级 Ctrl+C！
+  // 针对 Adobe Acrobat 弹出黑色快捷工具栏丢键或多格式延迟写入的超高敏保障：
+  // ① 坚决不发送会误导致 Acrobat 取消选区的 VK_INSERT。
+  // ② 轮询期间若剪贴板正在被 Acrobat 锁定写入，不提前 break，持续等待读取。
+  // ③ 若前 70ms 剪贴板未更新（Acrobat 忙于生成快捷栏丢键），自动重发一次 Ctrl+C 兜底！
+  if (selectedText.empty()) {
+    SendCopyKey('C');
+    for (int i = 0; i < 24; ++i) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      DWORD currentSeq = GetClipboardSequenceNumber();
+      if (currentSeq != origSeq) {
+        if (OpenClipboardWithRetry(nullptr, 5, 8)) {
+          HANDLE hData = GetClipboardData(CF_UNICODETEXT);
+          if (hData) {
+            LPCWSTR pText = static_cast<LPCWSTR>(GlobalLock(hData));
+            if (pText && wcslen(pText) > 0) {
+              selectedText = WideToUtf8(std::wstring(pText));
+            }
+            GlobalUnlock(hData);
+          }
+          CloseClipboard();
+        }
+        // 关键点：只有确实拿到非空文本才完成退出，避免在宿主写入多格式过程中提早退出
+        if (!selectedText.empty()) {
+          copySeq = currentSeq;
+          break;
+        }
+      }
+
+      // 如果前 70ms 剪贴板无响应，说明初次击键可能被刚弹出的黑条工具栏吞掉，自动重发一次
+      if (i == 7 && currentSeq == origSeq) {
+        SendCopyKey('C');
       }
     }
   }

@@ -236,7 +236,7 @@ namespace LinguaAlpaca::UI {
 		m_footerPanel->SetSizer(footerSizer);
 
 		mainSizer->Add(m_headerPanel, 0, wxEXPAND);
-		mainSizer->Add(m_splitter, 1, wxEXPAND | wxLEFT | wxRIGHT, 6_dip);
+		mainSizer->Add(m_splitter, 1, wxEXPAND);
 		mainSizer->Add(m_footerPanel, 0, wxEXPAND);
 
 		m_mainPanel->SetSizer(mainSizer);

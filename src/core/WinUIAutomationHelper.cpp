@@ -16,6 +16,27 @@ namespace LinguaAlpaca {
 
 namespace {
 
+std::wstring CleanUiaString(const wchar_t* wstr, size_t len) {
+    if (!wstr || len == 0) return L"";
+    std::wstring result;
+    result.reserve(len);
+    for (size_t i = 0; i < len; ++i) {
+        wchar_t ch = wstr[i];
+        // U+FFFC 是 UIA 在跨段落、跨子元素或块级容器时插入的 Object Replacement Character
+        if (ch == 0xFFFC) {
+            if (result.empty() || result.back() != L'\n') {
+                result.push_back(L'\n');
+            }
+        } else if (ch == 0xFEFF || ch == 0x200B || ch == 0x200C || ch == 0x200D) {
+            // 忽略零宽字符
+            continue;
+        } else {
+            result.push_back(ch);
+        }
+    }
+    return result;
+}
+
 std::string WideToUtf8(const std::wstring& wstr) {
     if (wstr.empty()) return "";
     int size = WideCharToMultiByte(CP_UTF8, 0, wstr.data(), (int)wstr.size(), nullptr, 0, nullptr, nullptr);
@@ -46,7 +67,8 @@ bool TryExtractFromElement(IUIAutomationElement* pElement, std::string& outText,
                 if (SUCCEEDED(pSelectionArray->GetElement(0, &pRange)) && pRange) {
                     BSTR bstrText = nullptr;
                     if (SUCCEEDED(pRange->GetText(-1, &bstrText)) && bstrText) {
-                        std::string text = WideToUtf8(bstrText);
+                        std::wstring cleanWstr = CleanUiaString(bstrText, SysStringLen(bstrText));
+                        std::string text = WideToUtf8(cleanWstr);
                         text = Trim(text);
                         SysFreeString(bstrText);
 

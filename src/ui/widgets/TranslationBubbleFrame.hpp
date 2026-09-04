@@ -46,28 +46,12 @@ public:
 private:
     void InitUI();
 
-    // 标题栏拖拽与边缘检测
-    void OnHeaderLeftDown(wxMouseEvent& event);
-    void OnHeaderLeftUp(wxMouseEvent& event);
-    void OnHeaderMouseMove(wxMouseEvent& event);
-    void OnHeaderMouseLeave(wxMouseEvent& event);
-
-    // 主面板与底栏边缘检测
-    void OnMainPanelMouseMove(wxMouseEvent& event);
-    void OnMainPanelLeftDown(wxMouseEvent& event);
-    void OnMainPanelLeftUp(wxMouseEvent& event);
-    void OnMainPanelMouseLeave(wxMouseEvent& event);
-
-    void OnFooterMouseMove(wxMouseEvent& event);
-    void OnFooterLeftDown(wxMouseEvent& event);
-    void OnFooterLeftUp(wxMouseEvent& event);
-    void OnFooterMouseLeave(wxMouseEvent& event);
-
-    // 右下角 Grip 手柄事件
+    // 边缘缩放与拖拽处理 (统一消除冗余的各窗口重复事件定义)
+    void HandleEdgeMouseMove(wxMouseEvent& event, wxWindow* sourceWin, bool isHeader = false);
+    void HandleEdgeLeftDown(wxMouseEvent& event, wxWindow* sourceWin, bool isHeader = false);
+    void HandleEdgeLeftUp(wxMouseEvent& event);
+    void HandleEdgeMouseLeave(wxMouseEvent& event, wxWindow* sourceWin);
     void OnGripPaint(wxPaintEvent& event);
-    void OnGripLeftDown(wxMouseEvent& event);
-    void OnGripMouseMove(wxMouseEvent& event);
-    void OnGripLeftUp(wxMouseEvent& event);
 
     // 调整大小核心辅助函数
     ResizeDirection HitTest(const wxPoint& ptInFrame, const wxSize& frameSize) const;
@@ -86,6 +70,8 @@ private:
     void OnCloseBtn(wxCommandEvent& event);
 
     void DoExecuteTranslation(const std::string& sourceText);
+    void SetSourcePanelExpanded(bool expanded);
+    void UpdateSourcePreview();
 
     std::shared_ptr<ModelManager> m_modelManager;
 
@@ -100,6 +86,14 @@ private:
     wxBitmapButton* m_retryBtn{nullptr};
     wxBitmapButton* m_copyBtn{nullptr};
     wxBitmapButton* m_closeBtn{nullptr};
+
+    // 原文折叠/展开相关控件
+    wxPanel* m_sourceToggleBar{nullptr};
+    wxStaticBitmap* m_sourceToggleIcon{nullptr};
+    wxStaticText* m_sourceToggleLabel{nullptr};
+    wxStaticText* m_sourcePreviewText{nullptr};
+    bool m_isSourceExpanded{false};
+    int m_savedSashPos{0};
 
     SplitterWindow* m_splitter{nullptr};
     wxPanel* m_sourcePanel{nullptr};
@@ -117,7 +111,7 @@ private:
     bool m_hasPinnedPos{false};
     wxPoint m_pinnedPos;
     bool m_isDragging{false};
-    wxPoint m_dragStartPos;
+    wxPoint m_dragOffset;
     std::string m_lastSourceText;
     std::string m_currentFullText;
 

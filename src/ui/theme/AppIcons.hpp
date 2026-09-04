@@ -339,6 +339,34 @@ inline constexpr const char *ZOOM_OUT = R"(
 inline constexpr const char *FONT_INCREASE = ZOOM_IN;
 inline constexpr const char *FONT_DECREASE = ZOOM_OUT;
 
+// 38. 折叠 / 展开 / 箭头 (Chevron Right / Down / Up / Left)
+inline constexpr const char *CHEVRON_RIGHT = R"(
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <polyline points="9 18 15 12 9 6"/>
+</svg>
+)";
+
+inline constexpr const char *CHEVRON_DOWN = R"(
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <polyline points="6 9 12 15 18 9"/>
+</svg>
+)";
+
+inline constexpr const char *CHEVRON_UP = R"(
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <polyline points="18 15 12 9 6 15"/>
+</svg>
+)";
+
+inline constexpr const char *CHEVRON_LEFT = R"(
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <polyline points="15 18 9 12 15 6"/>
+</svg>
+)";
+
+inline constexpr const char *EXPAND = CHEVRON_RIGHT;
+inline constexpr const char *COLLAPSE = CHEVRON_DOWN;
+
 } // namespace SVG
 
 } // namespace LinguaAlpaca::UI

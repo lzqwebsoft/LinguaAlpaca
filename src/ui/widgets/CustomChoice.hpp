@@ -3,6 +3,7 @@
 
 #include <wx/wx.h>
 #include <wx/popupwin.h>
+#include <wx/weakref.h>
 #include <vector>
 #include <string>
 #include "../theme/Theme.hpp"
@@ -140,7 +141,7 @@ private:
     bool m_isPopupOpen{false};
     wxLongLong m_lastDismissTime{0};
 
-    CustomChoicePopup* m_popup{nullptr};
+    wxWeakRef<CustomChoicePopup> m_popup;
 };
 
 } // namespace LinguaAlpaca::UI

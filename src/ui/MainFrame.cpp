@@ -466,21 +466,6 @@ namespace LinguaAlpaca::UI {
 
 #ifdef __WXMSW__
     WXLRESULT MainFrame::MSWWindowProc(WXUINT nMsg, WXWPARAM wParam, WXLPARAM lParam) {
-        if (nMsg == WM_QUERYENDSESSION) {
-            return TRUE;
-        }
-        if (nMsg == WM_ENDSESSION) {
-            if (wParam) {
-                if (m_taskBarIcon) {
-                    m_taskBarIcon->RemoveIcon();
-                }
-                if (m_modelManager) {
-                    m_modelManager->StopModel();
-                }
-            }
-            return 0;
-        }
-
         WXLRESULT rc = wxFrame::MSWWindowProc(nMsg, wParam, lParam);
         if (nMsg == WM_GETMINMAXINFO) {
             MINMAXINFO* mmi = reinterpret_cast<MINMAXINFO*>(lParam);

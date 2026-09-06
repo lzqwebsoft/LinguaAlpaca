@@ -21,10 +21,10 @@ class LinguaAlpacaApp : public wxApp {
 private:
     std::shared_ptr<ModelManager> m_modelManager;
     std::unique_ptr<SelectionService> m_selectionService;
-    UI::SplashScreen* m_splashScreen{nullptr};
-    UI::FloatingIconFrame* m_floatingIcon{nullptr};
-    UI::TranslationBubbleFrame* m_translationBubble{nullptr};
-    UI::MainFrame* m_mainFrame{nullptr};
+    wxWeakRef<UI::SplashScreen> m_splashScreen;
+    wxWeakRef<UI::FloatingIconFrame> m_floatingIcon;
+    wxWeakRef<UI::TranslationBubbleFrame> m_translationBubble;
+    wxWeakRef<UI::MainFrame> m_mainFrame;
 
 public:
     SelectionService* GetSelectionService() const { return m_selectionService.get(); }
@@ -116,20 +116,6 @@ public:
             LOG_INFO("App", "Stopping model manager...");
             m_modelManager->StopModel();
             m_modelManager.reset();
-        }
-        if (m_floatingIcon) {
-            m_floatingIcon->Hide();
-            delete m_floatingIcon;
-            m_floatingIcon = nullptr;
-        }
-        if (m_translationBubble) {
-            m_translationBubble->Hide();
-            delete m_translationBubble;
-            m_translationBubble = nullptr;
-        }
-        if (m_splashScreen) {
-            delete m_splashScreen;
-            m_splashScreen = nullptr;
         }
         UI::ThemeManager::GetInstance().ClearCallbacks();
         return wxApp::OnExit();

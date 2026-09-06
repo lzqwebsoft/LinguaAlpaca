@@ -118,3 +118,24 @@ This file records project-scoped rules, developer guidelines, and architectural 
 - **Multi-Monitor Boundary & Region Safety (`FloatingIconFrame` & `TranslationBubbleFrame`)**:
   - In floating tool frames, calculate screen boundary clamping against `MONITORINFO.rcWork` using `_dip` offsets (e.g. `10_dip` padding).
   - For smooth anti-aliased circular floating windows (`FloatingIconFrame`), avoid `SetWindowRgn` (which clips using a 1-bit binary mask causing jagged stair-step edges). Use Win32 Per-Pixel Alpha Layered Window (`WS_EX_LAYERED` + `UpdateLayeredWindow`) with GDI+ high-quality anti-aliasing (`PixelFormat32bppPARGB`), ensuring perfectly smooth, transparent blended edges across all DPI scaling levels.
+
+---
+
+## 🛑 7. Application Lifecycle, Shutdown & Window Memory Safety
+
+- **Never `delete` or Call Methods on Top-Level `wxWindow` in `wxApp::OnExit()` (UAF & Double-Free)**:
+  - **Framework Lifecycle Sequence**: When the wxWidgets event loop terminates, `wxAppConsoleBase::CallOnExit()` invokes `DoDelayedCleanup()` $\rightarrow$ `DeleteAllTLWs()` **before** calling `OnExit()`. This automatically deletes all top-level windows (`wxFrame`, `wxDialog`, `FloatingIconFrame`, `TranslationBubbleFrame`, `SplashScreen`) and reclaims their heap memory.
+  - **Fatal Bug Pattern**: Retaining raw pointers to top-level frames in `wxApp` and invoking `Hide()`, `Destroy()`, or `delete` on them in `OnExit()` causes Use-After-Free and Double-Free. `Hide()` calls virtual `HideWithEffect` / `ShowWithEffect` (`jmpq *0x1c0(%rax)`), dereferencing corrupted vtables and triggering `0xC0000005` Access Violation (`指令引用了 0x... 内存。该内存不能为 written`)!
+  - **Architectural Rules**:
+    1. Always store top-level tool windows using `wxWeakRef<T>` (e.g. `wxWeakRef<UI::FloatingIconFrame>`). When wxWidgets destroys the window, the weak reference resets to `nullptr` automatically.
+    2. **NEVER** call `delete` or window methods on UI frames inside `OnExit()`.
+    3. Confine `OnExit()` strictly to non-UI resource cleanups: stopping background hooks (`m_selectionService->Stop()`), terminating inference server child processes (`m_modelManager->StopModel()`), and clearing theme callbacks.
+- **Never Intercept `WM_QUERYENDSESSION` / `WM_ENDSESSION` Without Delegating to `wxFrame::MSWWindowProc`**:
+  - **Fatal Bug Pattern**: Catching `WM_QUERYENDSESSION` and returning `TRUE`, or intercepting `WM_ENDSESSION` and returning `0` in `MainFrame::MSWWindowProc` without delegating to `wxFrame::MSWWindowProc(nMsg, wParam, lParam)`:
+    - Bypasses wxWidgets' native session end handling (`wxWindowMSW::HandleEndSession`).
+    - Fails to set `gs_gotEndSession = true` (which instructs wxWidgets not to execute invalid `::DestroyWindow` calls during OS session teardown).
+    - Prevents `wxApp::OnEndSession` from executing `exit(0)`.
+    - Causes Windows to hang waiting for `LinguaAlpaca.exe` to exit, triggering the blue shutdown screen: *"这个应用阻止关机 (This app is preventing shutdown)"*.
+  - **Architectural Rule**: Always allow `wxFrame::MSWWindowProc` to process session-ending messages naturally. On session termination, wxWidgets automatically destroys top-level windows cleanly, triggers `OnExit()`, and calls `exit(rc)` to exit within milliseconds.
+- **Transient / Child Popup Pointer Safety (`CustomChoicePopup`)**:
+  - For composite controls managing floating popups (e.g. `CustomChoice` with `CustomChoicePopup`), use `wxWeakRef<CustomChoicePopup>` instead of raw pointers to ensure safety across parent-child destruction cascades and avoid dangling pointers upon destruction.

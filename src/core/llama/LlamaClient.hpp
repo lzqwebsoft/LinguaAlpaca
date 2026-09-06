@@ -44,6 +44,8 @@ public:
     void Cancel() { CancelCurrentTask(); }
     bool IsRunning() const;
 
+    static std::string SanitizeOcrToken(const std::string& token);
+
 private:
     std::string FormatHyMt2UserContent(
         const std::string& srcText,

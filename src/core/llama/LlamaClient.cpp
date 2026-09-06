@@ -268,6 +268,27 @@ void LlamaClient::TranslateStreamAsync(
     }).detach();
 }
 
+std::string LlamaClient::SanitizeOcrToken(const std::string& token) {
+    std::string clean;
+    clean.reserve(token.size());
+    for (size_t i = 0; i < token.size(); ++i) {
+        unsigned char uch = static_cast<unsigned char>(token[i]);
+        // 过滤不可打印控制字符 (0x00 - 0x1F，但保留合法换行、回车与制表符: \n, \r, \t)
+        if (uch < 0x20 && uch != '\n' && uch != '\r' && uch != '\t') {
+            continue;
+        }
+        // 过滤 Unicode 替换字符 U+FFFD (\xEF\xBF\xBD)
+        if (uch == 0xEF && i + 2 < token.size() &&
+            static_cast<unsigned char>(token[i + 1]) == 0xBF &&
+            static_cast<unsigned char>(token[i + 2]) == 0xBD) {
+            i += 2;
+            continue;
+        }
+        clean.push_back(token[i]);
+    }
+    return clean;
+}
+
 void LlamaClient::RecognizeStream(
     const std::string& imagePath,
     const std::string& taskType,
@@ -375,9 +396,12 @@ void LlamaClient::RecognizeStream(
                                         auto& choice = parsed["choices"][0];
                                         if (choice.contains("delta") && choice["delta"].contains("content")) {
                                             std::string token = choice["delta"]["content"].get<std::string>();
-                                            accumulatedText += token;
-                                            if (aliveToken->load() && onToken) {
-                                                onToken(token);
+                                            std::string cleanToken = SanitizeOcrToken(token);
+                                            if (!cleanToken.empty()) {
+                                                accumulatedText += cleanToken;
+                                                if (aliveToken->load() && onToken) {
+                                                    onToken(cleanToken);
+                                                }
                                             }
                                         }
                                     }
@@ -413,12 +437,22 @@ void LlamaClient::RecognizeStream(
             return;
         }
 
+        std::string finalCleanText = SanitizeOcrToken(accumulatedText);
+        while (!finalCleanText.empty() && (finalCleanText.front() == ' ' || finalCleanText.front() == '\n' || finalCleanText.front() == '\r' || finalCleanText.front() == '\t')) {
+            finalCleanText.erase(finalCleanText.begin());
+        }
+        while (!finalCleanText.empty() && (finalCleanText.back() == ' ' || finalCleanText.back() == '\n' || finalCleanText.back() == '\r' || finalCleanText.back() == '\t')) {
+            finalCleanText.pop_back();
+        }
+
         if (m_shouldStop.load()) {
-            if (onComplete) onComplete(accumulatedText, false, "已手动取消");
+            if (onComplete) onComplete(finalCleanText, false, "已手动取消");
         } else if (hasError) {
-            if (onComplete) onComplete(accumulatedText, false, errorMsg);
+            if (onComplete) onComplete(finalCleanText, false, errorMsg);
+        } else if (finalCleanText.empty()) {
+            if (onComplete) onComplete("", false, "未识别到有效文本内容");
         } else {
-            if (onComplete) onComplete(accumulatedText, true, "");
+            if (onComplete) onComplete(finalCleanText, true, "");
         }
     }).detach();
 }

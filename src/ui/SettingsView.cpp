@@ -952,7 +952,7 @@ namespace LinguaAlpaca::UI {
 	void SettingsView::OnBrowseOcrMmproj(wxCommandEvent& WXUNUSED(event)) {
 		wxFileDialog openFileDialog(
 			this, L"选择 mmproj 视觉投影器文件路径", "", "",
-			"GGUF mmproj Files (*.gguf)|*.gguf|All Files (*.*)|*.*",
+			"mmproj Files (*.mmproj;*.gguf)|*.mmproj;*.gguf|mmproj Files (*.mmproj)|*.mmproj|GGUF Files (*.gguf)|*.gguf|All Files (*.*)|*.*",
 			wxFD_OPEN | wxFD_FILE_MUST_EXIST);
 
 		if (openFileDialog.ShowModal() == wxID_OK) {

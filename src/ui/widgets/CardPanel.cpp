@@ -16,9 +16,9 @@ namespace LinguaAlpaca::UI {
 		wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
 		auto palette = ThemeColors::GetCurrentPalette();
 
-		m_titleFont = wxFont(11, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei");
-		m_tabFont = wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei");
-		m_countFont = wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei");
+		m_titleFont = ThemeFont::GetFont(FontRole::CardTitle);
+		m_tabFont = ThemeFont::GetFont(FontRole::Control, true);
+		m_countFont = ThemeFont::GetFont(FontRole::Control);
 
 		sizer->AddSpacer(42_dip);
 
@@ -28,7 +28,7 @@ namespace LinguaAlpaca::UI {
 		}
 
 		m_textCtrl = new TextCtrl(this, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, textStyle);
-		m_textCtrl->SetFont(wxFont(11, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+		m_textCtrl->SetFont(ThemeFont::GetFont(FontRole::Body));
 		m_textCtrl->SetBackgroundColour(palette.cardBg);
 		m_textCtrl->SetForegroundColour(m_isActiveBorder ? palette.accentPrimary : palette.textPrimary);
 

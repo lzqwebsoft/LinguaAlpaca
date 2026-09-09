@@ -19,6 +19,7 @@ add_executable(unit_tests
     ${CMAKE_SOURCE_DIR}/src/core/ModelManager.cpp
     ${CMAKE_SOURCE_DIR}/src/core/Downloader.cpp
     ${CMAKE_SOURCE_DIR}/src/core/WinTtsHelper.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/SelectionService.cpp
     ${CMAKE_SOURCE_DIR}/src/core/dict/DictFormatter.cpp
     ${CMAKE_SOURCE_DIR}/src/core/dict/DictEngine.cpp
     ${CMAKE_SOURCE_DIR}/src/core/markdown/MarkdownFormatter.cpp
@@ -34,29 +35,51 @@ target_include_directories(unit_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/third_party/llama.cpp/include
     ${CMAKE_SOURCE_DIR}/third_party/llama.cpp/common
     ${CMAKE_SOURCE_DIR}/third_party/llama.cpp/tools/mtmd
-    ${CMAKE_SOURCE_DIR}/third_party/wxWidgets/src/zlib
     ${CMAKE_SOURCE_DIR}/third_party/wxWidgets/3rdparty/catch/single_include
 )
 
 target_link_libraries(unit_tests PRIVATE
     wx::core
     wx::base
-    wxzlib
     llama
     llama-common
     cpp-httplib
     mtmd
 )
 
+if(TARGET wxzlib)
+    target_include_directories(unit_tests PRIVATE ${CMAKE_SOURCE_DIR}/third_party/wxWidgets/src/zlib)
+    target_link_libraries(unit_tests PRIVATE wxzlib)
+else()
+    find_package(ZLIB REQUIRED)
+    target_link_libraries(unit_tests PRIVATE ZLIB::ZLIB)
+endif()
+
 if(WIN32)
     target_link_libraries(unit_tests PRIVATE ole32 oleaut32 windowsapp)
+    add_custom_command(TARGET unit_tests POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_RUNTIME_DLLS:unit_tests>
+            $<TARGET_FILE_DIR:unit_tests>
+        COMMAND_EXPAND_LISTS
+    )
+elseif(APPLE)
+    set_source_files_properties(
+        ${CMAKE_SOURCE_DIR}/src/core/SelectionService.cpp
+        ${CMAKE_SOURCE_DIR}/src/core/ClipboardHelper.cpp
+        ${CMAKE_SOURCE_DIR}/src/core/WinUIAutomationHelper.cpp
+        PROPERTIES COMPILE_FLAGS "-x objective-c++"
+    )
+    set_source_files_properties(
+        ${CMAKE_SOURCE_DIR}/src/core/WinTtsHelper.cpp
+        PROPERTIES COMPILE_FLAGS "-x objective-c++ -fobjc-arc"
+    )
+    target_link_libraries(unit_tests PRIVATE
+        "-framework Cocoa"
+        "-framework ApplicationServices"
+        "-framework Carbon"
+        "-framework AVFoundation"
+    )
 endif()
 
 add_test(NAME CoreAndEngineTests COMMAND unit_tests)
-
-add_custom_command(TARGET unit_tests POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        $<TARGET_RUNTIME_DLLS:unit_tests>
-        $<TARGET_FILE_DIR:unit_tests>
-    COMMAND_EXPAND_LISTS
-)

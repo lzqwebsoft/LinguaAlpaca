@@ -5,6 +5,7 @@
 #include "widgets/AppTaskBarIcon.hpp"
 #include <wx/dcbuffer.h>
 #include <wx/graphics.h>
+#include <wx/display.h>
 
 #ifdef __WXMSW__
 #include <windows.h>
@@ -63,6 +64,7 @@ namespace LinguaAlpaca::UI {
         SetMinClientSize(dip(960, 680));
         InitUI();
         Centre();
+        m_savedRestoreRect = GetRect();
 
         // 创建系统托盘图标
         m_taskBarIcon = std::make_unique<AppTaskBarIcon>(this);
@@ -110,14 +112,14 @@ namespace LinguaAlpaca::UI {
         m_logoIcon = new wxStaticBitmap(m_topHeaderPanel, wxID_ANY, logoBundle);
 
         m_appNameText = new wxStaticText(m_topHeaderPanel, wxID_ANY, L"译灵驼 · LinguaAlpaca");
-        m_appNameText->SetFont(wxFont(13, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
+        m_appNameText->SetFont(ThemeFont::GetFont(FontRole::SectionTitle));
         m_appNameText->SetForegroundColour(palette.textPrimary);
         m_appNameText->SetBackgroundColour(palette.sidebarBg);
 
         // 模式切换按钮 (SVG Moon/Sun)
         bool isLight = ThemeManager::GetInstance().GetCurrentTheme() == ThemeMode::Light;
-        wxBitmapBundle themeBundle = IconManager::GetIconBundle(isLight ? SVG::MOON : SVG::SUN, wxSize(18, 18), palette.textPrimary);
-        m_themeBtn = new wxBitmapButton(m_topHeaderPanel, wxID_ANY, themeBundle, wxDefaultPosition, dip(34, 34), wxBORDER_NONE);
+        wxBitmapBundle themeBundle = IconManager::GetIconBundle(isLight ? SVG::MOON : SVG::SUN, wxSize(16, 16), palette.textPrimary);
+        m_themeBtn = new wxBitmapButton(m_topHeaderPanel, wxID_ANY, themeBundle, wxDefaultPosition, dip(32, 32), wxBORDER_NONE);
         m_themeBtn->SetBackgroundColour(palette.sidebarBg);
         m_themeBtn->SetToolTip(L"切换明暗主题");
 
@@ -141,7 +143,7 @@ namespace LinguaAlpaca::UI {
         headerSizer->Add(m_logoIcon, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 16_dip);
         headerSizer->Add(m_appNameText, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 10_dip);
         headerSizer->AddStretchSpacer(1);
-        headerSizer->Add(m_themeBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 12_dip);
+        headerSizer->Add(m_themeBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4_dip);
         headerSizer->Add(m_minBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4_dip);
         headerSizer->Add(m_maxBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4_dip);
         headerSizer->Add(m_closeBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 12_dip);
@@ -208,8 +210,7 @@ namespace LinguaAlpaca::UI {
         // 绑定窗口控制按钮事件
         m_minBtn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { Hide(); });
         m_maxBtn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
-            Maximize(!IsMaximized());
-            UpdateMaxButtonState();
+            ToggleMaximize();
         });
         m_closeBtn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { Close(true); });
 
@@ -339,6 +340,23 @@ namespace LinguaAlpaca::UI {
 
     void MainFrame::OnHeaderMouseMove(wxMouseEvent& event) {
         if (m_isDragging && event.Dragging() && event.LeftIsDown()) {
+#ifndef __WXMSW__
+            if (m_isMaximizedMac) {
+                // 最大化状态下拖拽标题栏：平滑恢复窗口大小并跟随鼠标
+                wxPoint mouseScreen = wxGetMousePosition();
+                m_isMaximizedMac = false;
+                int restoreW = (m_savedRestoreRect.width > 0) ? m_savedRestoreRect.width : dip(1080, 780).x;
+                int restoreH = (m_savedRestoreRect.height > 0) ? m_savedRestoreRect.height : dip(1080, 780).y;
+                int newX = mouseScreen.x - restoreW / 2;
+                int newY = mouseScreen.y - 20;
+                m_savedRestoreRect = wxRect(newX, newY, restoreW, restoreH);
+                SetSize(m_savedRestoreRect);
+                m_dragStartPos = mouseScreen - GetPosition();
+                Layout();
+                UpdateMaxButtonState();
+                return;
+            }
+#endif
             wxPoint currentMouseScreen = wxGetMousePosition();
             SetPosition(currentMouseScreen - m_dragStartPos);
         }
@@ -346,14 +364,50 @@ namespace LinguaAlpaca::UI {
     }
 
     void MainFrame::OnHeaderDoubleClick(wxMouseEvent& WXUNUSED(event)) {
+        ToggleMaximize();
+    }
+
+    bool MainFrame::IsCustomMaximized() const {
+#ifdef __WXMSW__
+        return IsMaximized();
+#else
+        return m_isMaximizedMac;
+#endif
+    }
+
+    void MainFrame::ToggleMaximize() {
+#ifdef __WXMSW__
         Maximize(!IsMaximized());
         UpdateMaxButtonState();
+#else
+        if (m_isMaximizedMac) {
+            // 还原窗口到上一次的正常尺寸与位置
+            if (m_savedRestoreRect.IsEmpty() || m_savedRestoreRect.width <= 0) {
+                m_savedRestoreRect = wxRect(100_dip, 100_dip, 1080_dip, 780_dip);
+            }
+            SetSize(m_savedRestoreRect);
+            m_isMaximizedMac = false;
+        } else {
+            // 最大化窗口至当前显示器的可用工作区（避开顶部菜单栏与 Dock）
+            m_savedRestoreRect = GetRect();
+            int displayIdx = wxDisplay::GetFromWindow(this);
+            if (displayIdx == wxNOT_FOUND) {
+                displayIdx = 0;
+            }
+            wxDisplay display(displayIdx);
+            wxRect clientArea = display.GetClientArea();
+            SetSize(clientArea);
+            m_isMaximizedMac = true;
+        }
+        Layout();
+        UpdateMaxButtonState();
+#endif
     }
 
     void MainFrame::UpdateMaxButtonState() {
         if (!m_maxBtn) return;
         auto palette = ThemeColors::GetCurrentPalette();
-        bool max = IsMaximized();
+        bool max = IsCustomMaximized();
         wxBitmapBundle bundle = IconManager::GetIconBundle(
             max ? SVG::RESTORE : SVG::MAXIMIZE, wxSize(15, 15), palette.textSecondary);
         m_maxBtn->SetBitmap(bundle);
@@ -375,7 +429,7 @@ namespace LinguaAlpaca::UI {
 
         bool isLight = ThemeManager::GetInstance().GetCurrentTheme() == ThemeMode::Light;
         wxBitmapBundle themeBundle = IconManager::GetIconBundle(
-            isLight ? SVG::MOON : SVG::SUN, wxSize(18, 18),
+            isLight ? SVG::MOON : SVG::SUN, wxSize(16, 16),
             palette.textPrimary);
         m_themeBtn->SetBitmap(themeBundle);
         m_themeBtn->SetBackgroundColour(palette.sidebarBg);

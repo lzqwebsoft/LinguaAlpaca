@@ -4,7 +4,6 @@
 #include <wx/gdicmn.h>
 #include <wx/window.h>
 #include <cmath>
-#include <algorithm>
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -17,9 +16,8 @@ namespace LinguaAlpaca::UI {
 
 inline double GetSystemDpiScale() {
 #ifdef _WIN32
-    typedef UINT (WINAPI *GetDpiForSystemFn)();
-    static auto pGetDpiForSystem = reinterpret_cast<GetDpiForSystemFn>(
-        GetProcAddress(GetModuleHandleW(L"user32.dll"), "GetDpiForSystem"));
+    typedef UINT(WINAPI * GetDpiForSystemFn)();
+    static auto pGetDpiForSystem = reinterpret_cast<GetDpiForSystemFn>(GetProcAddress(GetModuleHandleW(L"user32.dll"), "GetDpiForSystem"));
     if (pGetDpiForSystem) {
         return pGetDpiForSystem() / 96.0;
     }
@@ -29,7 +27,8 @@ inline double GetSystemDpiScale() {
 }
 
 inline int dip_val(int v) {
-    if (v == -1) return -1;
+    if (v == -1)
+        return -1;
     return static_cast<int>(std::round(v * GetSystemDpiScale()));
 }
 
@@ -48,10 +47,10 @@ inline wxSize dip(const wxSize& sz) {
 } // namespace LinguaAlpaca::UI
 
 // Global user-defined literals
-inline int operator"" _dip(unsigned long long val) {
+inline int operator""_dip(unsigned long long val) {
     return LinguaAlpaca::UI::dip_val(static_cast<int>(val));
 }
 
-inline double operator"" _dip(long double val) {
+inline double operator""_dip(long double val) {
     return LinguaAlpaca::UI::dip_val(static_cast<double>(val));
 }

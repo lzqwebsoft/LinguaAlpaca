@@ -1,4 +1,6 @@
+#if defined(_MSC_VER)
 #pragma execution_character_set("utf-8")
+#endif
 #include "ScreenTextExtractor.hpp"
 #include "ClipboardHelper.hpp"
 #include "WinUIAutomationHelper.hpp"
@@ -6,6 +8,8 @@
 #include "Logger.hpp"
 
 #include <algorithm>
+#include <chrono>
+#include <thread>
 
 namespace LinguaAlpaca {
 

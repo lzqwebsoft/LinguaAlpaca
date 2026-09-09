@@ -11,16 +11,15 @@
 
 namespace LinguaAlpaca::UI {
 
-LogView::LogView(wxWindow* parent,
-                 std::shared_ptr<ConfigManager> configManager,
-                 wxWindowID id)
-    : wxPanel(parent, id, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE),
-      m_configManager(std::move(configManager)) {
+LogView::LogView(wxWindow* parent, std::shared_ptr<ConfigManager> configManager, wxWindowID id)
+    : wxPanel(parent, id, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE)
+    , m_configManager(std::move(configManager)) {
     InitUI();
 
     // 订阅 Logger 的实时日志通知 (使用 BindUi 自动跨线程安全调度)
     m_listenerId = Logger::GetInstance().AddListener(BindUi([this](const LogMessage& msg) {
-        if (!m_logTextCtrl) return;
+        if (!m_logTextCtrl)
+            return;
         AppendLogMessage(msg);
     }));
 
@@ -51,7 +50,7 @@ void LogView::InitUI() {
     m_titleIcon = new wxStaticBitmap(m_headerPanel, wxID_ANY, logIconBundle);
 
     m_titleText = new wxStaticText(m_headerPanel, wxID_ANY, L"运行与诊断日志");
-    m_titleText->SetFont(wxFont(14, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
+    m_titleText->SetFont(ThemeFont::GetFont(FontRole::SectionTitle));
     m_titleText->SetForegroundColour(palette.textPrimary);
 
     headerSizer->Add(m_titleIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8_dip);
@@ -67,7 +66,7 @@ void LogView::InitUI() {
     levels.Add(L"ERROR");
 
     wxStaticText* filterLabel = new wxStaticText(m_headerPanel, wxID_ANY, L"过滤：");
-    filterLabel->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+    filterLabel->SetFont(ThemeFont::GetFont(FontRole::Control));
     filterLabel->SetForegroundColour(palette.textSecondary);
 
     m_filterChoice = new CustomChoice(m_headerPanel, wxID_ANY, wxDefaultPosition, dip(110, 28), levels);
@@ -80,7 +79,7 @@ void LogView::InitUI() {
     // 自动滚动 Checkbox
     m_autoScrollCheck = new wxCheckBox(m_headerPanel, wxID_ANY, L"自动滚动");
     m_autoScrollCheck->SetValue(true);
-    m_autoScrollCheck->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+    m_autoScrollCheck->SetFont(ThemeFont::GetFont(FontRole::Control));
     m_autoScrollCheck->SetForegroundColour(palette.textPrimary);
 
     // 功能按钮
@@ -130,10 +129,10 @@ void LogView::InitUI() {
 
     long textStyle = wxTE_MULTILINE | wxTE_READONLY | wxTE_RICH2 | wxBORDER_NONE;
     m_logTextCtrl = new TextCtrl(m_cardContainer, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, textStyle);
-    
-    // 设置等宽控制台字体
-    wxFont monoFont(9, wxFONTFAMILY_TELETYPE, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Consolas");
-    m_logTextCtrl->SetFont(monoFont);
+
+    m_monoNormalFont = ThemeFont::GetFont(FontRole::Code);
+    m_monoBoldFont = ThemeFont::GetFont(FontRole::Code, true);
+    m_logTextCtrl->SetFont(m_monoNormalFont);
     m_logTextCtrl->SetBackgroundColour(palette.cardBg);
     m_logTextCtrl->SetForegroundColour(palette.textPrimary);
 
@@ -157,7 +156,8 @@ void LogView::InitUI() {
 }
 
 void LogView::AppendLogMessage(const LogMessage& msg) {
-    if (!m_logTextCtrl) return;
+    if (!m_logTextCtrl)
+        return;
 
     // 过滤逻辑
     if (m_filterLevel >= 0) {
@@ -184,8 +184,8 @@ void LogView::AppendLogMessage(const LogMessage& msg) {
     }
 
     wxTextAttr attr(levelCol, palette.cardBg);
-    wxFont monoFont(9, wxFONTFAMILY_TELETYPE, wxFONTSTYLE_NORMAL,  (msg.level == LogLevel::Error || msg.level == LogLevel::Warning) ? wxFONTWEIGHT_BOLD : wxFONTWEIGHT_NORMAL, false, "Consolas");
-    attr.SetFont(monoFont);
+    bool isBold = (msg.level == LogLevel::Error || msg.level == LogLevel::Warning);
+    attr.SetFont(isBold ? m_monoBoldFont : m_monoNormalFont);
     m_logTextCtrl->SetDefaultStyle(attr);
 
     wxString line = wxString::FromUTF8(msg.FormattedString() + "\n");
@@ -197,9 +197,10 @@ void LogView::AppendLogMessage(const LogMessage& msg) {
 }
 
 void LogView::ReloadLogs() {
-    if (!m_logTextCtrl) return;
+    if (!m_logTextCtrl)
+        return;
 
-     // 锁定控件重绘，批量处理完后一次性刷新
+    // 锁定控件重绘，批量处理完后一次性刷新
     m_logTextCtrl->Freeze();
     m_logTextCtrl->Clear();
 
@@ -218,9 +219,11 @@ void LogView::OnClear(wxCommandEvent& WXUNUSED(event)) {
 }
 
 void LogView::OnCopyAll(wxCommandEvent& WXUNUSED(event)) {
-    if (!m_logTextCtrl) return;
+    if (!m_logTextCtrl)
+        return;
     wxString text = m_logTextCtrl->GetValue();
-    if (text.IsEmpty()) return;
+    if (text.IsEmpty())
+        return;
 
     ClipboardHelper::SetClipboardText(text.ToUTF8().data());
 }
@@ -254,7 +257,8 @@ void LogView::OnAutoScrollToggled(wxCommandEvent& event) {
 void LogView::UpdateTheme() {
     auto palette = ThemeColors::GetCurrentPalette();
     SetBackgroundColour(palette.windowBg);
-    if (m_headerPanel) m_headerPanel->SetBackgroundColour(palette.windowBg);
+    if (m_headerPanel)
+        m_headerPanel->SetBackgroundColour(palette.windowBg);
     if (m_cardContainer) {
         m_cardContainer->Refresh();
     }
@@ -274,9 +278,12 @@ void LogView::UpdateTheme() {
         m_autoScrollCheck->SetForegroundColour(palette.textPrimary);
     }
 
-    if (m_clearBtn) m_clearBtn->Refresh();
-    if (m_copyBtn) m_copyBtn->Refresh();
-    if (m_openDirBtn) m_openDirBtn->Refresh();
+    if (m_clearBtn)
+        m_clearBtn->Refresh();
+    if (m_copyBtn)
+        m_copyBtn->Refresh();
+    if (m_openDirBtn)
+        m_openDirBtn->Refresh();
 
     if (m_logTextCtrl) {
         m_logTextCtrl->SetBackgroundColour(palette.cardBg);

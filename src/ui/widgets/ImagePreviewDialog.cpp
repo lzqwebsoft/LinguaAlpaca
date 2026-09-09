@@ -36,12 +36,12 @@ void ImagePreviewDialog::InitUI() {
     wxStaticBitmap* titleIcon = new wxStaticBitmap(m_topBar, wxID_ANY, eyeBundle);
 
     wxStaticText* titleText = new wxStaticText(m_topBar, wxID_ANY, L"图片预览 (支持滚轮缩放 / 拖拽平移)");
-    titleText->SetFont(wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
+    titleText->SetFont(ThemeFont::GetFont(FontRole::WindowTitle));
     titleText->SetForegroundColour(palette.textPrimary);
     titleText->SetBackgroundColour(palette.sidebarBg);
 
     m_infoText = new wxStaticText(m_topBar, wxID_ANY, L"100%");
-    m_infoText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+    m_infoText->SetFont(ThemeFont::GetFont(FontRole::Control));
     m_infoText->SetForegroundColour(palette.textSecondary);
     m_infoText->SetBackgroundColour(palette.sidebarBg);
 

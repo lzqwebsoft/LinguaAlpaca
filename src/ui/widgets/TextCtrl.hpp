@@ -2,16 +2,14 @@
 #pragma execution_character_set("utf-8")
 
 #include <wx/wx.h>
-#include <memory>
 #include <string>
 #include "ScrollBar.hpp"
-#include "../../core/markdown/MarkdownFormatter.hpp"
 
 namespace LinguaAlpaca::UI {
 
 /**
  * @brief 自定义现代化文本框组件 (TextCtrl)
- * 
+ *
  * 特性：
  * - 嵌入定制的极简圆角高亮滑动条 (ScrollBar)，完全替代系统陈旧原生滚动条
  * - 支持可编辑模式 (Editable) 与只读模式 (Read-Only)
@@ -22,12 +20,8 @@ namespace LinguaAlpaca::UI {
  */
 class TextCtrl : public wxPanel {
 public:
-    TextCtrl(wxWindow* parent, wxWindowID id = wxID_ANY,
-             const wxString& value = wxEmptyString,
-             const wxPoint& pos = wxDefaultPosition,
-             const wxSize& size = wxDefaultSize,
-             long style = 0);
-    ~TextCtrl() override = default;
+    TextCtrl(wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& value = wxEmptyString, const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxDefaultSize, long style = 0);
+    ~TextCtrl() override;
 
     // 核心文本内容接口
     void SetValue(const wxString& value);
@@ -80,11 +74,16 @@ public:
 
 private:
     void InitUI(const wxString& value, long style);
+    void SetupNativeScrollHandling();
+    void CleanupNativeScrollHandling();
     void OnMouseWheel(wxMouseEvent& event);
     void OnMiddleDown(wxMouseEvent& event);
     void OnMiddleUp(wxMouseEvent& event);
     void OnMouseMove(wxMouseEvent& event);
     void OnContextMenu(wxContextMenuEvent& event);
+
+    int GetFirstVisibleLine() const;
+    int GetSafeLineHeight() const;
 
     wxTextCtrl* m_textCtrl{nullptr};
     ScrollBar* m_scrollBar{nullptr};
@@ -96,6 +95,9 @@ private:
     // Markdown 模式与缓存
     bool m_isMarkdownMode{false};
     std::string m_rawMarkdown;
+
+    // macOS 专用滚动通知观察者
+    void* m_macScrollObserver{nullptr};
 };
 
 } // namespace LinguaAlpaca::UI

@@ -439,7 +439,7 @@ std::string DictFormatter::FormatPlaintext(const std::string& text) {
             size_t sp = currentLine.find_first_not_of(" \t");
             if (sp != std::string_view::npos) {
                 std::string_view trimmedLine = currentLine.substr(sp);
-                if (trimmedLine.front() != '<' && trimmedLine.front() != '[' && trimmedLine.front() != '《' &&
+                if (trimmedLine.front() != '<' && trimmedLine.front() != '[' && trimmedLine.find("《") != 0 &&
                     !std::isdigit(static_cast<unsigned char>(trimmedLine.front())) &&
                     !IsPosPrefix(trimmedLine) &&
                     !(trimmedLine.front() == '(' && trimmedLine.size() >= 3 && (std::isdigit(static_cast<unsigned char>(trimmedLine[1])) || trimmedLine.find("←→") != std::string_view::npos))) {

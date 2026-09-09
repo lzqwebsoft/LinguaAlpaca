@@ -4,10 +4,30 @@
 #include <atomic>
 #include <memory>
 #include <tuple>
+#include <type_traits>
 #include <utility>
 #include <wx/app.h>
 
 namespace LinguaAlpaca::UI {
+
+namespace detail {
+#if (defined(__cplusplus) && __cplusplus >= 201703L) || (defined(_MSVC_LANG) && _MSVC_LANG >= 201703L)
+using std::apply;
+#else
+template <typename F, typename Tuple, size_t... I>
+constexpr decltype(auto) apply_impl(F&& f, Tuple&& t, std::index_sequence<I...>) {
+    return std::forward<F>(f)(std::get<I>(std::forward<Tuple>(t))...);
+}
+
+template <typename F, typename Tuple>
+constexpr decltype(auto) apply(F&& f, Tuple&& t) {
+    return apply_impl(
+        std::forward<F>(f),
+        std::forward<Tuple>(t),
+        std::make_index_sequence<std::tuple_size<std::decay_t<Tuple>>::value>{});
+}
+#endif
+} // namespace detail
 
 /**
  * @brief 线程安全异步 UI 生命周期混入基类
@@ -48,7 +68,7 @@ public:
                 auto tupleArgs = std::make_tuple(std::forward<decltype(args)>(args)...);
                 wxTheApp->CallAfter([alive, fn, tupleArgs = std::move(tupleArgs)]() mutable {
                     if (!*alive) return;
-                    std::apply(fn, std::move(tupleArgs));
+                    detail::apply(fn, std::move(tupleArgs));
                 });
             }
         };

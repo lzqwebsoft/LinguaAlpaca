@@ -147,7 +147,7 @@ void CustomChoicePopup::OnPaint(wxPaintEvent& WXUNUSED(event)) {
     // 1. 绘制背景与外边框
     double radius = 6.0_dip;
     gc->SetBrush(gc->CreateBrush(wxBrush(palette.cardBg)));
-    gc->SetPen(gc->CreatePen(wxPen(palette.cardBorderActive, 1.2)));
+    gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(palette.cardBorderActive).Width(1.2)));
     gc->DrawRoundedRectangle(1, 1, size.x - 2, size.y - 2, radius);
 
     // 2. 绘制选项列表
@@ -158,8 +158,8 @@ void CustomChoicePopup::OnPaint(wxPaintEvent& WXUNUSED(event)) {
     bool needsScroll = (static_cast<int>(m_items.size()) > visibleCount);
     int itemWidth = size.x - (needsScroll ? 18_dip : 8_dip);
 
-    wxFont itemFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei");
-    wxFont selectedFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei");
+    wxFont itemFont = ThemeFont::GetFont(FontRole::Control);
+    wxFont selectedFont = ThemeFont::GetFont(FontRole::Control, true);
 
     for (int i = m_firstVisibleIndex; i < endIndex; ++i) {
         int y = 4_dip + (i - m_firstVisibleIndex) * itemHeight;
@@ -341,7 +341,7 @@ wxSize CustomChoice::DoGetBestSize() const {
     int defaultHeight = 32_dip;
     int defaultWidth = 120_dip;
 
-    wxFont font(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei");
+    wxFont font = ThemeFont::GetFont(FontRole::Control);
     wxScreenDC dc;
     dc.SetFont(font);
 
@@ -583,13 +583,13 @@ void CustomChoice::OnPaint(wxPaintEvent& WXUNUSED(event)) {
         : (m_isHovered ? palette.cardBorderActive : palette.cardBorder));
 
     double borderWidth = (m_isPopupOpen || m_isFocused) ? 1.5 : 1.0;
-    gc->SetPen(gc->CreatePen(wxPen(borderColor, borderWidth)));
+    gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(borderColor).Width(borderWidth)));
     gc->DrawRoundedRectangle(1, 1, size.x - 2, size.y - 2, radius);
 
     // 2. 绘制当前选中的文字
     wxString text = GetStringSelection();
     if (!text.IsEmpty()) {
-        wxFont font(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei");
+        wxFont font = ThemeFont::GetFont(FontRole::Control);
         wxColour textColor = IsEnabled() ? palette.textPrimary : palette.textSecondary;
         gc->SetFont(font, textColor);
 
@@ -632,10 +632,9 @@ void CustomChoice::OnPaint(wxPaintEvent& WXUNUSED(event)) {
         path.AddLineToPoint(arrowX + arrowSize, arrowY - arrowSize / 2);
     }
 
-    wxPen arrowPen(arrowColor, 1.6);
-    arrowPen.SetCap(wxCAP_ROUND);
-    arrowPen.SetJoin(wxJOIN_ROUND);
-    gc->SetPen(gc->CreatePen(arrowPen));
+    wxGraphicsPenInfo arrowInfo(arrowColor);
+    arrowInfo.Width(1.6).Cap(wxCAP_ROUND).Join(wxJOIN_ROUND);
+    gc->SetPen(gc->CreatePen(arrowInfo));
     gc->StrokePath(path);
 }
 

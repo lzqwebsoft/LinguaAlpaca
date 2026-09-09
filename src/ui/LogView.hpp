@@ -46,6 +46,8 @@ private:
 
     wxPanel* m_cardContainer{nullptr};
     TextCtrl* m_logTextCtrl{nullptr};
+    wxFont m_monoNormalFont;
+    wxFont m_monoBoldFont;
 };
 
 } // namespace LinguaAlpaca::UI

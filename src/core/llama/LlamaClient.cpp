@@ -6,9 +6,7 @@
 #include <fstream>
 #include <iostream>
 #include <nlohmann/json.hpp>
-#include <sstream>
 #include <string_view>
-#include <vector>
 
 #include <http.h>
 
@@ -17,20 +15,24 @@ using json = nlohmann::json;
 namespace LinguaAlpaca {
 
 static std::string GetOcrPromptPrefix(const std::string& taskType) {
-    if (taskType == "table")    return "Table Recognition:";
-    if (taskType == "formula")  return "Formula Recognition:";
-    if (taskType == "chart")    return "Chart Recognition:";
-    if (taskType == "spotting") return "Spotting:";
-    if (taskType == "seal")     return "Seal Recognition:";
+    if (taskType == "table")
+        return "Table Recognition:";
+    if (taskType == "formula")
+        return "Formula Recognition:";
+    if (taskType == "chart")
+        return "Chart Recognition:";
+    if (taskType == "spotting")
+        return "Spotting:";
+    if (taskType == "seal")
+        return "Seal Recognition:";
     return "OCR:";
 }
 
 static std::string FormatImageUrl(const std::string& imagePath) {
-    if (imagePath.empty()) return "";
+    if (imagePath.empty())
+        return "";
 
-    if (imagePath.rfind("data:image/", 0) == 0 ||
-        imagePath.rfind("http://", 0) == 0 ||
-        imagePath.rfind("https://", 0) == 0) {
+    if (imagePath.rfind("data:image/", 0) == 0 || imagePath.rfind("http://", 0) == 0 || imagePath.rfind("https://", 0) == 0) {
         return imagePath;
     }
 
@@ -64,16 +66,16 @@ static std::string FormatImageUrl(const std::string& imagePath) {
 }
 
 LlamaClient::LlamaClient(std::shared_ptr<LlamaServer> server)
-    : m_server(std::move(server)),
-      m_aliveToken(std::make_shared<std::atomic<bool>>(true)) {
+    : m_server(std::move(server))
+    , m_aliveToken(std::make_shared<std::atomic<bool>>(true)) {
     if (m_server) {
         m_baseUrl = m_server->GetBaseUrl();
     }
 }
 
 LlamaClient::LlamaClient(std::string baseUrl)
-    : m_baseUrl(std::move(baseUrl)),
-      m_aliveToken(std::make_shared<std::atomic<bool>>(true)) {}
+    : m_baseUrl(std::move(baseUrl))
+    , m_aliveToken(std::make_shared<std::atomic<bool>>(true)) {}
 
 LlamaClient::~LlamaClient() {
     if (m_aliveToken) {
@@ -111,11 +113,8 @@ bool LlamaClient::IsModelLoaded() const {
     return !GetBaseUrl().empty();
 }
 
-std::string LlamaClient::FormatHyMt2UserContent(
-    const std::string& srcText,
-    LanguageCode srcLang,
-    LanguageCode tgtLang) {
-    
+std::string LlamaClient::FormatHyMt2UserContent(const std::string& srcText, LanguageCode srcLang, LanguageCode tgtLang) {
+
     std::string targetLangName = LanguageHelper::GetDisplayName(tgtLang);
     std::string srcLangName = LanguageHelper::GetDisplayName(srcLang);
 
@@ -125,11 +124,8 @@ std::string LlamaClient::FormatHyMt2UserContent(
     return "将以下" + srcLangName + "文本翻译为" + targetLangName + "，注意只需要输出翻译后的结果，不要额外解释：\n\n" + srcText;
 }
 
-void LlamaClient::TranslateStreamAsync(
-    const TranslationTask& task,
-    StreamTokenCallback onToken,
-    StreamCompleteCallback onComplete) {
-    
+void LlamaClient::TranslateStreamAsync(const TranslationTask& task, StreamTokenCallback onToken, StreamCompleteCallback onComplete) {
+
     CancelCurrentTask();
     m_shouldStop.store(false);
     m_isRunning.store(true);
@@ -143,30 +139,20 @@ void LlamaClient::TranslateStreamAsync(
         std::string currentBaseUrl = GetBaseUrl();
         if (currentBaseUrl.empty()) {
             m_isRunning.store(false);
-            if (aliveToken->load() && onComplete) onComplete(false, "", "服务地址为空或未启动");
+            if (aliveToken->load() && onComplete)
+                onComplete(false, "", "服务地址为空或未启动");
             return;
         }
 
-        std::string userPrompt = FormatHyMt2UserContent(
-            task.GetSourceText(),
-            task.GetSourceLanguage(),
-            task.GetTargetLanguage()
-        );
+        std::string userPrompt = FormatHyMt2UserContent(task.GetSourceText(), task.GetSourceLanguage(), task.GetTargetLanguage());
 
-        json body = {
-            {"messages", json::array({
-                {
-                    {"role", "user"},
-                    {"content", userPrompt}
-                }
-            })},
-            {"stream", true},
-            {"temperature", 0.7},
-            {"top_p", 0.6},
-            {"top_k", 20},
-            {"repetition_penalty", 1.05},
-            {"max_tokens", 4096}
-        };
+        json body = {{"messages", json::array({{{"role", "user"}, {"content", userPrompt}}})},
+                     {"stream", true},
+                     {"temperature", 0.7},
+                     {"top_p", 0.6},
+                     {"top_k", 20},
+                     {"repetition_penalty", 1.05},
+                     {"max_tokens", 4096}};
 
         std::string reqBody = body.dump();
         std::string accumulatedText;
@@ -182,60 +168,54 @@ void LlamaClient::TranslateStreamAsync(
 
             std::string buffer;
             httplib::Headers headers;
-            auto res = cli.Post(
-                path,
-                headers,
-                reqBody,
-                "application/json",
-                [&](const char* data, size_t len) {
-                    if (!aliveToken->load() || m_shouldStop.load()) {
-                        return false;
-                    }
+            auto res = cli.Post(path, headers, reqBody, "application/json", [&](const char* data, size_t len) {
+                if (!aliveToken->load() || m_shouldStop.load()) {
+                    return false;
+                }
 
-                    buffer.append(data, len);
-                    size_t pos;
-                    while ((pos = buffer.find("\n\n")) != std::string::npos) {
-                        std::string_view eventBlock(buffer.data(), pos);
+                buffer.append(data, len);
+                size_t pos;
+                while ((pos = buffer.find("\n\n")) != std::string::npos) {
+                    std::string_view eventBlock(buffer.data(), pos);
 
-                        size_t lineStart = 0;
-                        while (lineStart < eventBlock.size()) {
-                            size_t lineEnd = eventBlock.find('\n', lineStart);
-                            if (lineEnd == std::string_view::npos) {
-                                lineEnd = eventBlock.size();
+                    size_t lineStart = 0;
+                    while (lineStart < eventBlock.size()) {
+                        size_t lineEnd = eventBlock.find('\n', lineStart);
+                        if (lineEnd == std::string_view::npos) {
+                            lineEnd = eventBlock.size();
+                        }
+                        std::string_view line = eventBlock.substr(lineStart, lineEnd - lineStart);
+                        if (!line.empty() && line.back() == '\r') {
+                            line.remove_suffix(1);
+                        }
+                        lineStart = lineEnd + 1;
+
+                        if (line.rfind("data: ", 0) == 0) {
+                            std::string_view jsonStr = line.substr(6);
+                            if (jsonStr == "[DONE]") {
+                                break;
                             }
-                            std::string_view line = eventBlock.substr(lineStart, lineEnd - lineStart);
-                            if (!line.empty() && line.back() == '\r') {
-                                line.remove_suffix(1);
-                            }
-                            lineStart = lineEnd + 1;
-
-                            if (line.rfind("data: ", 0) == 0) {
-                                std::string_view jsonStr = line.substr(6);
-                                if (jsonStr == "[DONE]") {
-                                    break;
-                                }
-                                try {
-                                    auto parsed = json::parse(jsonStr);
-                                    if (parsed.contains("choices") && !parsed["choices"].empty()) {
-                                        auto& choice = parsed["choices"][0];
-                                        if (choice.contains("delta") && choice["delta"].contains("content")) {
-                                            std::string token = choice["delta"]["content"].get<std::string>();
-                                            accumulatedText += token;
-                                            if (aliveToken->load() && onToken) {
-                                                onToken(token);
-                                            }
+                            try {
+                                auto parsed = json::parse(jsonStr);
+                                if (parsed.contains("choices") && !parsed["choices"].empty()) {
+                                    auto& choice = parsed["choices"][0];
+                                    if (choice.contains("delta") && choice["delta"].contains("content")) {
+                                        std::string token = choice["delta"]["content"].get<std::string>();
+                                        accumulatedText += token;
+                                        if (aliveToken->load() && onToken) {
+                                            onToken(token);
                                         }
                                     }
-                                } catch (...) {
-                                    // 忽略格式不完整的临时 SSE 片段
                                 }
+                            } catch (...) {
+                                // 忽略格式不完整的临时 SSE 片段
                             }
                         }
-                        buffer.erase(0, pos + 2);
                     }
-                    return true;
+                    buffer.erase(0, pos + 2);
                 }
-            );
+                return true;
+            });
 
             if (!res) {
                 hasError = true;
@@ -259,11 +239,14 @@ void LlamaClient::TranslateStreamAsync(
         }
 
         if (m_shouldStop.load()) {
-            if (onComplete) onComplete(false, accumulatedText, "已手动取消");
+            if (onComplete)
+                onComplete(false, accumulatedText, "已手动取消");
         } else if (hasError) {
-            if (onComplete) onComplete(false, accumulatedText, errorMsg);
+            if (onComplete)
+                onComplete(false, accumulatedText, errorMsg);
         } else {
-            if (onComplete) onComplete(true, accumulatedText, "");
+            if (onComplete)
+                onComplete(true, accumulatedText, "");
         }
     }).detach();
 }
@@ -278,9 +261,7 @@ std::string LlamaClient::SanitizeOcrToken(const std::string& token) {
             continue;
         }
         // 过滤 Unicode 替换字符 U+FFFD (\xEF\xBF\xBD)
-        if (uch == 0xEF && i + 2 < token.size() &&
-            static_cast<unsigned char>(token[i + 1]) == 0xBF &&
-            static_cast<unsigned char>(token[i + 2]) == 0xBD) {
+        if (uch == 0xEF && i + 2 < token.size() && static_cast<unsigned char>(token[i + 1]) == 0xBF && static_cast<unsigned char>(token[i + 2]) == 0xBD) {
             i += 2;
             continue;
         }
@@ -289,14 +270,9 @@ std::string LlamaClient::SanitizeOcrToken(const std::string& token) {
     return clean;
 }
 
-void LlamaClient::RecognizeStream(
-    const std::string& imagePath,
-    const std::string& taskType,
-    const std::string& /*modelPath*/,
-    const std::string& /*mmprojPath*/,
-    OcrTokenCallback onToken,
-    OcrCompleteCallback onComplete) {
-    
+void LlamaClient::RecognizeStream(const std::string& imagePath, const std::string& taskType, const std::string& /*modelPath*/, const std::string& /*mmprojPath*/, OcrTokenCallback onToken,
+                                  OcrCompleteCallback onComplete) {
+
     CancelCurrentTask();
     m_shouldStop.store(false);
     m_isRunning.store(true);
@@ -310,7 +286,8 @@ void LlamaClient::RecognizeStream(
         std::string currentBaseUrl = GetBaseUrl();
         if (currentBaseUrl.empty()) {
             m_isRunning.store(false);
-            if (aliveToken->load() && onComplete) onComplete("", false, "服务地址为空或未启动");
+            if (aliveToken->load() && onComplete)
+                onComplete("", false, "服务地址为空或未启动");
             return;
         }
 
@@ -319,30 +296,13 @@ void LlamaClient::RecognizeStream(
 
         json messageContent = json::array();
         if (!imageUrl.empty()) {
-            messageContent.push_back({
-                {"type", "image_url"},
-                {"image_url", {{"url", imageUrl}}}
-            });
+            messageContent.push_back({{"type", "image_url"}, {"image_url", {{"url", imageUrl}}}});
         }
-        messageContent.push_back({
-            {"type", "text"},
-            {"text", promptPrefix}
-        });
+        messageContent.push_back({{"type", "text"}, {"text", promptPrefix}});
 
         json body = {
-            {"model", "default"},
-            {"messages", json::array({
-                {
-                    {"role", "user"},
-                    {"content", messageContent}
-                }
-            })},
-            {"stream", true},
-            {"temperature", 0.1},
-            {"top_p", 0.9},
-            {"max_tokens", 4096},
-            {"repetition_penalty", 1.05}
-        };
+            {"model", "default"},        {"messages", json::array({{{"role", "user"}, {"content", messageContent}}})}, {"stream", true}, {"temperature", 0.1}, {"top_p", 0.9}, {"max_tokens", 4096},
+            {"repetition_penalty", 1.05}};
 
         std::string reqBody = body.dump();
         std::string accumulatedText;
@@ -358,63 +318,57 @@ void LlamaClient::RecognizeStream(
 
             std::string buffer;
             httplib::Headers headers;
-            auto res = cli.Post(
-                path,
-                headers,
-                reqBody,
-                "application/json",
-                [&](const char* data, size_t len) {
-                    if (!aliveToken->load() || m_shouldStop.load()) {
-                        return false;
-                    }
+            auto res = cli.Post(path, headers, reqBody, "application/json", [&](const char* data, size_t len) {
+                if (!aliveToken->load() || m_shouldStop.load()) {
+                    return false;
+                }
 
-                    buffer.append(data, len);
-                    size_t pos;
-                    while ((pos = buffer.find("\n\n")) != std::string::npos) {
-                        std::string_view eventBlock(buffer.data(), pos);
+                buffer.append(data, len);
+                size_t pos;
+                while ((pos = buffer.find("\n\n")) != std::string::npos) {
+                    std::string_view eventBlock(buffer.data(), pos);
 
-                        size_t lineStart = 0;
-                        while (lineStart < eventBlock.size()) {
-                            size_t lineEnd = eventBlock.find('\n', lineStart);
-                            if (lineEnd == std::string_view::npos) {
-                                lineEnd = eventBlock.size();
+                    size_t lineStart = 0;
+                    while (lineStart < eventBlock.size()) {
+                        size_t lineEnd = eventBlock.find('\n', lineStart);
+                        if (lineEnd == std::string_view::npos) {
+                            lineEnd = eventBlock.size();
+                        }
+                        std::string_view line = eventBlock.substr(lineStart, lineEnd - lineStart);
+                        if (!line.empty() && line.back() == '\r') {
+                            line.remove_suffix(1);
+                        }
+                        lineStart = lineEnd + 1;
+
+                        if (line.rfind("data: ", 0) == 0) {
+                            std::string_view jsonStr = line.substr(6);
+                            if (jsonStr == "[DONE]") {
+                                break;
                             }
-                            std::string_view line = eventBlock.substr(lineStart, lineEnd - lineStart);
-                            if (!line.empty() && line.back() == '\r') {
-                                line.remove_suffix(1);
-                            }
-                            lineStart = lineEnd + 1;
-
-                            if (line.rfind("data: ", 0) == 0) {
-                                std::string_view jsonStr = line.substr(6);
-                                if (jsonStr == "[DONE]") {
-                                    break;
-                                }
-                                try {
-                                    auto parsed = json::parse(jsonStr);
-                                    if (parsed.contains("choices") && !parsed["choices"].empty()) {
-                                        auto& choice = parsed["choices"][0];
-                                        if (choice.contains("delta") && choice["delta"].contains("content")) {
-                                            std::string token = choice["delta"]["content"].get<std::string>();
-                                            std::string cleanToken = SanitizeOcrToken(token);
-                                            if (!cleanToken.empty()) {
-                                                accumulatedText += cleanToken;
-                                                if (aliveToken->load() && onToken) {
-                                                    onToken(cleanToken);
-                                                }
+                            try {
+                                auto parsed = json::parse(jsonStr);
+                                if (parsed.contains("choices") && !parsed["choices"].empty()) {
+                                    auto& choice = parsed["choices"][0];
+                                    if (choice.contains("delta") && choice["delta"].contains("content")) {
+                                        std::string token = choice["delta"]["content"].get<std::string>();
+                                        std::string cleanToken = SanitizeOcrToken(token);
+                                        if (!cleanToken.empty()) {
+                                            accumulatedText += cleanToken;
+                                            if (aliveToken->load() && onToken) {
+                                                onToken(cleanToken);
                                             }
                                         }
                                     }
-                                } catch (...) {
-                                    // 忽略格式不完整的临时 SSE 片段
                                 }
+                            } catch (...) {
+                                // 忽略格式不完整的临时 SSE 片段
                             }
                         }
-                        buffer.erase(0, pos + 2);
                     }
-                    return true;
+                    buffer.erase(0, pos + 2);
                 }
-            );
+                return true;
+            });
 
             if (!res) {
                 hasError = true;
@@ -446,13 +400,17 @@ void LlamaClient::RecognizeStream(
         }
 
         if (m_shouldStop.load()) {
-            if (onComplete) onComplete(finalCleanText, false, "已手动取消");
+            if (onComplete)
+                onComplete(finalCleanText, false, "已手动取消");
         } else if (hasError) {
-            if (onComplete) onComplete(finalCleanText, false, errorMsg);
+            if (onComplete)
+                onComplete(finalCleanText, false, errorMsg);
         } else if (finalCleanText.empty()) {
-            if (onComplete) onComplete("", false, "未识别到有效文本内容");
+            if (onComplete)
+                onComplete("", false, "未识别到有效文本内容");
         } else {
-            if (onComplete) onComplete(finalCleanText, true, "");
+            if (onComplete)
+                onComplete(finalCleanText, true, "");
         }
     }).detach();
 }

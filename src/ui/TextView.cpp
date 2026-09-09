@@ -41,7 +41,7 @@ namespace LinguaAlpaca::UI {
 		wxStaticBitmap* titleIcon = new wxStaticBitmap(this, wxID_ANY, titleBundle);
 
 		m_titleText = new wxStaticText(this, wxID_ANY, L"文本翻译");
-		m_titleText->SetFont(wxFont(18, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
+		m_titleText->SetFont(ThemeFont::GetFont(FontRole::DisplayTitle));
 		m_titleText->SetForegroundColour(palette.textPrimary);
 
 		m_statusBadge = new StatusBadge(this);

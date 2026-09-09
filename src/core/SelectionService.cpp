@@ -1,22 +1,39 @@
+#if defined(_MSC_VER)
 #pragma execution_character_set("utf-8")
+#endif
 #include "SelectionService.hpp"
 #include "ClipboardHelper.hpp"
 #include "ScreenTextExtractor.hpp"
 #include "Logger.hpp"
 
 #include <wx/app.h>
+#include <wx/toplevel.h>
 #include <iostream>
 #include <thread>
 #include <cmath>
+
+#ifndef WM_LBUTTONDOWN
+#define WM_LBUTTONDOWN 0x0201
+#endif
+#ifndef WM_LBUTTONUP
+#define WM_LBUTTONUP 0x0202
+#endif
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <windows.h>
+#elif defined(__APPLE__)
+#import <Cocoa/Cocoa.h>
+#import <ApplicationServices/ApplicationServices.h>
+#import <Carbon/Carbon.h>
+#include <unistd.h>
+#endif
 
 namespace LinguaAlpaca {
 
+#ifdef _WIN32
     namespace {
         SelectionService* g_activeService = nullptr;
         HHOOK g_mouseHook = nullptr;
@@ -31,6 +48,7 @@ namespace LinguaAlpaca {
             return CallNextHookEx(g_mouseHook, nCode, wParam, lParam);
         }
     } // namespace
+#endif
 
     SelectionService::SelectionService(std::shared_ptr<ConfigManager> configManager)
         : m_configManager(std::move(configManager)),
@@ -55,6 +73,7 @@ namespace LinguaAlpaca {
             m_aliveToken->store(true);
         }
 
+#ifdef _WIN32
         g_activeService = this;
         g_mouseHook = SetWindowsHookEx(
             WH_MOUSE_LL,
@@ -72,6 +91,38 @@ namespace LinguaAlpaca {
         m_isRunning.store(true);
         LOG_INFO("SelectionService", "Global mouse hook started successfully.");
         return true;
+#elif defined(__APPLE__)
+        @autoreleasepool {
+            NSEventMask mask = NSEventMaskLeftMouseDown | NSEventMaskLeftMouseUp;
+            id monitor = [NSEvent addGlobalMonitorForEventsMatchingMask:mask handler:^(NSEvent *event) {
+                if (!m_isRunning.load()) {
+                    return;
+                }
+                CGPoint pt = CGEventGetLocation([event CGEvent]);
+                int x = static_cast<int>(std::round(pt.x));
+                int y = static_cast<int>(std::round(pt.y));
+
+                NSEventType type = [event type];
+                if (type == NSEventTypeLeftMouseDown) {
+                    OnLowLevelMouseEvent(WM_LBUTTONDOWN, x, y);
+                } else if (type == NSEventTypeLeftMouseUp) {
+                    OnLowLevelMouseEvent(WM_LBUTTONUP, x, y);
+                }
+            }];
+
+            if (!monitor) {
+                LOG_ERROR("SelectionService", "Failed to install macOS global mouse monitor.");
+                return false;
+            }
+
+            m_hookHandle = (void*)[monitor retain];
+            m_isRunning.store(true);
+            LOG_INFO("SelectionService", "macOS global mouse monitor started successfully.");
+            return true;
+        }
+#else
+        return false;
+#endif
     }
 
     void SelectionService::Stop() {
@@ -83,6 +134,7 @@ namespace LinguaAlpaca {
             return;
         }
 
+#ifdef _WIN32
         if (g_mouseHook) {
             UnhookWindowsHookEx(g_mouseHook);
             g_mouseHook = nullptr;
@@ -92,6 +144,15 @@ namespace LinguaAlpaca {
             g_activeService = nullptr;
         }
         LOG_INFO("SelectionService", "Global mouse hook stopped.");
+#elif defined(__APPLE__)
+        if (m_hookHandle) {
+            id monitor = (id)m_hookHandle;
+            [NSEvent removeMonitor:monitor];
+            [monitor release];
+            m_hookHandle = nullptr;
+        }
+        LOG_INFO("SelectionService", "macOS global mouse monitor stopped.");
+#endif
     }
 
     void SelectionService::SetCallback(SelectionDetectedCallback callback) {
@@ -121,9 +182,14 @@ namespace LinguaAlpaca {
             // 连击检测 (双击/三击)
             int dx = x - m_lastClickX;
             int dy = y - m_lastClickY;
-            UINT doubleClickTime = GetDoubleClickTime();
+            long long doubleClickMs = 500;
+#ifdef _WIN32
+            doubleClickMs = static_cast<long long>(GetDoubleClickTime());
+#elif defined(__APPLE__)
+            doubleClickMs = static_cast<long long>([NSEvent doubleClickInterval] * 1000.0);
+#endif
             auto clickIntervalMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_lastClickTime).count();
-            if ((clickIntervalMs <= static_cast<long long>(doubleClickTime)) && (dx * dx + dy * dy <= 36)) {
+            if ((clickIntervalMs <= doubleClickMs) && (dx * dx + dy * dy <= 36)) {
                 m_clickCount++;
             } else {
                 m_clickCount = 1;
@@ -157,11 +223,22 @@ namespace LinguaAlpaca {
             } else if (mode == 1) {
                 // 模式 ②：划词 + 辅助按键
                 int modKey = m_modifierKey.load();
+                bool isModDown = false;
+#ifdef _WIN32
                 int vk = VK_CONTROL;
                 if (modKey == 1) vk = VK_MENU;       // Alt
                 else if (modKey == 2) vk = VK_SHIFT; // Shift
-
-                bool isModDown = (GetAsyncKeyState(vk) & 0x8000) != 0;
+                isModDown = (GetAsyncKeyState(vk) & 0x8000) != 0;
+#elif defined(__APPLE__)
+                CGEventFlags flags = CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
+                if (modKey == 0) { // Ctrl 或 Cmd 均可触发
+                    isModDown = (flags & kCGEventFlagMaskControl) != 0 || (flags & kCGEventFlagMaskCommand) != 0;
+                } else if (modKey == 1) { // Option / Alt
+                    isModDown = (flags & kCGEventFlagMaskAlternate) != 0;
+                } else if (modKey == 2) { // Shift
+                    isModDown = (flags & kCGEventFlagMaskShift) != 0;
+                }
+#endif
                 if (isModDown && (distSq >= 16 || m_clickCount >= 2)) {
                     shouldTrigger = true;
                 }
@@ -308,10 +385,51 @@ namespace LinguaAlpaca {
                 }
             }
             return false;
-            };
+        };
 
         if (checkNcHit(hwndDown, startX, startY) || checkNcHit(hwndUp, endX, endY)) {
             return true;
+        }
+
+        return false;
+#elif defined(__APPLE__)
+        // 1. 检查是否在 LinguaAlpaca 自身的主窗口、悬浮图标或气泡等顶层窗口内
+        wxWindowList& windows = wxTopLevelWindows;
+        for (wxWindowList::compatibility_iterator node = windows.GetFirst(); node; node = node->GetNext()) {
+            wxWindow* win = node->GetData();
+            if (win && win->IsShown()) {
+                wxRect r = win->GetScreenRect();
+                if (r.Contains(startX, startY) || r.Contains(endX, endY)) {
+                    return true;
+                }
+            }
+        }
+
+        // 2. 检查当前前台激活的应用是否属于本项目进程或屏幕截图/录屏工具
+        @autoreleasepool {
+            NSRunningApplication* frontApp = [[NSWorkspace sharedWorkspace] frontmostApplication];
+            if (frontApp) {
+                if (frontApp.processIdentifier == getpid()) {
+                    return true;
+                }
+                NSString* bundleId = [frontApp bundleIdentifier];
+                if (bundleId) {
+                    if ([bundleId containsString:@"screencapture"] ||
+                        [bundleId containsString:@"Snipaste"] ||
+                        [bundleId containsString:@"CleanShot"] ||
+                        [bundleId containsString:@"Shottr"] ||
+                        [bundleId containsString:@"Flameshot"] ||
+                        [bundleId containsString:@"Kap"]) {
+                        return true;
+                    }
+                }
+                NSString* appName = [frontApp localizedName];
+                if (appName) {
+                    if ([appName containsString:@"截图"] || [appName containsString:@"截屏"]) {
+                        return true;
+                    }
+                }
+            }
         }
 
         return false;
@@ -325,7 +443,7 @@ namespace LinguaAlpaca {
         auto aliveToken = m_aliveToken;
 
         std::thread([this, aliveToken, startX, startY, endX, endY, preserve]() {
-            // 短暂延迟 45ms 确保被划词的宿主窗口（如 Adobe Acrobat 弹出快捷工具栏）完成 MouseUp 并进入选中高亮状态
+            // 短暂延迟 45ms 确保被划词的宿主窗口完成 MouseUp 并进入选中高亮状态
             std::this_thread::sleep_for(std::chrono::milliseconds(45));
             if (!aliveToken->load()) {
                 return;
@@ -335,6 +453,10 @@ namespace LinguaAlpaca {
             DWORD currentPid = GetCurrentProcessId();
             HWND fgWnd = GetForegroundWindow();
             if (IsIgnoredOrScreenshotWindow(fgWnd, currentPid)) {
+                return;
+            }
+#elif defined(__APPLE__)
+            if (ShouldIgnoreMouseEvent(startX, startY, endX, endY)) {
                 return;
             }
 #endif
@@ -366,24 +488,9 @@ namespace LinguaAlpaca {
                     if (cb) {
                         cb(extracted.anchorX, extracted.anchorY, extracted.text);
                     }
-                    });
+                });
             }
-            }).detach();
+        }).detach();
     }
-
 } // namespace LinguaAlpaca
 
-#else // Non-Windows fallback
-
-namespace LinguaAlpaca {
-    SelectionService::SelectionService(std::shared_ptr<ConfigManager> configManager) : m_configManager(std::move(configManager)) {}
-    SelectionService::~SelectionService() {}
-    bool SelectionService::Start() { return false; }
-    void SelectionService::Stop() {}
-    void SelectionService::SetCallback(SelectionDetectedCallback) {}
-    void SelectionService::ApplyConfig(const AppConfig&) {}
-    void SelectionService::OnLowLevelMouseEvent(int, int, int) {}
-    void SelectionService::ProcessSelectionAsync(int, int, int, int) {}
-} // namespace LinguaAlpaca
-
-#endif

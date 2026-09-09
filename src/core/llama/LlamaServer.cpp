@@ -8,6 +8,14 @@
 #include <sstream>
 #include <vector>
 
+#ifndef _WIN32
+#include <unistd.h>
+#include <signal.h>
+#include <sys/wait.h>
+#include <cstring>
+#include <cerrno>
+#endif
+
 #include <wx/stdpaths.h>
 #include <wx/filename.h>
 
@@ -33,8 +41,14 @@ std::string LlamaServer::FindLlamaServerBinary() {
         std::filesystem::path appDir = fn.GetPath().ToStdWstring();
 
         std::vector<std::filesystem::path> candidates = {
-            appDir / "llama-server.exe",
             appDir / "llama-server",
+            appDir / "llama-server.exe",
+            appDir / ".." / "bin" / "llama-server",
+            appDir / ".." / "bin" / "Release" / "llama-server",
+            appDir / ".." / "bin" / "Debug" / "llama-server",
+            appDir / "bin" / "llama-server",
+            appDir / "bin" / "Release" / "llama-server",
+            appDir / "bin" / "Debug" / "llama-server",
             appDir / ".." / "bin" / "Debug" / "llama-server.exe",
             appDir / ".." / "bin" / "Release" / "llama-server.exe",
             appDir / "bin" / "Debug" / "llama-server.exe",
@@ -51,7 +65,11 @@ std::string LlamaServer::FindLlamaServerBinary() {
         // Ignore resolution exception and fallback
     }
 
+#ifdef _WIN32
     return "llama-server.exe";
+#else
+    return "llama-server";
+#endif
 }
 
 LlamaServer::LlamaServer() = default;
@@ -70,6 +88,7 @@ std::string LlamaServer::GetCurrentMmprojPath() const {
     return m_config.mmprojPath;
 }
 
+#ifdef _WIN32
 void LlamaServer::StartLogReader(HANDLE hReadPipe) {
     m_logThread = std::thread([hReadPipe]() {
         char buffer[2048];
@@ -109,6 +128,47 @@ void LlamaServer::StartLogReader(HANDLE hReadPipe) {
         CloseHandle(hReadPipe);
     });
 }
+#else
+void LlamaServer::StartLogReader(int fd) {
+    m_logThread = std::thread([fd]() {
+        char buffer[2048];
+        std::string lineBuffer;
+
+        ssize_t bytesRead = 0;
+        while ((bytesRead = read(fd, buffer, sizeof(buffer) - 1)) > 0) {
+            buffer[bytesRead] = '\0';
+            lineBuffer.append(buffer, bytesRead);
+
+            size_t pos;
+            while ((pos = lineBuffer.find('\n')) != std::string::npos) {
+                std::string line = lineBuffer.substr(0, pos);
+                if (!line.empty() && line.back() == '\r') {
+                    line.pop_back();
+                }
+                if (!line.empty()) {
+                    LogLevel lvl = LogLevel::Info;
+                    if (line.find("error") != std::string::npos || line.find("ERR") != std::string::npos) {
+                        lvl = LogLevel::Error;
+                    } else if (line.find("warn") != std::string::npos || line.find("WARN") != std::string::npos) {
+                        lvl = LogLevel::Warning;
+                    }
+                    Logger::GetInstance().Log(lvl, "llama.cpp", line);
+                }
+                lineBuffer.erase(0, pos + 1);
+            }
+        }
+
+        if (!lineBuffer.empty()) {
+            if (lineBuffer.back() == '\r') lineBuffer.pop_back();
+            if (!lineBuffer.empty()) {
+                Logger::GetInstance().Log(LogLevel::Info, "llama.cpp", lineBuffer);
+            }
+        }
+
+        close(fd);
+    });
+}
+#endif
 
 void LlamaServer::CleanupProcess() {
 #ifdef _WIN32
@@ -123,6 +183,25 @@ void LlamaServer::CleanupProcess() {
         m_hJob = NULL;
     }
     m_processId = 0;
+#else
+    if (m_childPid > 0) {
+        kill(m_childPid, SIGTERM);
+        int status = 0;
+        int waited = 0;
+        while (waited < 15) {
+            pid_t p = waitpid(m_childPid, &status, WNOHANG);
+            if (p == m_childPid || p == -1) {
+                break;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            waited++;
+        }
+        if (waitpid(m_childPid, &status, WNOHANG) == 0) {
+            kill(m_childPid, SIGKILL);
+            waitpid(m_childPid, &status, 0);
+        }
+        m_childPid = 0;
+    }
 #endif
 
     if (m_logThread.joinable()) {
@@ -262,7 +341,70 @@ bool LlamaServer::Start(const ServerConfig& config) {
     StartLogReader(hStdOutRead);
     return true;
 #else
-    return false;
+    int pipefd[2];
+    if (pipe(pipefd) != 0) {
+        LOG_ERROR("LlamaServer", "pipe() failed: " + std::string(strerror(errno)));
+        return false;
+    }
+
+    std::vector<std::string> args = {
+        serverExe,
+        "--host", config.host,
+        "--port", std::to_string(m_port),
+        "-m", config.modelPath,
+        "-ngl", std::to_string(config.ngl),
+        "--no-webui",
+        "--jinja"
+    };
+    if (config.ctxSize > 0) {
+        args.push_back("-c");
+        args.push_back(std::to_string(config.ctxSize));
+    }
+    if (config.threads > 0) {
+        args.push_back("-t");
+        args.push_back(std::to_string(config.threads));
+    }
+    if (!config.mmprojPath.empty()) {
+        args.push_back("--mmproj");
+        args.push_back(config.mmprojPath);
+        if (config.mmprojOffload) {
+            args.push_back("--mmproj-offload");
+        } else {
+            args.push_back("--no-mmproj-offload");
+        }
+    }
+
+    pid_t pid = fork();
+    if (pid < 0) {
+        LOG_ERROR("LlamaServer", "fork() failed: " + std::string(strerror(errno)));
+        close(pipefd[0]);
+        close(pipefd[1]);
+        return false;
+    }
+
+    if (pid == 0) {
+        // Child process
+        close(pipefd[0]);
+        dup2(pipefd[1], STDOUT_FILENO);
+        dup2(pipefd[1], STDERR_FILENO);
+        close(pipefd[1]);
+
+        std::vector<char*> c_args;
+        for (auto& s : args) {
+            c_args.push_back(const_cast<char*>(s.c_str()));
+        }
+        c_args.push_back(nullptr);
+
+        execv(serverExe.c_str(), c_args.data());
+        _exit(127);
+    }
+
+    // Parent process
+    close(pipefd[1]);
+    m_childPid = pid;
+    m_isAlive.store(true, std::memory_order_release);
+    StartLogReader(pipefd[0]);
+    return true;
 #endif
 }
 
@@ -289,6 +431,14 @@ bool LlamaServer::IsAlive() const {
             if (exitCode != STILL_ACTIVE) {
                 return false;
             }
+        }
+    }
+#else
+    if (m_childPid > 0) {
+        int status = 0;
+        pid_t p = waitpid(m_childPid, &status, WNOHANG);
+        if (p == m_childPid || (p == -1 && errno == ECHILD)) {
+            return false;
         }
     }
 #endif

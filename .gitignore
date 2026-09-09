@@ -42,3 +42,6 @@
 # Ignore build output and temporary files from wxWidgets and llama.cpp
 third_party/wxWidgets/build/
 third_party/llama.cpp/build/
+.cache/
+
+.DS_Store

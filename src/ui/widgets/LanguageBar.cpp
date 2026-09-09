@@ -19,14 +19,14 @@ void LanguageBar::InitUI() {
 
     // 源语言标签与下拉框
     m_srcLabel = new wxStaticText(this, wxID_ANY, L"源语言");
-    m_srcLabel->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
+    m_srcLabel->SetFont(ThemeFont::GetFont(FontRole::Control, true));
     m_srcLabel->SetForegroundColour(palette.textSecondary);
 
     m_sourceChoice = new CustomChoice(this, wxID_ANY, wxDefaultPosition, dip(120, 32));
     
     // 目标语言标签与下拉框
     m_targetLabel = new wxStaticText(this, wxID_ANY, L"目标语言");
-    m_targetLabel->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
+    m_targetLabel->SetFont(ThemeFont::GetFont(FontRole::Control, true));
     m_targetLabel->SetForegroundColour(palette.textSecondary);
 
     m_targetChoice = new CustomChoice(this, wxID_ANY, wxDefaultPosition, dip(120, 32));

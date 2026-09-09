@@ -5,10 +5,27 @@
 #include "../../core/ClipboardHelper.hpp"
 #include <algorithm>
 #include <wx/dcbuffer.h>
+#include "core/markdown/MarkdownFormatter.hpp"
 
 #ifdef _WIN32
 #include <windows.h>
 #include <richedit.h>
+#elif defined(__APPLE__)
+#import <Cocoa/Cocoa.h>
+
+namespace {
+NSScrollView* GetMacScrollView(wxTextCtrl* textCtrl) {
+    if (!textCtrl)
+        return nil;
+    NSView* view = (NSView*)textCtrl->GetHandle();
+    if (!view)
+        return nil;
+    if ([view isKindOfClass:[NSScrollView class]]) {
+        return (NSScrollView*)view;
+    }
+    return [view enclosingScrollView];
+}
+} // namespace
 #endif
 
 namespace LinguaAlpaca::UI {
@@ -17,13 +34,13 @@ namespace LinguaAlpaca::UI {
 // TextCtrl 实现
 // ----------------------------------------------------------------------------
 
-TextCtrl::TextCtrl(wxWindow* parent, wxWindowID id,
-                   const wxString& value,
-                   const wxPoint& pos,
-                   const wxSize& size,
-                   long style)
+TextCtrl::TextCtrl(wxWindow* parent, wxWindowID id, const wxString& value, const wxPoint& pos, const wxSize& size, long style)
     : wxPanel(parent, id, pos, size, wxBORDER_NONE) {
     InitUI(value, style);
+}
+
+TextCtrl::~TextCtrl() {
+    CleanupNativeScrollHandling();
 }
 
 void TextCtrl::InitUI(const wxString& value, long style) {
@@ -33,6 +50,7 @@ void TextCtrl::InitUI(const wxString& value, long style) {
     }
 
     m_textCtrl = new wxTextCtrl(this, wxID_ANY, value, wxDefaultPosition, wxDefaultSize, textStyle);
+    m_textCtrl->SetFont(ThemeFont::GetFont(FontRole::Body));
     if (style & wxTE_READONLY) {
         m_textCtrl->SetEditable(false);
         m_isEditable = false;
@@ -41,13 +59,7 @@ void TextCtrl::InitUI(const wxString& value, long style) {
         m_isEditable = true;
     }
 
-#ifdef _WIN32
-    HWND hwnd = (HWND)m_textCtrl->GetHWND();
-    if (hwnd) {
-        ::ShowScrollBar(hwnd, SB_VERT, FALSE);
-        ::SendMessage(hwnd, EM_SHOWSCROLLBAR, (WPARAM)SB_VERT, (LPARAM)FALSE);
-    }
-#endif
+    SetupNativeScrollHandling();
 
     m_scrollBar = new ScrollBar(this);
 
@@ -56,13 +68,22 @@ void TextCtrl::InitUI(const wxString& value, long style) {
     sizer->Add(m_scrollBar, 0, wxEXPAND | wxRIGHT, 2_dip);
     SetSizer(sizer);
 
-    // 鼠标中键滚轮滑动与中键拖拽平移事件监听
+    // 鼠标滚轮滑动与中键拖拽平移事件监听
     m_textCtrl->Bind(wxEVT_MOUSEWHEEL, &TextCtrl::OnMouseWheel, this);
     Bind(wxEVT_MOUSEWHEEL, &TextCtrl::OnMouseWheel, this);
     m_scrollBar->Bind(wxEVT_MOUSEWHEEL, &TextCtrl::OnMouseWheel, this);
 
-    m_textCtrl->Bind(wxEVT_ENTER_WINDOW, [this](wxMouseEvent& event) {
-        if (m_scrollBar) m_scrollBar->NotifyActivity();
+    // 仅在获得焦点与失去焦点时控制滑动条显示，避免鼠标掠过时误唤醒
+    m_textCtrl->Bind(wxEVT_SET_FOCUS, [this](wxFocusEvent& event) {
+        if (m_scrollBar) {
+            m_scrollBar->SetFocused(true);
+        }
+        event.Skip();
+    });
+    m_textCtrl->Bind(wxEVT_KILL_FOCUS, [this](wxFocusEvent& event) {
+        if (m_scrollBar) {
+            m_scrollBar->SetFocused(false);
+        }
         event.Skip();
     });
 
@@ -149,43 +170,111 @@ void TextCtrl::OnContextMenu(wxContextMenuEvent& WXUNUSED(event)) {
     PopupMenu(&menu);
 }
 
+void TextCtrl::SetupNativeScrollHandling() {
+    if (!m_textCtrl)
+        return;
+
+#ifdef _WIN32
+    HWND hwnd = (HWND)m_textCtrl->GetHWND();
+    if (hwnd) {
+        ::ShowScrollBar(hwnd, SB_VERT, FALSE);
+        ::SendMessage(hwnd, EM_SHOWSCROLLBAR, (WPARAM)SB_VERT, (LPARAM)FALSE);
+    }
+#elif defined(__APPLE__)
+    NSScrollView* sv = GetMacScrollView(m_textCtrl);
+    if (sv) {
+        [sv setHasVerticalScroller:NO];
+        [sv setHasHorizontalScroller:NO];
+        [sv setAutohidesScrollers:YES];
+
+        NSClipView* clipView = [sv contentView];
+        if (clipView) {
+            [clipView setPostsBoundsChangedNotifications:YES];
+            id observer = [[NSNotificationCenter defaultCenter] addObserverForName:NSViewBoundsDidChangeNotification
+                                                                            object:clipView
+                                                                             queue:[NSOperationQueue mainQueue]
+                                                                        usingBlock:[this](NSNotification*) {
+                                                                            NSEvent* event = [NSApp currentEvent];
+                                                                            if (event && ([event type] == NSEventTypeScrollWheel || [event type] == NSEventTypeLeftMouseDragged)) {
+                                                                                if (m_scrollBar) {
+                                                                                    m_scrollBar->NotifyActivity();
+                                                                                }
+                                                                            }
+                                                                            UpdateScrollInfo();
+                                                                        }];
+            m_macScrollObserver = (void*)[observer retain];
+        }
+    }
+#endif
+}
+
+void TextCtrl::CleanupNativeScrollHandling() {
+#ifdef __APPLE__
+    if (m_macScrollObserver) {
+        [[NSNotificationCenter defaultCenter] removeObserver:(id)m_macScrollObserver];
+        [(id)m_macScrollObserver release];
+        m_macScrollObserver = nullptr;
+    }
+#endif
+}
+
+int TextCtrl::GetSafeLineHeight() const {
+    if (!m_textCtrl)
+        return 16;
+    int h = m_textCtrl->GetCharHeight();
+    return h > 0 ? h : 16;
+}
+
+int TextCtrl::GetFirstVisibleLine() const {
+    if (!m_textCtrl)
+        return 0;
+
+#ifdef _WIN32
+    HWND hwnd = (HWND)m_textCtrl->GetHWND();
+    if (hwnd) {
+        return (int)::SendMessage(hwnd, EM_GETFIRSTVISIBLELINE, 0, 0);
+    }
+#elif defined(__APPLE__)
+    NSScrollView* sv = GetMacScrollView(m_textCtrl);
+    if (sv) {
+        NSClipView* clipView = [sv contentView];
+        NSRect visibleRect = [clipView documentVisibleRect];
+        return (int)(visibleRect.origin.y / (double)GetSafeLineHeight());
+    }
+#endif
+
+    return 0;
+}
+
 void TextCtrl::OnMouseWheel(wxMouseEvent& event) {
     int rotation = event.GetWheelRotation();
-    if (rotation == 0) return;
+    if (rotation == 0)
+        return;
 
     if (m_scrollBar) {
         m_scrollBar->NotifyActivity();
     }
 
     int delta = event.GetWheelDelta();
-    if (delta <= 0) delta = 120;
+    if (delta <= 0)
+        delta = 120;
     int linesPerAction = event.GetLinesPerAction();
-    if (linesPerAction <= 0) linesPerAction = 3;
+    if (linesPerAction <= 0)
+        linesPerAction = 3;
 
     int steps = rotation / delta;
-    if (steps == 0) steps = (rotation > 0 ? 1 : -1);
+    if (steps == 0)
+        steps = (rotation > 0 ? 1 : -1);
 
     int linesToScroll = -steps * linesPerAction;
-
-    int currentFirst = 0;
-#ifdef _WIN32
-    HWND hwnd = (HWND)m_textCtrl->GetHWND();
-    if (hwnd) {
-        currentFirst = (int)::SendMessage(hwnd, EM_GETFIRSTVISIBLELINE, 0, 0);
-    }
-#endif
-    ScrollToLine(currentFirst + linesToScroll);
+    ScrollToLine(GetFirstVisibleLine() + linesToScroll);
 }
 
 void TextCtrl::OnMiddleDown(wxMouseEvent& event) {
     m_isMiddleDragging = true;
     m_middleDragStartY = event.GetPosition().y;
-#ifdef _WIN32
-    HWND hwnd = (HWND)m_textCtrl->GetHWND();
-    if (hwnd) {
-        m_middleDragStartFirstLine = (int)::SendMessage(hwnd, EM_GETFIRSTVISIBLELINE, 0, 0);
-    }
-#endif
+    m_middleDragStartFirstLine = GetFirstVisibleLine();
+
     if (!HasCapture()) {
         CaptureMouse();
     }
@@ -211,9 +300,7 @@ void TextCtrl::OnMouseMove(wxMouseEvent& event) {
             m_scrollBar->NotifyActivity();
         }
         int deltaY = event.GetPosition().y - m_middleDragStartY;
-        int lineHeight = m_textCtrl->GetCharHeight();
-        if (lineHeight <= 0) lineHeight = 16;
-        int deltaLines = deltaY / lineHeight;
+        int deltaLines = deltaY / GetSafeLineHeight();
         ScrollToLine(m_middleDragStartFirstLine + deltaLines);
     } else {
         event.Skip();
@@ -224,6 +311,8 @@ void TextCtrl::SetValue(const wxString& value) {
     m_isMarkdownMode = false;
     m_rawMarkdown.clear();
     if (m_textCtrl) {
+        wxTextAttr defaultAttr(m_textCtrl->GetForegroundColour(), m_textCtrl->GetBackgroundColour(), m_textCtrl->GetFont());
+        m_textCtrl->SetDefaultStyle(defaultAttr);
         m_textCtrl->SetValue(value);
         UpdateScrollInfo();
     }
@@ -244,6 +333,8 @@ void TextCtrl::Clear() {
     m_isMarkdownMode = false;
     m_rawMarkdown.clear();
     if (m_textCtrl) {
+        wxTextAttr defaultAttr(m_textCtrl->GetForegroundColour(), m_textCtrl->GetBackgroundColour(), m_textCtrl->GetFont());
+        m_textCtrl->SetDefaultStyle(defaultAttr);
         m_textCtrl->Clear();
         UpdateScrollInfo();
     }
@@ -284,7 +375,8 @@ void TextCtrl::SetMarkdown(const std::string& markdownText) {
     m_isMarkdownMode = true;
     m_rawMarkdown = markdownText;
 
-    if (!m_textCtrl) return;
+    if (!m_textCtrl)
+        return;
 
     m_textCtrl->Freeze();
     m_textCtrl->Clear();
@@ -297,23 +389,25 @@ void TextCtrl::SetMarkdown(const std::string& markdownText) {
 
     ThemePalette palette = ThemeManager::GetCurrentPalette();
 
-    // 基础字体与尺寸规范 (高DPI友好)
+    // 基础字体与尺寸规范 (高DPI友好，macOS自动校准+2pt)
     wxFont baseFont = m_textCtrl->GetFont();
     if (!baseFont.IsOk()) {
-        baseFont = wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei");
+        baseFont = ThemeFont::GetFont(FontRole::Body);
     }
     int basePt = baseFont.GetPointSize();
-    if (basePt <= 0) basePt = 10;
+    if (basePt <= 0)
+        basePt = ThemeFont::GetFont(FontRole::Body).GetPointSize();
     wxString faceName = baseFont.GetFaceName();
-    if (faceName.IsEmpty()) faceName = "Microsoft YaHei";
+    if (faceName.IsEmpty())
+        faceName = ThemeFont::GetDefaultFamily();
 
     // 字体层级定义
     wxFont defaultFont(basePt, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, faceName);
     wxFont boldFont(basePt, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, faceName);
     wxFont italicFont(basePt, wxFONTFAMILY_SWISS, wxFONTSTYLE_ITALIC, wxFONTWEIGHT_NORMAL, false, faceName);
     wxFont boldItalicFont(basePt, wxFONTFAMILY_SWISS, wxFONTSTYLE_ITALIC, wxFONTWEIGHT_BOLD, false, faceName);
-    wxFont codeFont(std::max(8, basePt - 1), wxFONTFAMILY_TELETYPE, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Consolas");
-    wxFont codeBlockFont(std::max(8, basePt - 1), wxFONTFAMILY_TELETYPE, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Consolas");
+    wxFont codeFont(std::max(8, basePt - 1), wxFONTFAMILY_TELETYPE, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, ThemeFont::GetDefaultMonoFamily());
+    wxFont codeBlockFont(std::max(8, basePt - 1), wxFONTFAMILY_TELETYPE, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, ThemeFont::GetDefaultMonoFamily());
 
     // 标题逐级字号
     wxFont h1Font(basePt + 4, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, faceName);
@@ -323,60 +417,88 @@ void TextCtrl::SetMarkdown(const std::string& markdownText) {
     wxFont h5Font(basePt, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, faceName);
     wxFont h6Font(std::max(8, basePt - 1), wxFONTFAMILY_SWISS, wxFONTSTYLE_ITALIC, wxFONTWEIGHT_BOLD, false, faceName);
 
-    // 样式属性定义
-    wxTextAttr defaultAttr(palette.textPrimary, palette.cardBg, defaultFont);
-    wxTextAttr h1Attr(palette.accentPrimary, palette.cardBg, h1Font);
-    wxTextAttr h2Attr(palette.accentPrimary, palette.cardBg, h2Font);
-    wxTextAttr h3Attr(palette.textPrimary, palette.cardBg, h3Font);
-    wxTextAttr h4Attr(palette.textPrimary, palette.cardBg, h4Font);
-    wxTextAttr h5Attr(palette.textSecondary, palette.cardBg, h5Font);
-    wxTextAttr h6Attr(palette.textSecondary, palette.cardBg, h6Font);
+    wxColour baseFg = m_textCtrl->GetForegroundColour();
+    if (!baseFg.IsOk()) {
+        baseFg = palette.textPrimary;
+    }
+    wxColour baseBg = m_textCtrl->GetBackgroundColour();
+    if (!baseBg.IsOk()) {
+        baseBg = palette.cardBg;
+    }
 
-    wxTextAttr boldAttr(palette.textPrimary, palette.cardBg, boldFont);
-    wxTextAttr italicAttr(palette.textSecondary, palette.cardBg, italicFont);
-    wxTextAttr boldItalicAttr(palette.textPrimary, palette.cardBg, boldItalicFont);
+    // 样式属性定义 (严格继承控件的 ForegroundColour，确保如译文蓝色不被重置为默认黑色)
+    wxTextAttr defaultAttr(baseFg, baseBg, defaultFont);
+    wxTextAttr h1Attr(palette.accentPrimary, baseBg, h1Font);
+    wxTextAttr h2Attr(palette.accentPrimary, baseBg, h2Font);
+    wxTextAttr h3Attr(baseFg, baseBg, h3Font);
+    wxTextAttr h4Attr(baseFg, baseBg, h4Font);
+    wxTextAttr h5Attr(palette.textSecondary, baseBg, h5Font);
+    wxTextAttr h6Attr(palette.textSecondary, baseBg, h6Font);
+
+    wxTextAttr boldAttr(baseFg, baseBg, boldFont);
+    wxTextAttr italicAttr(palette.textSecondary, baseBg, italicFont);
+    wxTextAttr boldItalicAttr(baseFg, baseBg, boldItalicFont);
 
     // 行内代码与代码块
     wxTextAttr inlineCodeAttr(palette.bannerText, palette.bannerBg, codeFont);
     wxTextAttr codeBlockAttr(palette.textPrimary, palette.windowBg, codeBlockFont);
 
     // 引用
-    wxTextAttr blockquoteBarAttr(palette.accentPrimary, palette.cardBg, boldFont);
-    wxTextAttr blockquoteAttr(palette.textSecondary, palette.cardBg, italicFont);
+    wxTextAttr blockquoteBarAttr(palette.accentPrimary, baseBg, boldFont);
+    wxTextAttr blockquoteAttr(palette.textSecondary, baseBg, italicFont);
 
     // 列表与分割线
-    wxTextAttr listBulletAttr(palette.accentPrimary, palette.cardBg, boldFont);
-    wxTextAttr listNumAttr(palette.accentPrimary, palette.cardBg, boldFont);
-    wxTextAttr dividerAttr(palette.cardBorderActive, palette.cardBg, defaultFont);
+    wxTextAttr listBulletAttr(palette.accentPrimary, baseBg, boldFont);
+    wxTextAttr listNumAttr(palette.accentPrimary, baseBg, boldFont);
+    wxTextAttr dividerAttr(palette.cardBorderActive, baseBg, defaultFont);
 
     // 链接与删除线
-    wxTextAttr linkAttr(palette.accentPrimary, palette.cardBg, defaultFont);
+    wxTextAttr linkAttr(palette.accentPrimary, baseBg, defaultFont);
     linkAttr.SetFontUnderlined(true);
-    wxTextAttr strikeAttr(palette.textSecondary, palette.cardBg, defaultFont);
+    wxTextAttr strikeAttr(palette.textSecondary, baseBg, defaultFont);
     strikeAttr.SetFontStrikethrough(true);
 
     auto getStyleAttr = [&](MarkdownStyle style) -> const wxTextAttr& {
         switch (style) {
-            case MarkdownStyle::Heading1:      return h1Attr;
-            case MarkdownStyle::Heading2:      return h2Attr;
-            case MarkdownStyle::Heading3:      return h3Attr;
-            case MarkdownStyle::Heading4:      return h4Attr;
-            case MarkdownStyle::Heading5:      return h5Attr;
-            case MarkdownStyle::Heading6:      return h6Attr;
-            case MarkdownStyle::Bold:          return boldAttr;
-            case MarkdownStyle::Italic:        return italicAttr;
-            case MarkdownStyle::BoldItalic:    return boldItalicAttr;
-            case MarkdownStyle::InlineCode:    return inlineCodeAttr;
-            case MarkdownStyle::CodeBlock:     return codeBlockAttr;
-            case MarkdownStyle::Blockquote:    return blockquoteAttr;
-            case MarkdownStyle::BlockquoteBar: return blockquoteBarAttr;
-            case MarkdownStyle::ListBullet:    return listBulletAttr;
-            case MarkdownStyle::ListNumber:    return listNumAttr;
-            case MarkdownStyle::Divider:       return dividerAttr;
-            case MarkdownStyle::LinkText:      return linkAttr;
-            case MarkdownStyle::Strikethrough: return strikeAttr;
-            case MarkdownStyle::Default:
-            default:                           return defaultAttr;
+        case MarkdownStyle::Heading1:
+            return h1Attr;
+        case MarkdownStyle::Heading2:
+            return h2Attr;
+        case MarkdownStyle::Heading3:
+            return h3Attr;
+        case MarkdownStyle::Heading4:
+            return h4Attr;
+        case MarkdownStyle::Heading5:
+            return h5Attr;
+        case MarkdownStyle::Heading6:
+            return h6Attr;
+        case MarkdownStyle::Bold:
+            return boldAttr;
+        case MarkdownStyle::Italic:
+            return italicAttr;
+        case MarkdownStyle::BoldItalic:
+            return boldItalicAttr;
+        case MarkdownStyle::InlineCode:
+            return inlineCodeAttr;
+        case MarkdownStyle::CodeBlock:
+            return codeBlockAttr;
+        case MarkdownStyle::Blockquote:
+            return blockquoteAttr;
+        case MarkdownStyle::BlockquoteBar:
+            return blockquoteBarAttr;
+        case MarkdownStyle::ListBullet:
+            return listBulletAttr;
+        case MarkdownStyle::ListNumber:
+            return listNumAttr;
+        case MarkdownStyle::Divider:
+            return dividerAttr;
+        case MarkdownStyle::LinkText:
+            return linkAttr;
+        case MarkdownStyle::Strikethrough:
+            return strikeAttr;
+        case MarkdownStyle::Default:
+        default:
+            return defaultAttr;
         }
     };
 
@@ -385,6 +507,7 @@ void TextCtrl::SetMarkdown(const std::string& markdownText) {
         m_textCtrl->SetDefaultStyle(getStyleAttr(seg.style));
         m_textCtrl->AppendText(wxString::FromUTF8(seg.text));
     }
+    m_textCtrl->SetDefaultStyle(defaultAttr);
 
     m_textCtrl->Thaw();
     ScrollToLine(0);
@@ -447,7 +570,8 @@ void TextCtrl::SetSelection(long from, long to) {
 }
 
 void TextCtrl::Copy() {
-    if (!m_textCtrl) return;
+    if (!m_textCtrl)
+        return;
     wxString sel = m_textCtrl->GetStringSelection();
     if (!sel.IsEmpty()) {
         ClipboardHelper::SetClipboardText(sel.ToUTF8().data());
@@ -474,7 +598,8 @@ void TextCtrl::Paste() {
 }
 
 bool TextCtrl::CanCopy() const {
-    if (!m_textCtrl) return false;
+    if (!m_textCtrl)
+        return false;
     return m_textCtrl->CanCopy() || !m_textCtrl->GetValue().IsEmpty();
 }
 
@@ -526,7 +651,10 @@ bool TextCtrl::SetForegroundColour(const wxColour& colour) {
 }
 
 void TextCtrl::ScrollToLine(int targetLine) {
-    if (!m_textCtrl) return;
+    if (!m_textCtrl)
+        return;
+
+    bool handled = false;
 
 #ifdef _WIN32
     HWND hwnd = (HWND)m_textCtrl->GetHWND();
@@ -534,32 +662,56 @@ void TextCtrl::ScrollToLine(int targetLine) {
         int totalLines = (int)::SendMessage(hwnd, EM_GETLINECOUNT, 0, 0);
         targetLine = std::clamp(targetLine, 0, std::max(0, totalLines - 1));
 
-        int currentFirst = (int)::SendMessage(hwnd, EM_GETFIRSTVISIBLELINE, 0, 0);
-        int delta = targetLine - currentFirst;
+        int delta = targetLine - GetFirstVisibleLine();
         if (delta != 0) {
             ::SendMessage(hwnd, EM_LINESCROLL, 0, (LPARAM)delta);
         }
         ::ShowScrollBar(hwnd, SB_VERT, FALSE);
         ::SendMessage(hwnd, EM_SHOWSCROLLBAR, (WPARAM)SB_VERT, (LPARAM)FALSE);
+        handled = true;
     }
-#else
-    int totalLines = std::max(1, m_textCtrl->GetNumberOfLines());
-    targetLine = std::clamp(targetLine, 0, std::max(0, totalLines - 1));
-    long charPos = m_textCtrl->XYToPosition(0, targetLine);
-    if (charPos != -1) {
-        m_textCtrl->ShowPosition(charPos);
+#elif defined(__APPLE__)
+    NSScrollView* sv = GetMacScrollView(m_textCtrl);
+    if (sv) {
+        [sv setHasVerticalScroller:NO];
+        [sv setHasHorizontalScroller:NO];
+
+        NSClipView* clipView = [sv contentView];
+        NSView* docView = [sv documentView];
+        NSRect docRect = docView ? [docView frame] : NSZeroRect;
+        NSRect visibleRect = [clipView documentVisibleRect];
+
+        int lineHeight = GetSafeLineHeight();
+        double maxScrollY = std::max(0.0, (double)(docRect.size.height - visibleRect.size.height));
+        double targetY = std::clamp((double)targetLine * lineHeight, 0.0, maxScrollY);
+
+        NSPoint newOrigin = NSMakePoint(visibleRect.origin.x, targetY);
+        [clipView scrollToPoint:newOrigin];
+        [sv reflectScrolledClipView:clipView];
+        handled = true;
     }
 #endif
+
+    if (!handled) {
+        int totalLines = std::max(1, m_textCtrl->GetNumberOfLines());
+        targetLine = std::clamp(targetLine, 0, std::max(0, totalLines - 1));
+        long charPos = m_textCtrl->XYToPosition(0, targetLine);
+        if (charPos != -1) {
+            m_textCtrl->ShowPosition(charPos);
+        }
+    }
 
     UpdateScrollInfo();
 }
 
 void TextCtrl::UpdateScrollInfo() {
-    if (!m_textCtrl || !m_scrollBar) return;
+    if (!m_textCtrl || !m_scrollBar)
+        return;
 
-    int totalLines = 1;
-    int firstVisibleLine = 0;
-    int visibleLines = 1;
+    int lineHeight = GetSafeLineHeight();
+    int totalLines = std::max(1, m_textCtrl->GetNumberOfLines());
+    int visibleLines = std::max(1, m_textCtrl->GetClientSize().GetHeight() / lineHeight);
+    int firstVisibleLine = GetFirstVisibleLine();
 
 #ifdef _WIN32
     HWND hwnd = (HWND)m_textCtrl->GetHWND();
@@ -568,7 +720,6 @@ void TextCtrl::UpdateScrollInfo() {
         ::SendMessage(hwnd, EM_SHOWSCROLLBAR, (WPARAM)SB_VERT, (LPARAM)FALSE);
 
         totalLines = (int)::SendMessage(hwnd, EM_GETLINECOUNT, 0, 0);
-        firstVisibleLine = (int)::SendMessage(hwnd, EM_GETFIRSTVISIBLELINE, 0, 0);
 
         RECT rc;
         ::SendMessage(hwnd, EM_GETRECT, 0, (LPARAM)&rc);
@@ -576,17 +727,22 @@ void TextCtrl::UpdateScrollInfo() {
         if (clientH <= 0) {
             clientH = m_textCtrl->GetClientSize().GetHeight();
         }
-
-        int lineHeight = m_textCtrl->GetCharHeight();
-        if (lineHeight <= 0) lineHeight = 16;
         visibleLines = std::max(1, clientH / lineHeight);
     }
-#else
-    totalLines = std::max(1, m_textCtrl->GetNumberOfLines());
-    int lineHeight = m_textCtrl->GetCharHeight();
-    if (lineHeight <= 0) lineHeight = 16;
-    visibleLines = std::max(1, m_textCtrl->GetClientSize().GetHeight() / lineHeight);
-    firstVisibleLine = 0;
+#elif defined(__APPLE__)
+    NSScrollView* sv = GetMacScrollView(m_textCtrl);
+    if (sv) {
+        [sv setHasVerticalScroller:NO];
+        [sv setHasHorizontalScroller:NO];
+
+        NSClipView* clipView = [sv contentView];
+        NSRect visibleRect = [clipView documentVisibleRect];
+        NSView* docView = [sv documentView];
+        NSRect docRect = docView ? [docView frame] : NSZeroRect;
+
+        totalLines = std::max(1, (int)std::ceil(docRect.size.height / (double)lineHeight));
+        visibleLines = std::max(1, (int)(visibleRect.size.height / (double)lineHeight));
+    }
 #endif
 
     totalLines = std::max(1, totalLines);

@@ -8,9 +8,8 @@
 namespace LinguaAlpaca::UI {
 
 ScrollBar::ScrollBar(wxWindow* parent, ScrollCallback onScroll)
-    : wxWindow(parent, wxID_ANY, wxDefaultPosition, wxSize(8_dip, -1),
-               wxBORDER_NONE | wxFULL_REPAINT_ON_RESIZE),
-      m_scrollCallback(std::move(onScroll)) {
+    : wxWindow(parent, wxID_ANY, wxDefaultPosition, wxSize(8_dip, -1), wxBORDER_NONE | wxFULL_REPAINT_ON_RESIZE)
+    , m_scrollCallback(std::move(onScroll)) {
     SetBackgroundStyle(wxBG_STYLE_PAINT);
 
     auto palette = ThemeColors::GetCurrentPalette();
@@ -23,18 +22,16 @@ ScrollBar::ScrollBar(wxWindow* parent, ScrollCallback onScroll)
     Bind(wxEVT_LEFT_UP, &ScrollBar::OnLeftUp, this);
     Bind(wxEVT_MOTION, &ScrollBar::OnMouseMove, this);
     Bind(wxEVT_MOUSEWHEEL, &ScrollBar::OnMouseWheel, this);
-    Bind(wxEVT_MOUSE_CAPTURE_LOST, [this](wxMouseCaptureLostEvent&) {
-        m_isDragging = false;
-    });
+    Bind(wxEVT_MOUSE_CAPTURE_LOST, [this](wxMouseCaptureLostEvent&) { m_isDragging = false; });
 
     m_hideTimer.Bind(wxEVT_TIMER, &ScrollBar::OnTimer, this);
 }
 
 ScrollBar::ScrollBar(TextCtrl* parentTextCtrl)
-    : ScrollBar(static_cast<wxWindow*>(parentTextCtrl),
-                [parentTextCtrl](int line) {
-                    if (parentTextCtrl) parentTextCtrl->ScrollToLine(line);
-                }) {
+    : ScrollBar(static_cast<wxWindow*>(parentTextCtrl), [parentTextCtrl](int line) {
+        if (parentTextCtrl)
+            parentTextCtrl->ScrollToLine(line);
+    }) {
     m_parentTextCtrl = parentTextCtrl;
 }
 
@@ -56,12 +53,23 @@ void ScrollBar::SetScrollParams(int firstVisibleLine, int visibleLines, int tota
 }
 
 void ScrollBar::NotifyActivity() {
-    if (!m_needed) return;
+    if (!m_needed)
+        return;
     m_isVisible = true;
     Refresh();
 
     // 重新启动自动隐藏定时器 (1200ms 后自动隐藏)
     m_hideTimer.StartOnce(1200);
+}
+
+void ScrollBar::SetFocused(bool focused) {
+    m_isFocused = focused;
+    if (m_isFocused && m_needed) {
+        NotifyActivity();
+    } else if (!m_isFocused && !m_isHovered && !m_isDragging) {
+        m_isVisible = false;
+        Refresh();
+    }
 }
 
 void ScrollBar::OnTimer(wxTimerEvent& WXUNUSED(event)) {
@@ -77,21 +85,24 @@ void ScrollBar::OnTimer(wxTimerEvent& WXUNUSED(event)) {
 void ScrollBar::OnPaint(wxPaintEvent& WXUNUSED(event)) {
     wxAutoBufferedPaintDC dc(this);
     wxSize size = GetClientSize();
-    if (size.x <= 0 || size.y <= 0) return;
+    if (size.x <= 0 || size.y <= 0)
+        return;
 
     auto palette = ThemeColors::GetCurrentPalette();
     wxColour bg = GetParent() ? GetParent()->GetBackgroundColour() : palette.cardBg;
     dc.SetBackground(wxBrush(bg));
     dc.Clear();
 
-    if (!m_needed) {
+    // 默认彻底不显示：当不需要滚动，或处于非活动状态（未滚动、未聚焦、未悬停、未拖拽）时直接返回
+    if (!m_needed || (!m_isVisible && !m_isHovered && !m_isDragging && !m_isFocused)) {
         return;
     }
 
     int topMargin = 4_dip;
     int bottomMargin = 4_dip;
     int clientH = size.y - topMargin - bottomMargin;
-    if (clientH <= 0) return;
+    if (clientH <= 0)
+        return;
 
     int minThumbH = std::min(20_dip, clientH);
     int calcThumbH = (m_totalLines > 0) ? (clientH * m_visibleLines) / m_totalLines : clientH;
@@ -104,13 +115,13 @@ void ScrollBar::OnPaint(wxPaintEvent& WXUNUSED(event)) {
     wxColour thumbColor;
     if (m_isDragging) {
         thumbColor = palette.accentHover;
-    } else if (m_isHovered || m_isVisible) {
+    } else if (m_isHovered) {
         thumbColor = palette.accentPrimary;
     } else {
-        thumbColor = palette.cardBorderActive;
+        thumbColor = palette.accentPrimary;
     }
 
-    int thumbW = (m_isHovered || m_isDragging || m_isVisible) ? 6_dip : 4_dip;
+    int thumbW = (m_isHovered || m_isDragging) ? 6_dip : 4_dip;
     int thumbX = (GetClientSize().GetWidth() - thumbW) / 2;
 
     dc.SetBrush(wxBrush(thumbColor));
@@ -131,14 +142,16 @@ void ScrollBar::OnMouseLeave(wxMouseEvent& WXUNUSED(event)) {
 }
 
 void ScrollBar::OnLeftDown(wxMouseEvent& event) {
-    if (!m_needed) return;
+    if (!m_needed)
+        return;
 
     NotifyActivity();
 
     int topMargin = 4_dip;
     int bottomMargin = 4_dip;
     int clientH = GetClientSize().GetHeight() - topMargin - bottomMargin;
-    if (clientH <= 0) return;
+    if (clientH <= 0)
+        return;
 
     int minThumbH = std::min(20_dip, clientH);
     int calcThumbH = (m_totalLines > 0) ? (clientH * m_visibleLines) / m_totalLines : clientH;
@@ -186,7 +199,8 @@ void ScrollBar::OnMouseMove(wxMouseEvent& event) {
         int topMargin = 4_dip;
         int bottomMargin = 4_dip;
         int clientH = GetClientSize().GetHeight() - topMargin - bottomMargin;
-        if (clientH <= 0) return;
+        if (clientH <= 0)
+            return;
 
         int minThumbH = std::min(20_dip, clientH);
         int calcThumbH = (m_totalLines > 0) ? (clientH * m_visibleLines) / m_totalLines : clientH;
@@ -202,7 +216,8 @@ void ScrollBar::OnMouseMove(wxMouseEvent& event) {
 }
 
 void ScrollBar::OnMouseWheel(wxMouseEvent& event) {
-    if (!m_needed) return;
+    if (!m_needed)
+        return;
     NotifyActivity();
     int rotation = event.GetWheelRotation();
     int lines = (rotation > 0) ? -3 : 3;

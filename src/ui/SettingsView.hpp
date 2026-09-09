@@ -10,6 +10,7 @@
 #include "widgets/CustomButton.hpp"
 #include "widgets/CustomChoice.hpp"
 #include "widgets/CustomInputBox.hpp"
+#include "widgets/LeftAlignedRadioBox.hpp"
 #include "widgets/ScrollBar.hpp"
 #include "widgets/StatusBadge.hpp"
 #include "widgets/TextCtrl.hpp"
@@ -143,7 +144,7 @@ private:
     wxPanel* m_selectionCard{nullptr};
     wxStaticText* m_selectionTitleText{nullptr};
     wxCheckBox* m_selectionEnableCheck{nullptr};
-    wxRadioBox* m_selectionModeRadio{nullptr};
+    LeftAlignedRadioBox* m_selectionModeRadio{nullptr};
     wxStaticText* m_modifierKeyLabel{nullptr};
     CustomChoice* m_modifierKeyChoice{nullptr};
     wxCheckBox* m_preserveClipCheck{nullptr};
@@ -192,7 +193,7 @@ private:
     // UI Elements - 6. 偏好设置 Group
     wxPanel* m_prefCard{nullptr};
     wxStaticText* m_prefTitle{nullptr};
-    wxRadioBox* m_themeRadioBox{nullptr};
+    LeftAlignedRadioBox* m_themeRadioBox{nullptr};
     CustomButton* m_aboutBtn{nullptr};
     wxStaticText* m_aboutDescText{nullptr};
 

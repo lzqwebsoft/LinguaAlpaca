@@ -34,6 +34,8 @@ private:
     void OnHeaderMouseMove(wxMouseEvent& event);
     void OnHeaderDoubleClick(wxMouseEvent& event);
     void UpdateMaxButtonState();
+    bool IsCustomMaximized() const;
+    void ToggleMaximize();
 
 #ifdef __WXMSW__
     WXLRESULT MSWWindowProc(WXUINT nMsg, WXWPARAM wParam, WXLPARAM lParam) override;
@@ -63,6 +65,8 @@ private:
 
     bool m_isDragging{false};
     wxPoint m_dragStartPos;
+    bool m_isMaximizedMac{false};
+    wxRect m_savedRestoreRect;
 };
 
 } // namespace LinguaAlpaca::UI

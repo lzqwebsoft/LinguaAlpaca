@@ -10,7 +10,7 @@ class TextCtrl;
 
 /**
  * @brief 自定义现代化细条圆角滑动条控件 (ScrollBar)
- * 
+ *
  * 特性：
  * - 仅在鼠标滑动、拖拽或悬停时动态显示，静止后自动隐藏 (Auto-Hide)
  * - 胶囊状圆角滑块，悬停/拖拽时具有强调色高亮反馈
@@ -26,6 +26,7 @@ public:
 
     void SetScrollParams(int firstVisibleLine, int visibleLines, int totalLines);
     void NotifyActivity();
+    void SetFocused(bool focused);
 
 private:
     void OnPaint(wxPaintEvent& event);
@@ -50,6 +51,7 @@ private:
 
     bool m_isHovered{false};
     bool m_isDragging{false};
+    bool m_isFocused{false};
     int m_dragStartMouseY{0};
     int m_dragStartFirstLine{0};
 };

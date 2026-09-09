@@ -4,6 +4,7 @@
 #include <wx/wx.h>
 #include <wx/settings.h>
 #include "Dpi.hpp"
+#include "ThemeFont.hpp"
 #include <functional>
 #include <vector>
 #include <string>

@@ -39,8 +39,7 @@ void CustomButton::SetIcon(const char *svgContent, const wxSize &iconSize,
 
 wxSize CustomButton::DoGetBestSize() const {
   wxClientDC dc(const_cast<CustomButton *>(this));
-  wxFont font = wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL,
-                       wxFONTWEIGHT_BOLD, false, "Microsoft YaHei");
+  wxFont font = ThemeFont::GetFont(FontRole::Control, true);
   dc.SetFont(font);
   wxSize extent = dc.GetTextExtent(m_label);
   return wxSize(extent.x + 36_dip, 40_dip);
@@ -100,8 +99,7 @@ void CustomButton::OnPaint(wxPaintEvent &WXUNUSED(event)) {
   gc->DrawRoundedRectangle(1, 1, size.x - 2, size.y - 2, radius);
 
   // 绘制 SVG 图标与文字
-  wxFont font = wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL,
-                       wxFONTWEIGHT_BOLD, false, "Microsoft YaHei");
+  wxFont font = ThemeFont::GetFont(FontRole::Control, true);
   gc->SetFont(font, textColour);
 
   double tw = 0, th = 0;

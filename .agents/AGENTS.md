@@ -139,3 +139,65 @@ This file records project-scoped rules, developer guidelines, and architectural 
   - **Architectural Rule**: Always allow `wxFrame::MSWWindowProc` to process session-ending messages naturally. On session termination, wxWidgets automatically destroys top-level windows cleanly, triggers `OnExit()`, and calls `exit(rc)` to exit within milliseconds.
 - **Transient / Child Popup Pointer Safety (`CustomChoicePopup`)**:
   - For composite controls managing floating popups (e.g. `CustomChoice` with `CustomChoicePopup`), use `wxWeakRef<CustomChoicePopup>` instead of raw pointers to ensure safety across parent-child destruction cascades and avoid dangling pointers upon destruction.
+
+---
+
+## 🧩 8. Single Responsibility Principle (SRP) & Universal Component Architecture
+
+- **Declarative Layout vs. Platform Plumbing Separation**:
+  - UI construction routines (`InitUI()`, view constructors) must have a single, unambiguous responsibility: **declarative widget instantiation, sizer hierarchy composition, and primary UI event wiring**.
+  - **Anti-Pattern**: Inlining low-level OS platform APIs (such as Win32 messages, Cocoa observers, native window style tweaks) or complex state computations directly into UI layout routines.
+  - **Universal Rule**: Encapsulate native OS plumbing and complex configuration into dedicated, self-documenting helper methods (e.g., `SetupPlatformHooks()`, `SetupNativeWindowStyles()`), keeping layout routines linear, readable, and platform-agnostic:
+    ```cpp
+    void CustomComponent::InitUI() {
+        // 1. Declarative widget instantiation
+        CreateChildWidgets();
+
+        // 2. Encapsulated platform/native plumbing
+        SetupPlatformHooks();
+
+        // 3. Clean sizer layout & event binding
+        SetupLayout();
+        BindEvents();
+    }
+    ```
+
+- **Symmetrical Lifecycle & RAII for Native/External Subscriptions**:
+  - **Universal Rule**: Whenever any component registers an external or platform-level listener, notification observer, OS hook, or background timer (`SetupXxx()`), it **MUST** be paired with an exact symmetrical cleanup routine (`CleanupXxx()`).
+  - Symmetrical cleanup routines must be invoked in destructors or teardown sequences (adhering to RAII), ensuring:
+    1. Zero resource/memory leakage upon component destruction.
+    2. Complete immunity to dangling callbacks into destructed instances (UAF / dangling `this`).
+    3. Exception-safe, repeatable state transitions across component lifecycles.
+
+- **Encapsulate & Deduplicate Platform-Dependent Queries**:
+  - **Anti-Pattern**: Scattering identical `#ifdef _WIN32 ... #elif defined(__APPLE__) ... #endif` blocks across multiple member methods or event handlers to query the same native property, metric, or handle state.
+  - **Universal Rule**: Extract cross-platform queries into centralized private helper methods (e.g., `GetFirstVisibleLine()`, `GetSafeLineHeight()`, `GetNativeWindowBounds()`).
+  - This ensures all platform-specific nuances (zero-guards, coordinate transforms, fallback constants) are maintained in a single source of truth, reducing call-site event handlers to clean, 1-2 line invocations.
+
+- **Unified Control Flow & Fallback Architecture (`handled` Pattern)**:
+  - **Universal Rule**: In cross-platform methods providing platform-specific native optimizations alongside a generic wxWidgets fallback, **NEVER** duplicate the fallback implementation across `#elif defined(...) else` and `#else` branches.
+  - Use an early-return pattern or a `bool handled = false;` flag to isolate native OS paths, followed by a single shared generic fallback:
+    ```cpp
+    bool handled = false;
+    #ifdef _WIN32
+        if (hwnd) {
+            // Win32 native optimization...
+            handled = true;
+        }
+    #elif defined(__APPLE__)
+        if (nativeView) {
+            // Cocoa native optimization...
+            handled = true;
+        }
+    #endif
+
+    if (!handled) {
+        // Single unified generic cross-platform / wxWidgets fallback
+        ExecuteGenericFallback();
+    }
+    ```
+
+- **High Cohesion & Encapsulation in Composite Widgets**:
+  - Composite controls (widgets made of multiple inner child controls, scrollbars, buttons, or panels) must completely encapsulate child components and their synchronization mechanics.
+  - External callers should only interact with a clean, high-level semantic public API (e.g., `SetValue()`, `ScrollToLine()`, `SetTheme()`), without needing to know or manage internal child layouts, native scrollbar suppression, or platform-level observers.
+

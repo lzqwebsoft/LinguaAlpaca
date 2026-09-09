@@ -18,9 +18,9 @@ void CustomTableView::InitUI() {
     auto palette = ThemeColors::GetCurrentPalette();
     SetBackgroundColour(palette.cardBg);
 
-    m_headerFont = wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei");
-    m_rowFont = wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei");
-    m_hintFont = wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei");
+    m_headerFont = ThemeFont::GetFont(FontRole::Control, true);
+    m_rowFont = ThemeFont::GetFont(FontRole::Control);
+    m_hintFont = ThemeFont::GetFont(FontRole::Caption);
 
     m_canvas = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE | wxFULL_REPAINT_ON_RESIZE);
     m_canvas->SetBackgroundStyle(wxBG_STYLE_PAINT);
@@ -220,7 +220,7 @@ void CustomTableView::OnPaint(wxPaintEvent& WXUNUSED(event)) {
     gc->FillPath(headerPath);
 
     // 绘制表头底部分割线
-    gc->SetPen(gc->CreatePen(wxPen(palette.cardBorder, 1.5)));
+    gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(palette.cardBorder).Width(1.5)));
     gc->StrokeLine(startDrawX, startDrawY + m_headerHeight, startDrawX + tableWidth, startDrawY + m_headerHeight);
 
     // 3. 绘制表头文字与列分割线
@@ -241,7 +241,7 @@ void CustomTableView::OnPaint(wxPaintEvent& WXUNUSED(event)) {
 
         // 垂直列分割线
         if (c + 1 < colCount) {
-            gc->SetPen(gc->CreatePen(wxPen(palette.cardBorder, 0.8)));
+            gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(palette.cardBorder).Width(0.8)));
             gc->StrokeLine(curColX + colW, startDrawY + 4_dip, curColX + colW, startDrawY + m_headerHeight - 4_dip);
         }
         curColX += colW;
@@ -296,14 +296,14 @@ void CustomTableView::OnPaint(wxPaintEvent& WXUNUSED(event)) {
 
             // 列分隔线
             if (c + 1 < colCount) {
-                gc->SetPen(gc->CreatePen(wxPen(palette.cardBorder, 0.5)));
+                gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(palette.cardBorder).Width(0.5)));
                 gc->StrokeLine(curColX + colW, curRowY, curColX + colW, curRowY + rowH);
             }
             curColX += colW;
         }
 
         // 行底部分割线
-        gc->SetPen(gc->CreatePen(wxPen(palette.cardBorder, 0.8)));
+        gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(palette.cardBorder).Width(0.8)));
         gc->StrokeLine(startDrawX, curRowY + rowH, startDrawX + tableWidth, curRowY + rowH);
 
         curRowY += rowH;

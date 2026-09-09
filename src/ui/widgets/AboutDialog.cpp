@@ -29,19 +29,19 @@ namespace LinguaAlpaca::UI {
 
         wxBoxSizer* nameRow = new wxBoxSizer(wxHORIZONTAL);
         wxStaticText* nameText = new wxStaticText(this, wxID_ANY, L"LinguaAlpaca 灵驼译");
-        nameText->SetFont(wxFont(15, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
+        nameText->SetFont(ThemeFont::GetFont(FontRole::SectionTitle));
         nameText->SetForegroundColour(palette.textPrimary);
 
-        wxStaticText* versionBadge = new wxStaticText(this, wxID_ANY, L" v1.0.0 ");
-        versionBadge->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
-        versionBadge->SetForegroundColour(palette.badgeText);
-        versionBadge->SetBackgroundColour(palette.badgeBg);
+        wxStaticText* versionBadge = new wxStaticText(this, wxID_ANY, L"v1.0.0");
+        versionBadge->SetFont(ThemeFont::GetFont(FontRole::Badge));
+        versionBadge->SetForegroundColour(palette.accentPrimary);
 
         nameRow->Add(nameText, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8_dip);
         nameRow->Add(versionBadge, 0, wxALIGN_CENTER_VERTICAL);
 
-        wxStaticText* sloganText = new wxStaticText(this, wxID_ANY, L"凭本地之智，见世界之全 —— 端侧多模态全能离线翻译助手");
-        sloganText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+        // 口号
+        wxStaticText* sloganText = new wxStaticText(this, wxID_ANY, L"端侧多模态全能离线翻译助手");
+        sloganText->SetFont(ThemeFont::GetFont(FontRole::Control));
         sloganText->SetForegroundColour(palette.accentPrimary);
 
         titleCol->Add(nameRow, 0, wxBOTTOM, 3_dip);
@@ -60,7 +60,7 @@ namespace LinguaAlpaca::UI {
         wxBoxSizer* infoCardSizer = new wxBoxSizer(wxVERTICAL);
 
         wxStaticText* introTitle = new wxStaticText(infoCard, wxID_ANY, L"核心特性");
-        introTitle->SetFont(wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
+        introTitle->SetFont(ThemeFont::GetFont(FontRole::Control, true));
         introTitle->SetForegroundColour(palette.textPrimary);
         infoCardSizer->Add(introTitle, 0, wxALL, 12_dip);
 
@@ -74,7 +74,7 @@ namespace LinguaAlpaca::UI {
 
         for (const auto& feat : features) {
             wxStaticText* featText = new wxStaticText(infoCard, wxID_ANY, feat);
-            featText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+            featText->SetFont(ThemeFont::GetFont(FontRole::Control));
             featText->SetForegroundColour(palette.textSecondary);
             infoCardSizer->Add(featText, 0, wxLEFT | wxRIGHT | wxBOTTOM, 6_dip);
         }
@@ -94,7 +94,7 @@ namespace LinguaAlpaca::UI {
 
         // 4. 底部版权信息
         wxStaticText* copyrightText = new wxStaticText(this, wxID_ANY, L"开源项目");
-        copyrightText->SetFont(wxFont(8, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+        copyrightText->SetFont(ThemeFont::GetFont(FontRole::Caption));
         copyrightText->SetForegroundColour(palette.textSecondary);
         mainSizer->Add(copyrightText, 0, wxALIGN_CENTER | wxBOTTOM, 14_dip);
 

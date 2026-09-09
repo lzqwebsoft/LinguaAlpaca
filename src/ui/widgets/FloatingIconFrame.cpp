@@ -1,4 +1,6 @@
+#if defined(_MSC_VER)
 #pragma execution_character_set("utf-8")
+#endif
 #include "FloatingIconFrame.hpp"
 #include "../theme/AppIcons.hpp"
 #include "../theme/IconManager.hpp"
@@ -12,6 +14,8 @@
 
 #ifdef _WIN32
 #include <wx/msw/wrapgdip.h>
+#elif defined(__APPLE__)
+#import <Cocoa/Cocoa.h>
 #endif
 
 namespace LinguaAlpaca::UI {
@@ -44,6 +48,19 @@ namespace LinguaAlpaca::UI {
                 exStyle | WS_EX_LAYERED | WS_EX_NOACTIVATE | WS_EX_TOPMOST | WS_EX_TOOLWINDOW);
             SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0,
                 SWP_NOMOVE | SWP_NOSIZE | SWP_FRAMECHANGED | SWP_NOACTIVATE);
+        }
+#elif defined(__APPLE__)
+        NSView* nsview = (NSView*)GetHandle();
+        if (nsview) {
+            NSWindow* nswin = [nsview window];
+            if (nswin) {
+                [nswin setOpaque:NO];
+                [nswin setBackgroundColor:[NSColor clearColor]];
+                [nswin setLevel:NSPopUpMenuWindowLevel];
+                [nswin setCollectionBehavior:NSWindowCollectionBehaviorCanJoinAllSpaces |
+                                             NSWindowCollectionBehaviorFullScreenAuxiliary];
+                [nswin setHidesOnDeactivate:NO];
+            }
         }
 #endif
     }
@@ -209,6 +226,9 @@ namespace LinguaAlpaca::UI {
 #else
         wxPoint pos(targetX, targetY);
         int displayIdx = wxDisplay::GetFromPoint(pos);
+        if (displayIdx == wxNOT_FOUND) {
+            displayIdx = wxDisplay::GetFromPoint(wxPoint(screenX, screenY));
+        }
         if (displayIdx != wxNOT_FOUND) {
             wxDisplay display(displayIdx);
             wxRect geom = display.GetClientArea();
@@ -241,6 +261,19 @@ namespace LinguaAlpaca::UI {
 
         LOG_INFO("FloatingIconFrame", "显示浮动图标: (" + std::to_string(targetX) + ", " + std::to_string(targetY) + ")");
         ShowWithoutActivating();
+#ifdef __APPLE__
+        NSView* nsview = (NSView*)GetHandle();
+        if (nsview) {
+            NSWindow* nswin = [nsview window];
+            if (nswin) {
+                [nswin setLevel:NSPopUpMenuWindowLevel];
+                [nswin setCollectionBehavior:NSWindowCollectionBehaviorCanJoinAllSpaces |
+                                             NSWindowCollectionBehaviorFullScreenAuxiliary];
+                [nswin setHidesOnDeactivate:NO];
+                [nswin orderFrontRegardless];
+            }
+        }
+#endif
 #ifndef _WIN32
         Refresh();
         Update();
@@ -272,9 +305,7 @@ namespace LinguaAlpaca::UI {
         double h = sz.y;
         if (w <= 0 || h <= 0) return;
 
-        wxGraphicsPath clipPath = gc->CreatePath();
-        clipPath.AddCircle(w / 2.0, h / 2.0, (w / 2.0) - 1.5);
-        gc->Clip(clipPath);
+        gc->Clip(1.5, 1.5, w - 3.0, h - 3.0);
 
         gc->SetBrush(*wxWHITE_BRUSH);
         gc->SetPen(*wxTRANSPARENT_PEN);
@@ -292,11 +323,11 @@ namespace LinguaAlpaca::UI {
         if (m_isHovered) {
             ThemePalette palette = ThemeManager::GetCurrentPalette();
             gc->SetBrush(wxBrush(wxColour(palette.accentPrimary.Red(), palette.accentPrimary.Green(), palette.accentPrimary.Blue(), 40)));
-            gc->SetPen(wxPen(palette.accentPrimary, 1.8));
+            gc->SetPen(wxPen(palette.accentPrimary, 2));
             gc->DrawEllipse(1.5, 1.5, w - 3.0, h - 3.0);
         } else {
             gc->SetBrush(*wxTRANSPARENT_BRUSH);
-            gc->SetPen(wxPen(wxColour(200, 220, 245), 1.2));
+            gc->SetPen(wxPen(wxColour(200, 220, 245), 1));
             gc->DrawEllipse(1.5, 1.5, w - 3.0, h - 3.0);
         }
 #endif
@@ -386,6 +417,9 @@ namespace LinguaAlpaca::UI {
 #else
                 wxPoint pos(targetX, targetY);
                 int displayIdx = wxDisplay::GetFromPoint(pos);
+                if (displayIdx == wxNOT_FOUND) {
+                    displayIdx = wxDisplay::GetFromPoint(m_dragStartMousePos);
+                }
                 if (displayIdx != wxNOT_FOUND) {
                     wxDisplay display(displayIdx);
                     wxRect geom = display.GetClientArea();

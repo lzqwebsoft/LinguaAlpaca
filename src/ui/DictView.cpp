@@ -51,8 +51,7 @@ void DictView::InitUI() {
     wxStaticBitmap* titleIcon = new wxStaticBitmap(m_headerPanel, wxID_ANY, titleBundle);
 
     m_titleText = new wxStaticText(m_headerPanel, wxID_ANY, L"词典查询");
-    m_titleText->SetFont(wxFont(18, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL,
-                                wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
+    m_titleText->SetFont(ThemeFont::GetFont(FontRole::DisplayTitle));
     m_titleText->SetForegroundColour(palette.textPrimary);
 
     m_dictCountBadge = new StatusBadge(m_headerPanel);
@@ -141,7 +140,7 @@ void DictView::InitUI() {
     m_suggestIcon = new wxStaticBitmap(m_suggestHeaderBar, wxID_ANY, suggestIconBundle);
 
     m_suggestTitle = new wxStaticText(m_suggestHeaderBar, wxID_ANY, L"联想词列表");
-    m_suggestTitle->SetFont(wxFont(13, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
+    m_suggestTitle->SetFont(ThemeFont::GetFont(FontRole::CardTitle));
     m_suggestTitle->SetForegroundColour(palette.textPrimary);
     m_suggestTitle->SetBackgroundColour(palette.cardBg);
 
@@ -189,12 +188,12 @@ void DictView::InitUI() {
     m_resultIcon = new wxStaticBitmap(m_wordHeaderBar, wxID_ANY, resultIconBundle);
 
     m_headwordText = new wxStaticText(m_wordHeaderBar, wxID_ANY, L"输入单词开始查询");
-    m_headwordText->SetFont(wxFont(13, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
+    m_headwordText->SetFont(ThemeFont::GetFont(FontRole::SectionTitle));
     m_headwordText->SetForegroundColour(palette.textPrimary);
     m_headwordText->SetBackgroundColour(palette.cardBg);
 
     m_phoneticText = new wxStaticText(m_wordHeaderBar, wxID_ANY, L"");
-    m_phoneticText->SetFont(wxFont(11, wxFONTFAMILY_SWISS, wxFONTSTYLE_ITALIC, wxFONTWEIGHT_NORMAL, false, "Lucida Sans Unicode"));
+    m_phoneticText->SetFont(ThemeFont::MakeFont(11, wxFONTWEIGHT_NORMAL, true, "Lucida Sans Unicode"));
     m_phoneticText->SetForegroundColour(palette.accentPrimary);
     m_phoneticText->SetBackgroundColour(palette.cardBg);
 
@@ -220,7 +219,7 @@ void DictView::InitUI() {
 
     // 释义内容文本展示框 (启用 wxTE_RICH2 支持富文本样式)
     m_definitionCtrl = new TextCtrl(m_rightResultCard, wxID_ANY, L"", wxDefaultPosition, wxDefaultSize, wxTE_MULTILINE | wxTE_READONLY | wxBORDER_NONE | wxTE_RICH2);
-    m_definitionCtrl->SetFont(wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+    m_definitionCtrl->SetFont(ThemeFont::GetFont(FontRole::Body));
     m_definitionCtrl->SetBackgroundColour(palette.cardBg);
     m_definitionCtrl->SetForegroundColour(palette.textPrimary);
 
@@ -238,13 +237,13 @@ void DictView::InitUI() {
     m_emptyIcon = new wxStaticBitmap(m_emptyStateCard, wxID_ANY, emptyBundle);
 
     m_emptyTitle = new wxStaticText(m_emptyStateCard, wxID_ANY, L"欢迎使用 StarDict 本地词典");
-    m_emptyTitle->SetFont(wxFont(14, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
+    m_emptyTitle->SetFont(ThemeFont::GetFont(FontRole::SectionTitle));
     m_emptyTitle->SetForegroundColour(palette.textPrimary);
 
     m_emptyDesc = new wxStaticText(m_emptyStateCard, wxID_ANY,
         L"在上方输入框中输入英文或中文单词，即可快速查询本地 StarDict 词典的详细释义与音标。\n"
         L"如未加载词典，请前往【设置 -> 词典设置】指定 StarDict 词典目录。");
-    m_emptyDesc->SetFont(wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+    m_emptyDesc->SetFont(ThemeFont::GetFont(FontRole::Body));
     m_emptyDesc->SetForegroundColour(palette.textSecondary);
 
     m_goToSettingsBtn = new CustomButton(m_emptyStateCard, wxID_ANY, L"前往词典设置", ButtonStyle::Primary,
@@ -470,14 +469,14 @@ void DictView::RenderRichDictionaryResults(const std::vector<DictSearchResult>& 
     auto palette = ThemeColors::GetCurrentPalette();
 
     // 字体规范定义 (高DPI适配，层级清晰)
-    wxFont defaultFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei");
-    wxFont dictHeaderFont(11, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei");
-    wxFont posFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei");
-    wxFont numFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei");
-    wxFont phoneticFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_ITALIC, wxFONTWEIGHT_NORMAL, false, "Lucida Sans Unicode");
-    wxFont exampleFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei");
-    wxFont tagFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei");
-    wxFont dividerFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei");
+    wxFont defaultFont = ThemeFont::GetFont(FontRole::Body);
+    wxFont dictHeaderFont = ThemeFont::GetFont(FontRole::CardTitle);
+    wxFont posFont = ThemeFont::GetFont(FontRole::Control, true);
+    wxFont numFont = ThemeFont::GetFont(FontRole::Body, true);
+    wxFont phoneticFont = ThemeFont::MakeFont(10, wxFONTWEIGHT_NORMAL, true, "Lucida Sans Unicode");
+    wxFont exampleFont = ThemeFont::GetFont(FontRole::Body);
+    wxFont tagFont = ThemeFont::GetFont(FontRole::Control, true);
+    wxFont dividerFont = ThemeFont::GetFont(FontRole::Caption);
 
     // 样式属性定义：针对各类语义元素应用专属的前景色、胶囊徽章背景与字重
     // 1. 普通释义正文

@@ -1,4 +1,6 @@
+#if defined(_MSC_VER)
 #pragma execution_character_set("utf-8")
+#endif
 #include "ClipboardHelper.hpp"
 
 #ifdef _WIN32
@@ -411,14 +413,177 @@ ClipboardHelper::GetSelectedTextViaSendInput(bool preserveClipboard) {
 
 } // namespace LinguaAlpaca
 
-#else // Non-Windows fallback
+#else // Non-Windows fallback using wxTheClipboard and macOS native pasteboard / CGEvent
+
+#include <wx/clipbrd.h>
+#include <wx/dataobj.h>
+
+#if defined(__APPLE__)
+#import <Cocoa/Cocoa.h>
+#import <ApplicationServices/ApplicationServices.h>
+#import <Carbon/Carbon.h>
+#include <chrono>
+#include <thread>
+#endif
 
 namespace LinguaAlpaca {
-std::string ClipboardHelper::GetClipboardText() { return ""; }
-bool ClipboardHelper::SetClipboardText(const std::string &) { return false; }
+
+std::string ClipboardHelper::GetClipboardText() {
+    if (wxTheClipboard && wxTheClipboard->Open()) {
+        if (wxTheClipboard->IsSupported(wxDF_TEXT) || wxTheClipboard->IsSupported(wxDF_UNICODETEXT)) {
+            wxTextDataObject data;
+            wxTheClipboard->GetData(data);
+            wxTheClipboard->Close();
+            return data.GetText().ToUTF8().data();
+        }
+        wxTheClipboard->Close();
+    }
+    return "";
+}
+
+bool ClipboardHelper::SetClipboardText(const std::string &text) {
+    if (wxTheClipboard && wxTheClipboard->Open()) {
+        wxTheClipboard->SetData(new wxTextDataObject(wxString::FromUTF8(text)));
+        wxTheClipboard->Flush();
+        wxTheClipboard->Close();
+        return true;
+    }
+    return false;
+}
+
+bool ClipboardHelper::HasText() {
+    if (wxTheClipboard && wxTheClipboard->Open()) {
+        bool has = wxTheClipboard->IsSupported(wxDF_TEXT) || wxTheClipboard->IsSupported(wxDF_UNICODETEXT);
+        wxTheClipboard->Close();
+        return has;
+    }
+    return false;
+}
+
+#if defined(__APPLE__)
+
+bool ClipboardHelper::SendCtrlC() {
+    @autoreleasepool {
+        CGEventSourceRef source = CGEventSourceCreate(kCGEventSourceStateCombinedSessionState);
+        if (!source) return false;
+
+        CGKeyCode cCode = static_cast<CGKeyCode>(kVK_ANSI_C);
+        CGEventRef keyDown = CGEventCreateKeyboardEvent(source, cCode, true);
+        CGEventRef keyUp = CGEventCreateKeyboardEvent(source, cCode, false);
+
+        if (!keyDown || !keyUp) {
+            if (keyDown) CFRelease(keyDown);
+            if (keyUp) CFRelease(keyUp);
+            CFRelease(source);
+            return false;
+        }
+
+        CGEventSetFlags(keyDown, kCGEventFlagMaskCommand);
+        CGEventSetFlags(keyUp, kCGEventFlagMaskCommand);
+
+        CGEventPost(kCGHIDEventTap, keyDown);
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        CGEventPost(kCGHIDEventTap, keyUp);
+
+        CFRelease(keyDown);
+        CFRelease(keyUp);
+        CFRelease(source);
+        return true;
+    }
+}
+
+std::string ClipboardHelper::GetSelectedTextViaSendInput(bool preserveClipboard) {
+    @autoreleasepool {
+        NSPasteboard *pb = [NSPasteboard generalPasteboard];
+        if (!pb) return "";
+
+        NSInteger initialChangeCount = [pb changeCount];
+
+        // 1. 如果开启了剪贴板保护，完整备份当前剪贴板中所有项及各类型数据
+        NSMutableArray<NSDictionary<NSPasteboardType, NSData*>*> *savedItems = nil;
+        if (preserveClipboard) {
+            NSArray<NSPasteboardItem *> *items = [pb pasteboardItems];
+            if (items && items.count > 0) {
+                savedItems = [NSMutableArray arrayWithCapacity:items.count];
+                for (NSPasteboardItem *item in items) {
+                    NSMutableDictionary<NSPasteboardType, NSData*> *dict = [NSMutableDictionary dictionary];
+                    for (NSPasteboardType type in [item types]) {
+                        NSData *data = [item dataForType:type];
+                        if (data) {
+                            [dict setObject:data forKey:type];
+                        }
+                    }
+                    if (dict.count > 0) {
+                        [savedItems addObject:dict];
+                    }
+                }
+            }
+        }
+
+        // 2. 模拟发送 Cmd+C
+        if (!SendCtrlC()) {
+            return "";
+        }
+
+        // 3. 轮询等待系统剪贴板 changeCount 发生变化（最长约 150ms）
+        bool updated = false;
+        for (int i = 0; i < 15; ++i) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            if ([pb changeCount] != initialChangeCount) {
+                updated = true;
+                break;
+            }
+        }
+
+        if (!updated) {
+            return "";
+        }
+
+        NSInteger copyChangeCount = [pb changeCount];
+
+        // 提取剪贴板文本并去除两端空白
+        NSString *str = [pb stringForType:NSPasteboardTypeString];
+        std::string selectedText;
+        if (str) {
+            NSString *trimmed = [str stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+            if (trimmed && trimmed.length > 0) {
+                selectedText = [trimmed UTF8String];
+            }
+        }
+
+        if (selectedText.empty()) {
+            return "";
+        }
+
+        // 4. 若开启剪贴板保护且备份有效，恢复原本的剪贴板全部内容
+        if (preserveClipboard && savedItems && savedItems.count > 0) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            // 确保在恢复前，用户没有进行新的复制操作
+            if ([pb changeCount] == copyChangeCount) {
+                [pb clearContents];
+                NSMutableArray<NSPasteboardItem*> *restoreItems = [NSMutableArray arrayWithCapacity:savedItems.count];
+                for (NSDictionary<NSPasteboardType, NSData*> *dict in savedItems) {
+                    NSPasteboardItem *newItem = [[NSPasteboardItem alloc] init];
+                    [dict enumerateKeysAndObjectsUsingBlock:^(NSPasteboardType type, NSData *data, BOOL *stop) {
+                        [newItem setData:data forType:type];
+                    }];
+                    [restoreItems addObject:newItem];
+                }
+                [pb writeObjects:restoreItems];
+            }
+        }
+
+        return selectedText;
+    }
+}
+
+#else
+
 std::string ClipboardHelper::GetSelectedTextViaSendInput(bool) { return ""; }
-bool ClipboardHelper::HasText() { return false; }
 bool ClipboardHelper::SendCtrlC() { return false; }
+
+#endif
+
 } // namespace LinguaAlpaca
 
 #endif

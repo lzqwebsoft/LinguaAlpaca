@@ -15,6 +15,8 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <windows.h>
+#else
+#include <sys/types.h>
 #endif
 
 namespace LinguaAlpaca {
@@ -66,7 +68,11 @@ public:
 
 private:
     void CleanupProcess();
+#ifdef _WIN32
     void StartLogReader(HANDLE hReadPipe);
+#else
+    void StartLogReader(int fd);
+#endif
 
     std::atomic<bool> m_isAlive{false};
     std::atomic<bool> m_isStopping{false};
@@ -80,6 +86,8 @@ private:
     HANDLE m_hProcess{NULL};
     HANDLE m_hJob{NULL};
     DWORD m_processId{0};
+#else
+    pid_t m_childPid{0};
 #endif
     std::thread m_logThread;
 };

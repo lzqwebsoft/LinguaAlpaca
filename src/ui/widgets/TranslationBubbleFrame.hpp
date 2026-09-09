@@ -5,8 +5,6 @@
 #include <memory>
 #include <string>
 #include "../../core/ModelManager.hpp"
-#include "../../core/Config.hpp"
-#include "CustomButton.hpp"
 #include "StatusBadge.hpp"
 #include "SplitterWindow.hpp"
 #include "TextCtrl.hpp"
@@ -72,6 +70,10 @@ private:
     void DoExecuteTranslation(const std::string& sourceText);
     void SetSourcePanelExpanded(bool expanded);
     void UpdateSourcePreview();
+    void UpdateSpeakBtnVisibility();
+    void RepositionSpeakButtons();
+
+    wxTimer m_speakBtnTimer;
 
     std::shared_ptr<ModelManager> m_modelManager;
 

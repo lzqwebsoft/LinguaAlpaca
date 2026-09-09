@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.16)
 project(LinguaAlpaca LANGUAGES CXX)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -59,7 +61,13 @@ set(LLAMA_BUILD_SERVER ON CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_EXTRA_TOOLS OFF CACHE BOOL "" FORCE) # 仅构建必要的 server 和 mtmd，精简跳过 18+ 个 CLI 压测与量化工具
 set(LLAMA_BUILD_UI OFF CACHE BOOL "" FORCE)
 set(LLAMA_USE_PREBUILT_UI OFF CACHE BOOL "" FORCE)
-set(GGML_VULKAN ON CACHE BOOL "" FORCE)  # 默认开启Vulkan SDK加速
+if(APPLE)
+    # macOS 平台默认启用 Apple Silicon Metal 原生 GPU 加速，关闭 Vulkan
+    set(GGML_METAL ON CACHE BOOL "" FORCE)
+    set(GGML_VULKAN OFF CACHE BOOL "" FORCE)
+else()
+    set(GGML_VULKAN ON CACHE BOOL "" FORCE)  # Windows / Linux 默认开启Vulkan SDK加速
+endif()
 add_subdirectory(third_party/llama.cpp)
 
 # 模块化源码组织
@@ -118,6 +126,7 @@ set(UI_SOURCES
     src/ui/widgets/CustomChoice.cpp
     src/ui/widgets/CustomInputBox.hpp
     src/ui/widgets/CustomInputBox.cpp
+    src/ui/widgets/LeftAlignedRadioBox.hpp
     src/ui/widgets/StatusBadge.hpp
     src/ui/widgets/StatusBadge.cpp
     src/ui/widgets/SidebarNav.hpp
@@ -188,7 +197,6 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/llama.cpp/include
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/llama.cpp/common
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/llama.cpp/tools/mtmd
-    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/wxWidgets/src/zlib
 )
 
 # 链接 wxWidgets 与核心库
@@ -196,23 +204,53 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     wx::core
     wx::base
     wx::adv
-    wxzlib
     llama
     llama-common
     cpp-httplib
     mtmd
 )
 
-if(WIN32)
-    target_link_libraries(${PROJECT_NAME} PRIVATE ole32 oleaut32 windowsapp)
+if(TARGET wxzlib)
+    target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/third_party/wxWidgets/src/zlib)
+    target_link_libraries(${PROJECT_NAME} PRIVATE wxzlib)
+else()
+    find_package(ZLIB REQUIRED)
+    target_link_libraries(${PROJECT_NAME} PRIVATE ZLIB::ZLIB)
 endif()
 
-# 自动仅复制程序实际依赖的动态链接库 (Runtime DLLs)、llama-server 及 resources 资源目录
+if(WIN32)
+    target_link_libraries(${PROJECT_NAME} PRIVATE ole32 oleaut32 windowsapp)
+    # 自动仅复制 Windows 程序实际依赖的动态链接库 (Runtime DLLs) 及 llama-server
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND}
+            -DDEST_DIR=$<TARGET_FILE_DIR:${PROJECT_NAME}>
+            "-DDLLS=$<TARGET_RUNTIME_DLLS:${PROJECT_NAME}>;$<TARGET_RUNTIME_DLLS:llama-server>"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_runtime_deps.cmake"
+    )
+elseif(APPLE)
+    set_source_files_properties(
+        src/core/SelectionService.cpp
+        src/core/ClipboardHelper.cpp
+        src/core/WinUIAutomationHelper.cpp
+        src/ui/widgets/FloatingIconFrame.cpp
+        src/ui/widgets/TranslationBubbleFrame.cpp
+        src/ui/widgets/TextCtrl.cpp
+        PROPERTIES COMPILE_FLAGS "-x objective-c++"
+    )
+    set_source_files_properties(
+        src/core/WinTtsHelper.cpp
+        PROPERTIES COMPILE_FLAGS "-x objective-c++ -fobjc-arc"
+    )
+    target_link_libraries(${PROJECT_NAME} PRIVATE
+        "-framework Cocoa"
+        "-framework ApplicationServices"
+        "-framework Carbon"
+        "-framework AVFoundation"
+    )
+endif()
+
+# 复制 resources 资源目录
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-    COMMAND ${CMAKE_COMMAND}
-        -DDEST_DIR=$<TARGET_FILE_DIR:${PROJECT_NAME}>
-        "-DDLLS=$<TARGET_RUNTIME_DLLS:${PROJECT_NAME}>;$<TARGET_RUNTIME_DLLS:llama-server>"
-        -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_runtime_deps.cmake"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_CURRENT_SOURCE_DIR}/resources"
         "$<TARGET_FILE_DIR:${PROJECT_NAME}>/resources"

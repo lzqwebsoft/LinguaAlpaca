@@ -2,11 +2,9 @@
 #pragma execution_character_set("utf-8")
 
 #include <atomic>
-#include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
-#include <thread>
 
 #include "core/Types.hpp"
 #include "LlamaServer.hpp"
@@ -25,20 +23,10 @@ public:
 
     bool IsModelLoaded() const;
 
-    void TranslateStreamAsync(
-        const TranslationTask& task,
-        StreamTokenCallback onToken,
-        StreamCompleteCallback onComplete
-    );
+    void TranslateStreamAsync(const TranslationTask& task, StreamTokenCallback onToken, StreamCompleteCallback onComplete);
 
-    void RecognizeStream(
-        const std::string& imagePath,
-        const std::string& taskType,
-        const std::string& modelPath,
-        const std::string& mmprojPath,
-        OcrTokenCallback onToken,
-        OcrCompleteCallback onComplete
-    );
+    void RecognizeStream(const std::string& imagePath, const std::string& taskType, const std::string& modelPath, const std::string& mmprojPath, OcrTokenCallback onToken,
+                         OcrCompleteCallback onComplete);
 
     void CancelCurrentTask();
     void Cancel() { CancelCurrentTask(); }
@@ -47,11 +35,7 @@ public:
     static std::string SanitizeOcrToken(const std::string& token);
 
 private:
-    std::string FormatHyMt2UserContent(
-        const std::string& srcText,
-        LanguageCode srcLang,
-        LanguageCode tgtLang
-    );
+    std::string FormatHyMt2UserContent(const std::string& srcText, LanguageCode srcLang, LanguageCode tgtLang);
 
     std::shared_ptr<LlamaServer> m_server;
     std::string m_baseUrl;

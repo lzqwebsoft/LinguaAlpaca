@@ -18,11 +18,11 @@ StatusBadge::StatusBadge(wxWindow* parent, wxWindowID id,
 }
 
 wxSize StatusBadge::DoGetBestSize() const {
-    wxFont font(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei");
+    wxFont font = ThemeFont::GetFont(FontRole::Badge);
     wxCoord tw = 0, th = 0;
     GetTextExtent(m_label, &tw, &th, nullptr, nullptr, &font);
     int w = tw + 22_dip; // 左右各 11_dip 内边距
-    int h = 26_dip;
+    int h = 28_dip;
     return wxSize(w, h);
 }
 
@@ -149,7 +149,7 @@ void StatusBadge::OnPaint(wxPaintEvent& WXUNUSED(event)) {
     gc->DrawRoundedRectangle(1, 1, size.x - 2, size.y - 2, radius);
 
     // 绘制文字 (居中，并裁剪防止极端窄窗口溢出)
-    wxFont font(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei");
+    wxFont font = ThemeFont::GetFont(FontRole::Badge);
     gc->SetFont(font, m_fgColour);
 
     double tw = 0, th = 0;

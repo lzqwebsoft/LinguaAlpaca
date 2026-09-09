@@ -29,7 +29,7 @@ namespace LinguaAlpaca::UI {
 
         // 2. 主标题 `欢迎使用 LinguaAlpaca 灵驼译`
         wxStaticText* titleText = new wxStaticText(this, wxID_ANY, L"欢迎使用 LinguaAlpaca 灵驼译");
-        titleText->SetFont(wxFont(16, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
+        titleText->SetFont(ThemeFont::GetFont(FontRole::SectionTitle));
         titleText->SetForegroundColour(palette.textPrimary);
         mainSizer->Add(titleText, 0, wxALIGN_CENTER);
 
@@ -37,7 +37,7 @@ namespace LinguaAlpaca::UI {
 
         // 3. 副标题口号说明
         wxStaticText* subtitleText = new wxStaticText(this, wxID_ANY, L"凭本地之智，见世界之全 —— 端侧多模态全能离线翻译助手");
-        subtitleText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+        subtitleText->SetFont(ThemeFont::GetFont(FontRole::Control));
         subtitleText->SetForegroundColour(palette.accentPrimary);
         mainSizer->Add(subtitleText, 0, wxALIGN_CENTER);
 
@@ -50,7 +50,7 @@ namespace LinguaAlpaca::UI {
         wxBoxSizer* bannerSizer = new wxBoxSizer(wxVERTICAL);
 
         wxStaticText* infoTitle = new wxStaticText(bannerPanel, wxID_ANY, L"初次使用请先配置离线大模型或词典");
-        infoTitle->SetFont(wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
+        infoTitle->SetFont(ThemeFont::GetFont(FontRole::Control, true));
         infoTitle->SetForegroundColour(palette.textPrimary);
         bannerSizer->Add(infoTitle, 0, wxALL, 12_dip);
 
@@ -62,7 +62,7 @@ namespace LinguaAlpaca::UI {
 
         for (const auto& item : guideItems) {
             wxStaticText* itemText = new wxStaticText(bannerPanel, wxID_ANY, item);
-            itemText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+            itemText->SetFont(ThemeFont::GetFont(FontRole::Control));
             itemText->SetForegroundColour(palette.textSecondary);
             bannerSizer->Add(itemText, 0, wxLEFT | wxRIGHT | wxBOTTOM, 6_dip);
         }
@@ -87,7 +87,7 @@ namespace LinguaAlpaca::UI {
 
         // 6. 底部 Footer 说明
         wxStaticText* footerText = new wxStaticText(this, wxID_ANY, L"全本地端侧离线运算 · 零云端数据交互 · 彻底保护隐私安全");
-        footerText->SetFont(wxFont(8, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+        footerText->SetFont(ThemeFont::GetFont(FontRole::Caption));
         footerText->SetForegroundColour(palette.textSecondary);
         mainSizer->Add(footerText, 0, wxALIGN_CENTER | wxBOTTOM, 14_dip);
 

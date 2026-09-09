@@ -244,8 +244,8 @@ namespace LinguaAlpaca::UI {
 		wxBitmapBundle logoBundle = IconManager::GetAppLogoBundle(wxSize(42, 42));
 		wxBitmap logoBmp = logoBundle.GetBitmap(logoSize);
 
-		wxFont titleFont(15, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei");
-		wxFont subTitleFont(11, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Segoe UI");
+		wxFont titleFont = ThemeFont::GetFont(FontRole::SectionTitle);
+		wxFont subTitleFont = ThemeFont::MakeFont(11, wxFONTWEIGHT_NORMAL);
 
 		wxString titleCn = L"译灵驼";
 		wxString titleEn = L"LinguaAlpaca";
@@ -290,7 +290,7 @@ namespace LinguaAlpaca::UI {
 		double statusY = headerY + logoSize.y + 15_dip;
 
 		// 百分比文字 (加粗高亮主色，靠右固定排版)
-		wxFont percentFont(9.5, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Segoe UI");
+		wxFont percentFont = ThemeFont::MakeFont(10, wxFONTWEIGHT_BOLD);
 		gc->SetFont(percentFont, palette.accentPrimary);
 
 		int progressPercent = (int)std::round(m_currentProgress);
@@ -300,7 +300,7 @@ namespace LinguaAlpaca::UI {
 		gc->DrawText(percentStr, size.x - marginX - pw, statusY);
 
 		// 状态文字 (自适应剩余可用宽度，超长时智能截断省略，绝对不与百分比重叠或溢出)
-		wxFont statusFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei");
+		wxFont statusFont = ThemeFont::GetFont(FontRole::Control);
 		gc->SetFont(statusFont, palette.textSecondary);
 
 		double maxStatusW = (size.x - marginX - pw - 12_dip) - marginX;
@@ -324,7 +324,7 @@ namespace LinguaAlpaca::UI {
 
 		// 轨道底槽
 		gc->SetBrush(gc->CreateBrush(wxBrush(palette.windowBg)));
-		gc->SetPen(gc->CreatePen(wxPen(palette.cardBorder, 0.8)));
+		gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(palette.cardBorder).Width(0.8)));
 		gc->DrawRoundedRectangle(marginX, barY, barW, barH, 2.5_dip);
 
 		// 进度条发光渐变填充
@@ -341,7 +341,7 @@ namespace LinguaAlpaca::UI {
 		}
 
 		// 5. 第四行：提炼合一的 Slogan 口号（居中排版）
-		wxFont sloganFont(8.5, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei");
+		wxFont sloganFont = ThemeFont::GetFont(FontRole::Caption);
 		gc->SetFont(sloganFont, palette.textSecondary);
 
 		wxString sloganText = L"凭本地之智，见世界之全 —— 端侧多模态全能离线翻译助手";
@@ -358,7 +358,7 @@ namespace LinguaAlpaca::UI {
 			L"多模态 OCR"
 		};
 
-		wxFont badgeFont(8, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei");
+		wxFont badgeFont = ThemeFont::GetFont(FontRole::Caption);
 		gc->SetFont(badgeFont, palette.accentPrimary);
 
 		double badgeH = 18_dip;
@@ -384,7 +384,7 @@ namespace LinguaAlpaca::UI {
 
 			// 胶囊背景与精细边框
 			gc->SetBrush(gc->CreateBrush(wxBrush(palette.windowBg)));
-			gc->SetPen(gc->CreatePen(wxPen(palette.cardBorder, 0.8)));
+			gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(palette.cardBorder).Width(0.8)));
 			gc->DrawRoundedRectangle(curBadgeX, curBadgeY, bw, badgeH, 4.0_dip);
 
 			// 文字居中绘制

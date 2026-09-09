@@ -37,8 +37,7 @@ void CustomInputBox::InitUI(const wxString &value, const wxString &hint,
   if (!hint.IsEmpty()) {
     m_textCtrl->SetHint(hint);
   }
-  m_textCtrl->SetFont(wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL,
-                             wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+  m_textCtrl->SetFont(ThemeFont::GetFont(FontRole::Body));
   m_textCtrl->SetBackgroundColour(palette.cardBg);
   m_textCtrl->SetForegroundColour(palette.textPrimary);
 

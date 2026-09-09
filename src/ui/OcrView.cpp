@@ -49,7 +49,7 @@ namespace LinguaAlpaca::UI {
 		wxStaticBitmap* titleIcon = new wxStaticBitmap(this, wxID_ANY, titleBundle);
 
 		m_titleText = new wxStaticText(this, wxID_ANY, L"图片 OCR 识别");
-		m_titleText->SetFont(wxFont(18, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
+		m_titleText->SetFont(ThemeFont::GetFont(FontRole::DisplayTitle));
 		m_titleText->SetForegroundColour(palette.textPrimary);
 
 		m_statusBadge = new StatusBadge(this);
@@ -73,7 +73,7 @@ namespace LinguaAlpaca::UI {
 
 		wxBoxSizer* leftControlSizer = new wxBoxSizer(wxHORIZONTAL);
 		m_typeLabel = new wxStaticText(m_leftControlPanel, wxID_ANY, L"识别类型");
-		m_typeLabel->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
+		m_typeLabel->SetFont(ThemeFont::GetFont(FontRole::Control, true));
 		m_typeLabel->SetForegroundColour(palette.textSecondary);
 
 		m_typeChoice = new CustomChoice(m_leftControlPanel, wxID_ANY, wxDefaultPosition, dip(180, 32));
@@ -103,11 +103,11 @@ namespace LinguaAlpaca::UI {
 		m_uploadIconBmp = new wxStaticBitmap(m_dropzonePanel, wxID_ANY, uploadBundle);
 
 		m_dropTextPrimary = new wxStaticText(m_dropzonePanel, wxID_ANY, L"点击上传 或 拖拽/粘贴图片至此");
-		m_dropTextPrimary->SetFont(wxFont(11, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
+		m_dropTextPrimary->SetFont(ThemeFont::GetFont(FontRole::CardTitle));
 		m_dropTextPrimary->SetForegroundColour(palette.textPrimary);
 
 		m_dropTextSecondary = new wxStaticText(m_dropzonePanel, wxID_ANY, L"支持 JPG, PNG, BMP, WebP 及剪贴板截图 (Ctrl+V)");
-		m_dropTextSecondary->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+		m_dropTextSecondary->SetFont(ThemeFont::GetFont(FontRole::Control));
 		m_dropTextSecondary->SetForegroundColour(palette.textSecondary);
 
 		dropSizer->AddStretchSpacer(1);
@@ -189,7 +189,7 @@ namespace LinguaAlpaca::UI {
 						wxBitmapBundle eyeBundle = IconManager::GetIconBundle(SVG::EYE, wxSize(14, 14), topText);
 						wxBitmap eyeBmp = eyeBundle.GetBitmap(topIconSz);
 
-						wxFont topFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei");
+						wxFont topFont = ThemeFont::GetFont(FontRole::Control, true);
 						gc->SetFont(topFont, topText);
 						double eyeTw = 0, eyeTh = 0;
 						gc->GetTextExtent(L"预览", &eyeTw, &eyeTh);
@@ -219,7 +219,7 @@ namespace LinguaAlpaca::UI {
 						wxBitmapBundle cloudBundle = IconManager::GetIconBundle(SVG::CLOUD_UPLOAD, wxSize(16, 16), *wxWHITE);
 						wxBitmap cloudBmp = cloudBundle.GetBitmap(centerIconSz);
 
-						wxFont centerFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei");
+						wxFont centerFont = ThemeFont::GetFont(FontRole::Control, true);
 						gc->SetFont(centerFont, *wxWHITE);
 						double cTw = 0, cTh = 0;
 						gc->GetTextExtent(L" 替换图片", &cTw, &cTh);

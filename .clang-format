@@ -1,0 +1,58 @@
+---
+Language: Cpp
+BasedOnStyle: LLVM
+Standard: c++17
+
+# 基础缩进与宽度
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ColumnLimit: 200
+
+# 指针与引用靠左：Type* var, Type& ref
+PointerAlignment: Left
+ReferenceAlignment: Left
+
+# 大括号风格：紧随声明（Attach），单行短函数仅限内联
+BreakBeforeBraces: Attach
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortLambdasOnASingleLine: All
+AllowShortBlocksOnASingleLine: Never
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+
+# 类成员与访问修饰符 (public/private 顶格)
+AccessModifierOffset: -4
+NamespaceIndentation: None
+FixNamespaceComments: true
+
+# 构造函数初始化列表换行风格
+ConstructorInitializerIndentWidth: 4
+BreakConstructorInitializers: BeforeComma
+
+# 空格控制
+SpaceBeforeParens: ControlStatements
+SpaceBeforeAssignmentOperators: true
+SpaceAfterCStyleCast: false
+SpaceBeforeCpp11BracedList: false
+SpacesInAngles: false
+SpacesInContainerLiterals: false
+SpacesInParentheses: false
+SpacesInSquareBrackets: false
+
+# 对齐控制
+AlignAfterOpenBracket: Align
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
+AlignOperands: Align
+AlignTrailingComments: true
+
+# 头文件排序：保持现有顺序与注释分组，避免破坏 Windows/Mac 平台条件宏
+SortIncludes: Never
+IncludeBlocks: Preserve
+
+# Objective-C++ 语法兼容
+ObjCBlockIndentWidth: 4
+ObjCSpaceAfterProperty: true
+ObjCSpaceBeforeProtocolList: true
+...

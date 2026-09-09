@@ -14,7 +14,7 @@
   <img src="https://img.shields.io/badge/C%2B%2B-17-00599C?style=flat-square&logo=c%2B%2B" alt="C++17" />
   <img src="https://img.shields.io/badge/wxWidgets-3.3+-007ACC?style=flat-square" alt="wxWidgets" />
   <img src="https://img.shields.io/badge/llama.cpp-Embedded-7B1FA2?style=flat-square" alt="llama.cpp" />
-  <img src="https://img.shields.io/badge/Platform-Windows-0078D6?style=flat-square&logo=windows" alt="Platform" />
+  <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS-0078D6?style=flat-square" alt="Platform" />
   <img src="https://img.shields.io/badge/License-MIT-2E7D32?style=flat-square" alt="License" />
 </p>
 
@@ -132,14 +132,7 @@ src/
 
 ## 🛠 快速开始与构建 (Quick Start)
 
-### 1. 环境准备
-
-- **操作系统**：Windows 10 / 11 (x64)
-- **编译器**：Visual Studio 2022 (MSVC v143) 或更高版本，支持 C++17
-- **构建工具**：CMake 3.20+
-- **Vulkan SDK** _(可选，用于 GPU 加速推理)_
-
-### 2. 初始化 Git 子模块
+### 1. 初始化 Git 子模块
 
 拉取项目及所有嵌套依赖（包含 `wxWidgets`、`llama.cpp` 及其第三方依赖库）：
 
@@ -147,15 +140,23 @@ src/
 git submodule update --init --recursive --force
 ```
 
-### 3. CMake 配置与工程生成
+---
 
+### 🪟 Windows 构建与运行指南
+
+#### 1. 环境准备
+- **操作系统**：Windows 10 / 11 (x64)
+- **编译器**：Visual Studio 2022 (MSVC v143) 或更高版本，支持 C++17
+- **构建工具**：CMake 3.20+
+- **GPU 加速**：Vulkan SDK _(可选，用于 Windows 下 Vulkan GPU 加速推理)_
+
+#### 2. CMake 配置与工程生成
 ```powershell
-# 生成 Visual Studio 2022 x64 工程
+# 生成 Visual Studio 2022 x64 解决方案
 cmake -S . -B build -G "Visual Studio 17 2022" -A x64
 ```
 
-### 4. 编译与运行主程序
-
+#### 3. 编译与运行主程序
 ```powershell
 # 编译主程序 (推荐 Release 配置以获得最佳端侧大模型推理性能)
 cmake --build build --config Release --target LinguaAlpaca
@@ -163,17 +164,55 @@ cmake --build build --config Release --target LinguaAlpaca
 # 运行主程序
 .\build\bin\Release\LinguaAlpaca.exe
 ```
-
 > **提示**：若进行代码调试，可切换为 `--config Debug` 编译运行。
 
-### 5. 运行自动化单元测试
-
+#### 4. 运行自动化单元测试
 项目集成了 Catch2 单元测试套件，全面覆盖核心配置、语言转换、词典加载与索引、划词提取与几何坐标计算等关键业务逻辑：
-
 ```powershell
 # 编译并运行单元测试
 cmake --build build --config Release --target unit_tests
 .\build\bin\Release\unit_tests.exe
+```
+
+---
+
+### 🍎 macOS 构建与运行指南
+
+#### 1. 环境准备
+- **操作系统**：macOS 12.0+ (Monterey / Ventura / Sonoma / Sequoia)，原生支持 Apple Silicon (M 系列芯片) 及 Intel x86_64
+- **编译器**：Apple Clang / Xcode Command Line Tools (`xcode-select --install`)，支持 C++17
+- **构建工具**：CMake 3.20+ (`brew install cmake`)，推荐搭配 Ninja (`brew install ninja`) 提升并行构建速度
+- **GPU 加速**：Metal _(系统原生集成，`llama.cpp` 原生 Metal 后端开箱即用，无需额外安装 SDK)_
+
+#### 2. CMake 配置与工程生成
+```bash
+# 推荐方式：使用 Ninja (构建速度极快)
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+# 或使用标准 Unix Makefiles
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+# 或生成 Xcode 解决方案工程
+cmake -S . -B build -G Xcode
+```
+
+#### 3. 编译与运行主程序
+```bash
+# 编译主程序 (推荐 Release 配置以获得最佳端侧推理性能，利用多核并行加速)
+cmake --build build --config Release --target LinguaAlpaca -j$(sysctl -n hw.ncpu)
+
+# 运行主程序
+./build/bin/LinguaAlpaca
+# （若使用 Xcode 生成器，产物位于 ./build/bin/Release/LinguaAlpaca）
+```
+> **提示**：若进行代码调试，可切换为 `-DCMAKE_BUILD_TYPE=Debug` (Ninja/Makefiles) 或 `--config Debug` (Xcode) 编译运行。
+
+#### 4. 运行自动化单元测试
+项目集成了 Catch2 单元测试套件，全面覆盖核心配置、语言转换、词典加载与索引、划词提取与几何坐标计算等关键业务逻辑：
+```bash
+# 编译并运行单元测试
+cmake --build build --config Release --target unit_tests -j$(sysctl -n hw.ncpu)
+./build/bin/unit_tests
 ```
 
 ---

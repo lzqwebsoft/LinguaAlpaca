@@ -79,7 +79,7 @@ void SidebarNav::OnPaint(wxPaintEvent& WXUNUSED(event)) {
         }
 
         // Label
-        wxFont labelFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, isSelected ? wxFONTWEIGHT_BOLD : wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei");
+        wxFont labelFont = ThemeFont::GetFont(FontRole::Control, isSelected);
         gc->SetFont(labelFont, iconTextColour);
         double lw, lh;
         gc->GetTextExtent(item.label, &lw, &lh);

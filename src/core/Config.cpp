@@ -158,7 +158,7 @@ namespace LinguaAlpaca {
         m_config.themeMode = fileConfig.Read("/UI/Theme", "Light").ToUTF8().data();
         m_config.autoRead = fileConfig.ReadBool("/UI/AutoRead", false);
         m_config.selectionAutoTranslate = fileConfig.ReadBool("/UI/SelectionAutoTranslate", true);
-        m_config.bubbleFontSize = fileConfig.ReadLong("/UI/BubbleFontSize", 10);
+        m_config.bubbleFontSize = fileConfig.ReadLong("/UI/BubbleFontSize", m_config.bubbleFontSize);
         if (m_config.bubbleFontSize < 8) m_config.bubbleFontSize = 8;
         if (m_config.bubbleFontSize > 24) m_config.bubbleFontSize = 24;
         m_config.sourceLang = fileConfig.Read("/Language/SourceLang", "auto").ToUTF8().data();

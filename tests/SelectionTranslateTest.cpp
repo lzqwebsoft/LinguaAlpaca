@@ -100,4 +100,69 @@ TEST_CASE("WinTtsHelper - Basic TTS controls", "[core][tts]") {
     }
 }
 
+#include "core/SelectionService.hpp"
 
+TEST_CASE("SelectionService - Lifecycle and Config Management", "[core][selection_service]") {
+    auto configManager = std::make_shared<ConfigManager>();
+    SelectionService service(configManager);
+
+    SECTION("Initial state is not running") {
+        REQUIRE(service.IsRunning() == false);
+    }
+
+    SECTION("Start and Stop lifecycle") {
+        bool started = service.Start();
+        REQUIRE(started == true);
+        REQUIRE(service.IsRunning() == true);
+
+        // Re-starting when already running returns true
+        REQUIRE(service.Start() == true);
+
+        service.Stop();
+        REQUIRE(service.IsRunning() == false);
+    }
+
+    SECTION("Callback registration and config update") {
+        bool callbackInvoked = false;
+        service.SetCallback([&](int, int, const std::string&) {
+            callbackInvoked = true;
+        });
+
+        AppConfig cfg = configManager->GetConfig();
+        cfg.selectionTranslateEnabled = false;
+        cfg.selectionTriggerMode = 2;
+        service.ApplyConfig(cfg);
+
+        // Service stopped clean
+        service.Stop();
+        REQUIRE(service.IsRunning() == false);
+    }
+}
+
+TEST_CASE("WinTtsHelper - Text to Speech Functionality", "[core][tts]") {
+    WinTtsHelper& tts = WinTtsHelper::GetInstance();
+
+    SECTION("Empty text handling") {
+        REQUIRE(tts.Speak("", LanguageCode::AutoDetect) == false);
+        REQUIRE(tts.Speak(std::wstring(L""), LanguageCode::AutoDetect) == false);
+    }
+
+    SECTION("Rate and volume adjustments") {
+        tts.SetRate(5);
+        tts.SetVolume(80);
+        tts.SetRate(-5);
+        tts.SetVolume(100);
+    }
+
+    SECTION("Speak and Stop lifecycle") {
+        bool ok = tts.Speak("LinguaAlpaca TTS Test", LanguageCode::English);
+        REQUIRE(ok == true);
+        tts.Stop();
+        REQUIRE(tts.IsSpeaking() == false);
+
+        bool okZh = tts.Speak(L"灵驼翻译朗读测试", LanguageCode::Chinese);
+        REQUIRE(okZh == true);
+        tts.Stop();
+        REQUIRE(tts.IsSpeaking() == false);
+    }
+}

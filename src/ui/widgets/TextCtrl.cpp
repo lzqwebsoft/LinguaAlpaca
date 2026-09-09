@@ -222,7 +222,24 @@ void TextCtrl::CleanupNativeScrollHandling() {
 }
 
 void TextCtrl::SanitizeNativeTextAttributes(bool stripStorageBg) {
-#ifdef __APPLE__
+#ifdef _WIN32
+    if (m_textCtrl) {
+        HWND hwnd = (HWND)m_textCtrl->GetHWND();
+        if (hwnd) {
+            CHARFORMAT2W cf;
+            ZeroMemory(&cf, sizeof(cf));
+            cf.cbSize = sizeof(cf);
+            cf.dwMask = CFM_BACKCOLOR;
+            cf.dwEffects = CFE_AUTOBACKCOLOR;
+            cf.crBackColor = 0;
+            if (stripStorageBg || !m_isMarkdownMode) {
+                ::SendMessageW(hwnd, EM_SETCHARFORMAT, SCF_ALL, (LPARAM)&cf);
+            }
+            ::SendMessageW(hwnd, EM_SETCHARFORMAT, SCF_DEFAULT, (LPARAM)&cf);
+            ::SendMessageW(hwnd, EM_SETCHARFORMAT, SCF_SELECTION, (LPARAM)&cf);
+        }
+    }
+#elif defined(__APPLE__)
     if (!m_textCtrl)
         return;
 

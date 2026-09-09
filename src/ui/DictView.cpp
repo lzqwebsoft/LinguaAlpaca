@@ -465,6 +465,7 @@ void DictView::RenderRichDictionaryResults(const std::vector<DictSearchResult>& 
 
     inner->Freeze();
     inner->Clear();
+    m_definitionCtrl->SanitizeNativeTextAttributes();
 
     auto palette = ThemeColors::GetCurrentPalette();
 
@@ -478,15 +479,15 @@ void DictView::RenderRichDictionaryResults(const std::vector<DictSearchResult>& 
     wxFont tagFont = ThemeFont::MakeFont(10, wxFONTWEIGHT_BOLD);
     wxFont dividerFont = ThemeFont::GetFont(FontRole::Caption);
 
-    // 样式属性定义：针对各类语义元素应用专属的前景色、胶囊徽章背景与字重
-    // 1. 普通释义正文 (背景色置为 wxNullColour 保持透明底色)
+    // 样式属性定义：针对各类语义元素应用专属的前景色与字重 (无背景色，保持干净通透的纯文本底色)
+    // 1. 普通释义正文
     wxTextAttr defaultAttr(palette.textPrimary, wxNullColour, defaultFont);
 
-    // 2. 词典来源标头 (轻量横幅徽章样式)
-    wxTextAttr dictHeaderAttr(palette.bannerText, palette.bannerBg, dictHeaderFont);
+    // 2. 词典来源标头 (主强调色大字加粗)
+    wxTextAttr dictHeaderAttr(palette.accentPrimary, wxNullColour, dictHeaderFont);
 
-    // 3. 词性徽章 (微蓝/高亮药丸徽章，与正文形成清晰对比)
-    wxTextAttr posAttr(palette.bannerText, palette.bannerBg, posFont);
+    // 3. 词性 (高亮色加粗)
+    wxTextAttr posAttr(palette.accentHover, wxNullColour, posFont);
 
     // 4. 编号列表项 (强调色加粗)
     wxTextAttr numAttr(palette.accentPrimary, wxNullColour, numFont);
@@ -497,8 +498,8 @@ void DictView::RenderRichDictionaryResults(const std::vector<DictSearchResult>& 
     // 6. 例句与双语注释 (次级文字色)
     wxTextAttr exampleAttr(palette.textSecondary, wxNullColour, exampleFont);
 
-    // 7. 版块标签 (如【例】【用法】【短语】，微绿药丸徽章)
-    wxTextAttr tagAttr(palette.badgeText, palette.badgeBg, tagFont);
+    // 7. 版块标签 (如【例】【用法】【短语】)
+    wxTextAttr tagAttr(palette.accentPrimary, wxNullColour, tagFont);
 
     // 8. 词典间高雅分割线
     wxTextAttr dividerAttr(palette.cardBorderActive, wxNullColour, dividerFont);

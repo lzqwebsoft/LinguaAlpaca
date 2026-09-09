@@ -1075,12 +1075,12 @@ std::vector<DictTextSegment> DictFormatter::BuildRichTextSegments(const std::vec
         }
 
         // 1. 词典名称标头
-        segments.push_back({ DictTextStyle::DictHeader, " 📖 " + r.dictName + " " });
+        segments.push_back({ DictTextStyle::DictHeader, "📖 " + r.dictName });
         segments.push_back({ DictTextStyle::Default, "\n" });
 
         // 2. 音标
         if (!r.phonetic.empty()) {
-            segments.push_back({ DictTextStyle::Phonetic, "   🗣 " + r.phonetic + "\n" });
+            segments.push_back({ DictTextStyle::Phonetic, "🗣 " + r.phonetic + "\n" });
         }
 
         // 3. 高性能逐行分段
@@ -1106,14 +1106,14 @@ std::vector<DictTextSegment> DictFormatter::BuildRichTextSegments(const std::vec
                     continue;
                 }
                 if (StartsWith(line, posTag)) {
-                    segments.push_back({ DictTextStyle::PartOfSpeech, " " + std::string(posTag) + " " });
+                    segments.push_back({ DictTextStyle::PartOfSpeech, std::string(posTag) + " " });
                     std::string_view rest = Trim(line.substr(posTag.size()));
 
                     if (!rest.empty() && rest.front() == '[') {
                         size_t closeBracket = rest.find(']');
                         if (closeBracket != std::string_view::npos && closeBracket <= 30) {
                             std::string subTag(rest.substr(0, closeBracket + 1));
-                            segments.push_back({ DictTextStyle::Tag, " " + subTag + " " });
+                            segments.push_back({ DictTextStyle::Tag, subTag + " " });
                             std::string_view afterTag = Trim(rest.substr(closeBracket + 1));
                             segments.push_back({ DictTextStyle::Default, std::string(afterTag) + "\n" });
                             matchedPos = true;
@@ -1132,7 +1132,7 @@ std::vector<DictTextSegment> DictFormatter::BuildRichTextSegments(const std::vec
             if (StartsWith(line, "<<")) {
                 size_t closePos = line.find(">>", 2);
                 if (closePos != std::string_view::npos && closePos <= 30) {
-                    segments.push_back({ DictTextStyle::PartOfSpeech, " " + std::string(line.substr(0, closePos + 2)) + " " });
+                    segments.push_back({ DictTextStyle::PartOfSpeech, std::string(line.substr(0, closePos + 2)) + " " });
                     std::string_view rest = Trim(line.substr(closePos + 2));
                     segments.push_back({ DictTextStyle::Default, std::string(rest) + "\n" });
                     continue;
@@ -1141,7 +1141,7 @@ std::vector<DictTextSegment> DictFormatter::BuildRichTextSegments(const std::vec
             if (StartsWith(line, "《")) {
                 size_t closePos = line.find("》", 3);
                 if (closePos != std::string_view::npos && closePos <= 80) {
-                    segments.push_back({ DictTextStyle::Tag, " " + std::string(line.substr(0, closePos + 3)) + " " });
+                    segments.push_back({ DictTextStyle::Tag, std::string(line.substr(0, closePos + 3)) + " " });
                     std::string_view rest = Trim(line.substr(closePos + 3));
                     segments.push_back({ DictTextStyle::Default, std::string(rest) + "\n" });
                     continue;
@@ -1152,7 +1152,7 @@ std::vector<DictTextSegment> DictFormatter::BuildRichTextSegments(const std::vec
             if (line.front() == '[') {
                 size_t closeBracket = line.find(']');
                 if (closeBracket != std::string_view::npos && closeBracket <= 30) {
-                    segments.push_back({ DictTextStyle::Tag, " " + std::string(line.substr(0, closeBracket + 1)) + " " });
+                    segments.push_back({ DictTextStyle::Tag, std::string(line.substr(0, closeBracket + 1)) + " " });
                     std::string_view rest = Trim(line.substr(closeBracket + 1));
                     segments.push_back({ DictTextStyle::Default, std::string(rest) + "\n" });
                     continue;
@@ -1163,7 +1163,7 @@ std::vector<DictTextSegment> DictFormatter::BuildRichTextSegments(const std::vec
                 if (closePos != std::string_view::npos && closePos <= 30) {
                     std::string_view tag = line.substr(0, closePos + 3);
                     std::string_view rest = Trim(line.substr(closePos + 3));
-                    segments.push_back({ DictTextStyle::Tag, " " + std::string(tag) + " " });
+                    segments.push_back({ DictTextStyle::Tag, std::string(tag) + " " });
                     if (tag.find("例") != std::string_view::npos || tag.find("短语") != std::string_view::npos ||
                         tag.find("句") != std::string_view::npos) {
                         segments.push_back({ DictTextStyle::Example, std::string(rest) + "\n" });
@@ -1222,7 +1222,7 @@ std::vector<DictTextSegment> DictFormatter::BuildRichTextSegments(const std::vec
                         numPart += ".";
                     }
 
-                    segments.push_back({ DictTextStyle::NumberedItem, " " + numPart + " " });
+                    segments.push_back({ DictTextStyle::NumberedItem, numPart + " " });
 
                     // 进一步检查行内字母子义项 (如 "1. a. 善...")
                     std::string_view trimmedText = Trim(textPart);
@@ -1230,7 +1230,7 @@ std::vector<DictTextSegment> DictFormatter::BuildRichTextSegments(const std::vec
                         trimmedText[1] == '.') {
                         std::string subLetterPart(trimmedText.substr(0, 2));
                         std::string_view restPart = Trim(trimmedText.substr(2));
-                        segments.push_back({ DictTextStyle::NumberedItem, " " + subLetterPart + " " });
+                        segments.push_back({ DictTextStyle::NumberedItem, subLetterPart + " " });
                         segments.push_back({ DictTextStyle::Default, std::string(restPart) + "\n" });
                     } else {
                         segments.push_back({ DictTextStyle::Default, std::string(textPart) + "\n" });

@@ -120,6 +120,8 @@ set(UI_SOURCES
     src/ui/theme/AppIcons.hpp
     src/ui/theme/IconManager.hpp
     src/ui/theme/IconManager.cpp
+    src/ui/theme/PlatformThemeHelper.hpp
+    src/ui/theme/PlatformThemeHelper.cpp
     src/ui/widgets/CustomButton.hpp
     src/ui/widgets/CustomButton.cpp
     src/ui/widgets/CustomChoice.hpp
@@ -177,10 +179,15 @@ set(UI_SOURCES
 set(APP_RESOURCES "")
 if(WIN32)
     set(APP_RESOURCES resources/app.rc)
+elseif(APPLE)
+    set(APP_RESOURCES resources/app_icon.icns)
+    set_source_files_properties(resources/app_icon.icns PROPERTIES
+        MACOSX_PACKAGE_LOCATION "Resources"
+    )
 endif()
 
-# 创建主可执行程序 (Windows GUI)
-add_executable(${PROJECT_NAME} WIN32
+# 创建主可执行程序 (Windows GUI / macOS App Bundle)
+add_executable(${PROJECT_NAME} WIN32 MACOSX_BUNDLE
     src/main.cpp
     ${CORE_SOURCES}
     ${ENGINE_SOURCES}
@@ -228,6 +235,14 @@ if(WIN32)
             -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_runtime_deps.cmake"
     )
 elseif(APPLE)
+    set_target_properties(${PROJECT_NAME} PROPERTIES
+        MACOSX_BUNDLE TRUE
+        MACOSX_BUNDLE_BUNDLE_NAME "LinguaAlpaca"
+        MACOSX_BUNDLE_BUNDLE_VERSION "1.0.2"
+        MACOSX_BUNDLE_SHORT_VERSION_STRING "1.0.2"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "com.zqluo.linguaalpaca"
+        MACOSX_BUNDLE_ICON_FILE "app_icon.icns"
+    )
     set_source_files_properties(
         src/core/SelectionService.cpp
         src/core/ClipboardHelper.cpp
@@ -235,6 +250,9 @@ elseif(APPLE)
         src/ui/widgets/FloatingIconFrame.cpp
         src/ui/widgets/TranslationBubbleFrame.cpp
         src/ui/widgets/TextCtrl.cpp
+        src/ui/theme/IconManager.cpp
+        src/ui/theme/PlatformThemeHelper.cpp
+        src/ui/widgets/CustomInputBox.cpp
         PROPERTIES COMPILE_FLAGS "-x objective-c++"
     )
     set_source_files_properties(
@@ -249,12 +267,36 @@ elseif(APPLE)
     )
 endif()
 
-# 复制 resources 资源目录
-add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${CMAKE_CURRENT_SOURCE_DIR}/resources"
-        "$<TARGET_FILE_DIR:${PROJECT_NAME}>/resources"
-)
+# 复制 resources 资源目录与 macOS App Bundle 整合
+if(APPLE)
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_CURRENT_SOURCE_DIR}/resources"
+            "$<TARGET_FILE_DIR:${PROJECT_NAME}>/../Resources/resources"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_CURRENT_SOURCE_DIR}/resources/app_icon.icns"
+            "$<TARGET_FILE_DIR:${PROJECT_NAME}>/../Resources/app_icon.icns"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_CURRENT_SOURCE_DIR}/resources"
+            "$<TARGET_FILE_DIR:${PROJECT_NAME}>/../../../resources"
+        COMMAND ${CMAKE_COMMAND} -E rm -f
+            "$<TARGET_FILE_DIR:${PROJECT_NAME}>/../../../LinguaAlpaca"
+        COMMAND ${CMAKE_COMMAND} -E create_symlink
+            "LinguaAlpaca.app/Contents/MacOS/LinguaAlpaca"
+            "$<TARGET_FILE_DIR:${PROJECT_NAME}>/../../../LinguaAlpaca"
+        COMMAND ${CMAKE_COMMAND} -E rm -f
+            "$<TARGET_FILE_DIR:${PROJECT_NAME}>/llama-server"
+        COMMAND ${CMAKE_COMMAND} -E create_symlink
+            "$<TARGET_FILE_DIR:llama-server>/llama-server"
+            "$<TARGET_FILE_DIR:${PROJECT_NAME}>/llama-server"
+    )
+else()
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_CURRENT_SOURCE_DIR}/resources"
+            "$<TARGET_FILE_DIR:${PROJECT_NAME}>/resources"
+    )
+endif()
 
 # 单元测试模块
 enable_testing()

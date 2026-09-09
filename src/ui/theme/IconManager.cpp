@@ -6,6 +6,10 @@
 #include <wx/stdpaths.h>
 #include <wx/filename.h>
 
+#ifdef __APPLE__
+#import <Cocoa/Cocoa.h>
+#endif
+
 namespace LinguaAlpaca::UI {
 
 struct IconCacheKey {
@@ -31,6 +35,19 @@ struct IconCacheKeyHash {
 static std::unordered_map<IconCacheKey, wxBitmapBundle, IconCacheKeyHash> s_bundleCache;
 
 static wxString ResolveResourcePath(const wxString& relativePath) {
+    // 0. 尝试 wxStandardPaths Resources 目录 (适用于 macOS App Bundle: Contents/Resources)
+    wxString resDir = wxStandardPaths::Get().GetResourcesDir();
+    if (!resDir.IsEmpty()) {
+        wxString candidateRes1 = resDir + wxFileName::GetPathSeparator() + relativePath;
+        if (wxFileExists(candidateRes1)) return candidateRes1;
+
+        if (relativePath.StartsWith("resources/") || relativePath.StartsWith("resources\\")) {
+            wxString stripped = relativePath.Mid(10);
+            wxString candidateRes2 = resDir + wxFileName::GetPathSeparator() + stripped;
+            if (wxFileExists(candidateRes2)) return candidateRes2;
+        }
+    }
+
     // 1. 尝试可执行文件所在目录
     wxFileName exeDir(wxStandardPaths::Get().GetExecutablePath());
     wxString dir = exeDir.GetPath();
@@ -113,7 +130,7 @@ wxImage IconManager::GetAppLogoImage() {
     }
 #endif
 
-    // 回退机制：从文件路径解析加载 logo.png
+    // 从文件路径解析加载 logo.png
     wxString logoPath = ResolveResourcePath("resources/logo.png");
     if (!logoPath.IsEmpty() && wxFileExists(logoPath)) {
         wxImage img;
@@ -144,7 +161,7 @@ wxImage IconManager::GetAppWindowIconImage() {
     }
 #endif
 
-    // 回退机制：从文件路径解析加载 app_icon.png
+    // 从文件路径解析加载 app_icon.png
     wxString logoPath = ResolveResourcePath("resources/app_icon.png");
     if (!logoPath.IsEmpty() && wxFileExists(logoPath)) {
         wxImage img;
@@ -174,6 +191,48 @@ wxBitmapBundle IconManager::GetAppLogoBundle(const wxSize& targetSize) {
     return wxBitmapBundle::FromBitmaps(bitmaps);
 }
 
+wxBitmapBundle IconManager::GetAppStatusBarBundle() {
+    // 优先使用清晰度与对比度更高的应用专用图标 app_icon.png
+    wxImage srcImg = GetAppWindowIconImage();
+    if (!srcImg.IsOk()) {
+        srcImg = GetAppLogoImage();
+    }
+    if (!srcImg.IsOk()) {
+        return wxBitmapBundle();
+    }
+
+    // 针对 macOS 状态栏 (22~24pt) 与各平台系统托盘，构建带安全内边距的高清多尺寸集合
+    // 逻辑基准尺寸：22x22 点 (上下各 2pt 呼吸安全留白，核心图标 18x18 点)
+    struct SizeSpec {
+        int canvasSize;
+        int iconSize;
+    };
+    const SizeSpec specs[] = {
+        { 22, 18 },  // 1.0x 标准屏基准 (22pt 状态栏，18pt 居中图标)
+        { 24, 20 },  // 1.0x Notch 屏基准 (24pt 状态栏，20pt 居中图标)
+        { 28, 22 },  // 1.25x 缩放
+        { 33, 27 },  // 1.5x 缩放
+        { 44, 36 },  // 2.0x Retina 屏 (44px 物理像素，36px 居中图标)
+        { 48, 40 },  // 2.0x Retina Notch 屏 (48px 物理像素，40px 居中图标)
+        { 66, 54 },  // 3.0x 超视网膜屏 (66px 物理像素，54px 居中图标)
+        { 88, 72 },  // 4.0x 超高分屏 (88px 物理像素，72px 居中图标)
+    };
+
+    wxVector<wxBitmap> bitmaps;
+    for (const auto& sp : specs) {
+        wxImage scaled = srcImg.Scale(sp.iconSize, sp.iconSize, wxIMAGE_QUALITY_HIGH);
+        wxImage canvas(sp.canvasSize, sp.canvasSize);
+        canvas.InitAlpha();
+        memset(canvas.GetAlpha(), 0, sp.canvasSize * sp.canvasSize);
+        memset(canvas.GetData(), 0, sp.canvasSize * sp.canvasSize * 3);
+        int offset = (sp.canvasSize - sp.iconSize) / 2;
+        canvas.Paste(scaled, offset, offset, wxIMAGE_ALPHA_BLEND_OVER);
+        bitmaps.push_back(wxBitmap(canvas));
+    }
+
+    return wxBitmapBundle::FromBitmaps(bitmaps);
+}
+
 wxIcon IconManager::GetAppIcon(const wxSize& targetSize) {
 #ifdef _WIN32
     HICON hIcon = (HICON)::LoadImageW(
@@ -192,6 +251,19 @@ wxIcon IconManager::GetAppIcon(const wxSize& targetSize) {
         ::DestroyIcon(hIcon);
     }
 #endif
+
+    // 尝试从 resources/app_icon.ico 解析多分辨率图标
+    wxString icoPath = ResolveResourcePath("resources/app_icon.ico");
+    if (icoPath.IsEmpty()) icoPath = ResolveResourcePath("app_icon.ico");
+    if (!icoPath.IsEmpty() && wxFileExists(icoPath)) {
+        wxIconBundle bundle(icoPath, wxBITMAP_TYPE_ICO);
+        if (bundle.IsOk()) {
+            wxIcon icon = bundle.GetIcon(targetSize);
+            if (icon.IsOk()) {
+                return icon;
+            }
+        }
+    }
 
     wxImage img = GetAppWindowIconImage();
     if (!img.IsOk()) {
@@ -233,6 +305,16 @@ wxIconBundle IconManager::GetAppIconBundle() {
     }
 #endif
 
+    // 尝试从 resources/app_icon.ico 加载全部规格图标
+    wxString icoPath = ResolveResourcePath("resources/app_icon.ico");
+    if (icoPath.IsEmpty()) icoPath = ResolveResourcePath("app_icon.ico");
+    if (!icoPath.IsEmpty() && wxFileExists(icoPath)) {
+        bundle.AddIcon(icoPath, wxBITMAP_TYPE_ICO);
+        if (bundle.IsOk() && bundle.GetIcon(wxSize(32, 32)).IsOk()) {
+            return bundle;
+        }
+    }
+
     wxImage img = GetAppWindowIconImage();
     if (!img.IsOk()) {
         img = GetAppLogoImage();
@@ -247,6 +329,88 @@ wxIconBundle IconManager::GetAppIconBundle() {
         }
     }
     return bundle;
+}
+
+#ifdef __APPLE__
+static void SetupMacDockIcon() {
+    @autoreleasepool {
+        NSImage* appIconImage = nil;
+
+        // 1. 优先从 resources/app_icon.icns 加载原生多分辨率矢量与位图图标
+        wxString icnsPath = ResolveResourcePath("resources/app_icon.icns");
+        if (icnsPath.IsEmpty()) {
+            icnsPath = ResolveResourcePath("app_icon.icns");
+        }
+        if (!icnsPath.IsEmpty() && wxFileExists(icnsPath)) {
+            NSString* nsPath = [NSString stringWithUTF8String:icnsPath.ToUTF8().data()];
+            appIconImage = [[NSImage alloc] initWithContentsOfFile:nsPath];
+        }
+
+        // 2. 次选从 resources/app_icon.png 或 resources/logo.png 加载
+        if (!appIconImage) {
+            wxString pngPath = ResolveResourcePath("resources/app_icon.png");
+            if (pngPath.IsEmpty()) {
+                pngPath = ResolveResourcePath("app_icon.png");
+            }
+            if (!pngPath.IsEmpty() && wxFileExists(pngPath)) {
+                NSString* nsPath = [NSString stringWithUTF8String:pngPath.ToUTF8().data()];
+                appIconImage = [[NSImage alloc] initWithContentsOfFile:nsPath];
+            }
+        }
+
+        // 3. 回退机制：从 wxImage / wxBitmap 导出 NSImage
+        if (!appIconImage) {
+            wxImage img = IconManager::GetAppWindowIconImage();
+            if (!img.IsOk()) {
+                img = IconManager::GetAppLogoImage();
+            }
+            if (img.IsOk()) {
+                wxBitmap bmp(img);
+                if (bmp.IsOk()) {
+                    appIconImage = (NSImage*)bmp.GetNSImage();
+                    if (appIconImage) {
+#if !__has_feature(objc_arc)
+                        [appIconImage retain];
+#endif
+                    }
+                }
+            }
+        }
+
+        // 4. 将图标注入 macOS Cocoa 运行态中枢并立即刷新 Dock 坞标识
+        if (appIconImage) {
+            NSApplication* app = [NSApplication sharedApplication];
+            if ([app activationPolicy] != NSApplicationActivationPolicyRegular) {
+                [app setActivationPolicy:NSApplicationActivationPolicyRegular];
+            }
+            [app setApplicationIconImage:appIconImage];
+            [[app dockTile] display];
+
+            // 5. 将自定义图标固化到可执行文件与 Bundle 磁盘本体 (通过 NSWorkspace 文件元数据扩展属性)，
+            // 确保用户在 macOS 程序坞中勾选「在程序坞中保留」并退出程序后，程序坞依然常驻显示精美图标
+            wxString exePath = wxStandardPaths::Get().GetExecutablePath();
+            if (!exePath.IsEmpty() && wxFileExists(exePath)) {
+                NSString* nsExePath = [NSString stringWithUTF8String:exePath.ToUTF8().data()];
+                [[NSWorkspace sharedWorkspace] setIcon:appIconImage forFile:nsExePath options:0];
+
+                if ([nsExePath containsString:@".app/Contents/MacOS"]) {
+                    NSString* appBundlePath = [nsExePath componentsSeparatedByString:@"/Contents/MacOS"][0];
+                    [[NSWorkspace sharedWorkspace] setIcon:appIconImage forFile:appBundlePath options:0];
+                }
+            }
+
+#if !__has_feature(objc_arc)
+            [appIconImage release];
+#endif
+        }
+    }
+}
+#endif
+
+void IconManager::SetupApplicationIcon() {
+#ifdef __APPLE__
+    SetupMacDockIcon();
+#endif
 }
 
 } // namespace LinguaAlpaca::UI

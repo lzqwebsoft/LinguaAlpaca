@@ -11,9 +11,14 @@ namespace LinguaAlpaca::UI {
 
 AppTaskBarIcon::AppTaskBarIcon(MainFrame* mainFrame)
     : m_mainFrame(mainFrame) {
-    wxIcon icon = IconManager::GetAppIcon(wxSize(16, 16));
-    if (icon.IsOk()) {
-        SetIcon(icon, L"译灵驼 · LinguaAlpaca");
+    wxBitmapBundle bundle = IconManager::GetAppStatusBarBundle();
+    if (bundle.IsOk()) {
+        SetIcon(bundle, L"译灵驼 · LinguaAlpaca");
+    } else {
+        wxIcon icon = IconManager::GetAppIcon(wxSize(32, 32));
+        if (icon.IsOk()) {
+            SetIcon(icon, L"译灵驼 · LinguaAlpaca");
+        }
     }
 
     Bind(wxEVT_TASKBAR_LEFT_UP, &AppTaskBarIcon::OnLeftClick, this);

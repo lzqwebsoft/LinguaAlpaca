@@ -1,6 +1,5 @@
 #include <wx/wx.h>
 #include <memory>
-#include <iostream>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -13,6 +12,7 @@
 #include "ui/widgets/SplashScreen.hpp"
 #include "ui/widgets/FloatingIconFrame.hpp"
 #include "ui/widgets/TranslationBubbleFrame.hpp"
+#include "ui/theme/IconManager.hpp"
 #include "ui/MainFrame.hpp"
 
 using namespace LinguaAlpaca;
@@ -32,7 +32,7 @@ public:
     bool OnInit() override {
 #ifdef _WIN32
         // 启用 Windows 原生 Per-Monitor V2 DPI 感知，确保划词全局坐标与多显示器高分屏绝对一致
-        typedef BOOL(WINAPI* PFN_SetProcessDpiAwarenessContext)(DPI_AWARENESS_CONTEXT);
+        typedef BOOL(WINAPI * PFN_SetProcessDpiAwarenessContext)(DPI_AWARENESS_CONTEXT);
         HMODULE hUser32 = GetModuleHandleW(L"user32.dll");
         if (hUser32) {
             auto setDpiContext = (PFN_SetProcessDpiAwarenessContext)GetProcAddress(hUser32, "SetProcessDpiAwarenessContext");
@@ -51,6 +51,7 @@ public:
         }
 #endif
         wxInitAllImageHandlers();
+        UI::IconManager::SetupApplicationIcon();
 
         LOG_INFO("App", "LinguaAlpaca application starting...");
 
@@ -69,6 +70,10 @@ public:
             LOG_INFO("App", "Initialization completed. Displaying MainFrame...");
 
             auto configManager = m_modelManager ? m_modelManager->GetConfigManager() : nullptr;
+            if (configManager) {
+                auto cfg = configManager->GetConfig();
+                UI::ThemeManager::GetInstance().SetPreferenceByString(cfg.themeMode);
+            }
 
             // 4. 初始化全局划词翻译悬浮组件与全局常驻划词服务
             m_floatingIcon = new UI::FloatingIconFrame(nullptr);

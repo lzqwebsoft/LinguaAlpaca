@@ -1,4 +1,5 @@
 #include "CustomChoice.hpp"
+#include "../theme/PlatformThemeHelper.hpp"
 #include <wx/dcbuffer.h>
 #include <wx/graphics.h>
 #include <wx/display.h>
@@ -20,6 +21,12 @@ CustomChoicePopup::CustomChoicePopup(CustomChoice* owner)
 void CustomChoicePopup::InitUI() {
     auto palette = ThemeColors::GetCurrentPalette();
     SetBackgroundColour(palette.cardBg);
+
+    // Dummy hidden child ensuring GetChildren().GetCount() != 1.
+    // In wxWidgets wxPopupTransientWindow::Popup, if GetChildren().GetCount() == 1,
+    // wxWidgets assumes that single child covers the entire popup and transfers
+    // mouse capture and event handlers to that child instead of this popup.
+    new wxWindow(this, wxID_ANY, wxPoint(-100, -100), wxSize(0, 0));
 
     m_scrollBar = new ScrollBar(this, [this](int line) {
         ScrollToItem(line);
@@ -55,11 +62,20 @@ void CustomChoicePopup::SetItems(const std::vector<ChoiceItem>& items, int selec
 }
 
 void CustomChoicePopup::ShowPopup(const wxPoint& pos, const wxSize& size) {
+    PlatformThemeHelper::ApplyWindowAppearance(this, ThemeManager::GetInstance().GetCurrentTheme());
     SetSize(pos.x, pos.y, size.x, size.y);
     Layout();
     UpdateScrollParams();
     Popup(this);
     Refresh();
+}
+
+void CustomChoicePopup::Dismiss() {
+    bool wasShown = IsShown();
+    wxPopupTransientWindow::Dismiss();
+    if (wasShown) {
+        OnDismiss();
+    }
 }
 
 void CustomChoicePopup::OnDismiss() {
@@ -270,6 +286,7 @@ void CustomChoicePopup::OnKeyDown(wxKeyEvent& event) {
 }
 
 void CustomChoicePopup::UpdateTheme() {
+    PlatformThemeHelper::ApplyWindowAppearance(this, ThemeManager::GetInstance().GetCurrentTheme());
     auto palette = ThemeColors::GetCurrentPalette();
     SetBackgroundColour(palette.cardBg);
     Refresh();
@@ -535,18 +552,23 @@ void CustomChoice::Popup() {
 }
 
 void CustomChoice::Dismiss() {
-    if (m_popup && m_isPopupOpen) {
+    if (m_popup && (m_isPopupOpen || m_popup->IsShown())) {
         m_popup->Dismiss();
     }
+    OnPopupDismissed();
 }
 
 void CustomChoice::OnPopupDismissed() {
-    m_isPopupOpen = false;
-    m_lastDismissTime = wxGetLocalTimeMillis();
-    Refresh();
+    if (m_isPopupOpen) {
+        m_isPopupOpen = false;
+        m_lastDismissTime = wxGetLocalTimeMillis();
+        Refresh();
+    }
 }
 
 void CustomChoice::OnItemSelectedFromPopup(int index) {
+    OnPopupDismissed();
+    m_lastDismissTime = 0; // Deliberate selection: no debounce delay needed on next open click
     if (index >= 0 && index < static_cast<int>(m_items.size()) && index != m_selection) {
         m_selection = index;
         Refresh();
@@ -658,9 +680,10 @@ void CustomChoice::OnLeftDown(wxMouseEvent& WXUNUSED(event)) {
         return;
     }
 
-    if (m_isPopupOpen) {
+    if (m_isPopupOpen && m_popup && m_popup->IsShown()) {
         Dismiss();
     } else {
+        m_isPopupOpen = false;
         Popup();
     }
 }

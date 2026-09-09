@@ -2,6 +2,7 @@
 #include <wx/wx.h>
 #include <wx/radiobox.h>
 #include "../theme/Theme.hpp"
+#include "../theme/PlatformThemeHelper.hpp"
 #include <algorithm>
 #include <vector>
 
@@ -35,6 +36,10 @@ public:
         return res;
     }
 
+    void UpdateTheme() {
+        PlatformThemeHelper::ApplyControlTheme(this, ThemeColors::GetCurrentPalette());
+    }
+
     void AdjustAlignment() {
 #ifdef __WXOSX__
         AlignChildrenLeft();
@@ -53,12 +58,15 @@ private:
 #ifdef __WXOSX__
     void AlignChildrenLeft() {
         const wxWindowList& children = GetChildren();
-        if (children.empty()) return;
+        if (children.empty())
+            return;
 
         int numCols = GetColumnCount();
-        if (numCols <= 0) numCols = 1;
+        if (numCols <= 0)
+            numCols = 1;
         int numRows = GetRowCount();
-        if (numRows <= 0) numRows = (int)children.size();
+        if (numRows <= 0)
+            numRows = (int)children.size();
 
         int leftMargin = 16_dip;
         int gapX = 20_dip; // 选项之间的横向舒适间距
@@ -68,7 +76,8 @@ private:
         int itemIndex = 0;
         for (wxWindowList::compatibility_iterator node = children.GetFirst(); node; node = node->GetNext(), ++itemIndex) {
             wxWindow* child = node->GetData();
-            if (!child) continue;
+            if (!child)
+                continue;
 
             int col = (GetWindowStyle() & wxRA_SPECIFY_ROWS) ? (itemIndex / numRows) : (itemIndex % numCols);
             wxSize best = child->GetBestSize();
@@ -89,7 +98,8 @@ private:
         itemIndex = 0;
         for (wxWindowList::compatibility_iterator node = children.GetFirst(); node; node = node->GetNext(), ++itemIndex) {
             wxWindow* child = node->GetData();
-            if (!child) continue;
+            if (!child)
+                continue;
 
             int col = (GetWindowStyle() & wxRA_SPECIFY_ROWS) ? (itemIndex / numRows) : (itemIndex % numCols);
             int posX = (col >= 0 && col < numCols) ? colStartX[col] : leftMargin;

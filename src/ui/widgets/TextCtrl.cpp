@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <wx/dcbuffer.h>
 #include "core/markdown/MarkdownFormatter.hpp"
+#include "../../core/Logger.hpp"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -115,6 +116,7 @@ void TextCtrl::InitUI(const wxString& value, long style) {
     });
 
     m_textCtrl->Bind(wxEVT_TEXT, [this](wxCommandEvent& event) {
+        SanitizeNativeTextAttributes();
         event.Skip();
         UpdateScrollInfo();
     });
@@ -206,6 +208,7 @@ void TextCtrl::SetupNativeScrollHandling() {
         }
     }
 #endif
+    SanitizeNativeTextAttributes();
 }
 
 void TextCtrl::CleanupNativeScrollHandling() {
@@ -215,6 +218,81 @@ void TextCtrl::CleanupNativeScrollHandling() {
         [(id)m_macScrollObserver release];
         m_macScrollObserver = nullptr;
     }
+#endif
+}
+
+void TextCtrl::SanitizeNativeTextAttributes(bool stripStorageBg) {
+#ifdef __APPLE__
+    if (!m_textCtrl)
+        return;
+
+    NSScrollView* sv = GetMacScrollView(m_textCtrl);
+    if (sv) {
+        [sv setDrawsBackground:NO];
+        [sv setBorderType:NSNoBorder];
+
+        NSClipView* clipView = [sv contentView];
+        if (clipView) {
+            [clipView setDrawsBackground:NO];
+        }
+
+        NSTextView* tv = (NSTextView*)[sv documentView];
+        if (tv && [tv isKindOfClass:[NSTextView class]]) {
+            [tv setDrawsBackground:NO];
+            [tv setBackgroundColor:[NSColor clearColor]];
+            [tv setFocusRingType:NSFocusRingTypeNone];
+
+            auto palette = ThemeColors::GetCurrentPalette();
+            NSColor* cursorColor = [NSColor colorWithSRGBRed:palette.textPrimary.Red() / 255.0
+                                                       green:palette.textPrimary.Green() / 255.0
+                                                        blue:palette.textPrimary.Blue() / 255.0
+                                                       alpha:1.0];
+            [tv setInsertionPointColor:cursorColor];
+
+            @autoreleasepool {
+                NSDictionary* currentAttrs = [tv typingAttributes];
+                if (currentAttrs && [currentAttrs objectForKey:NSBackgroundColorAttributeName]) {
+                    NSMutableDictionary* attrs = [currentAttrs mutableCopy];
+                    [attrs removeObjectForKey:NSBackgroundColorAttributeName];
+                    [tv setTypingAttributes:attrs];
+                    [attrs release];
+                }
+
+                if (tv.textStorage && tv.textStorage.length > 0) {
+                    bool isDark = (ThemeManager::GetInstance().GetCurrentTheme() == ThemeMode::Dark);
+                    if (stripStorageBg || !m_isMarkdownMode) {
+                        [tv.textStorage removeAttribute:NSBackgroundColorAttributeName range:NSMakeRange(0, tv.textStorage.length)];
+                    } else if (isDark) {
+                        // In markdown mode during dark theme, remove any background attribute that has a light/white tint
+                        [tv.textStorage enumerateAttribute:NSBackgroundColorAttributeName
+                                                   inRange:NSMakeRange(0, tv.textStorage.length)
+                                                   options:0
+                                                usingBlock:^(id value, NSRange range, BOOL* stop) {
+                            if (value) {
+                                NSColor* col = (NSColor*)value;
+                                NSColor* rgbCol = [col colorUsingColorSpace:[NSColorSpace sRGBColorSpace]];
+                                if (rgbCol) {
+                                    CGFloat r = [rgbCol redComponent];
+                                    CGFloat g = [rgbCol greenComponent];
+                                    CGFloat b = [rgbCol blueComponent];
+                                    if (r > 0.4 || g > 0.4 || b > 0.4) {
+                                        [tv.textStorage removeAttribute:NSBackgroundColorAttributeName range:range];
+                                    }
+                                } else {
+                                    [tv.textStorage removeAttribute:NSBackgroundColorAttributeName range:range];
+                                }
+                            }
+                        }];
+                    }
+                }
+            }
+
+            [tv setNeedsDisplay:YES];
+            [sv setNeedsDisplay:YES];
+        }
+    }
+#else
+    (void)stripStorageBg;
 #endif
 }
 
@@ -311,9 +389,12 @@ void TextCtrl::SetValue(const wxString& value) {
     m_isMarkdownMode = false;
     m_rawMarkdown.clear();
     if (m_textCtrl) {
-        wxTextAttr defaultAttr(m_textCtrl->GetForegroundColour(), m_textCtrl->GetBackgroundColour(), m_textCtrl->GetFont());
+        wxTextAttr emptyAttr;
+        m_textCtrl->SetDefaultStyle(emptyAttr);
+        wxTextAttr defaultAttr(m_textCtrl->GetForegroundColour(), wxNullColour, m_textCtrl->GetFont());
         m_textCtrl->SetDefaultStyle(defaultAttr);
         m_textCtrl->SetValue(value);
+        SanitizeNativeTextAttributes(true);
         UpdateScrollInfo();
     }
 }
@@ -325,6 +406,7 @@ wxString TextCtrl::GetValue() const {
 void TextCtrl::AppendText(const wxString& text) {
     if (m_textCtrl) {
         m_textCtrl->AppendText(text);
+        SanitizeNativeTextAttributes(true);
         UpdateScrollInfo();
     }
 }
@@ -333,9 +415,12 @@ void TextCtrl::Clear() {
     m_isMarkdownMode = false;
     m_rawMarkdown.clear();
     if (m_textCtrl) {
-        wxTextAttr defaultAttr(m_textCtrl->GetForegroundColour(), m_textCtrl->GetBackgroundColour(), m_textCtrl->GetFont());
+        wxTextAttr emptyAttr;
+        m_textCtrl->SetDefaultStyle(emptyAttr);
+        wxTextAttr defaultAttr(m_textCtrl->GetForegroundColour(), wxNullColour, m_textCtrl->GetFont());
         m_textCtrl->SetDefaultStyle(defaultAttr);
         m_textCtrl->Clear();
+        SanitizeNativeTextAttributes(true);
         UpdateScrollInfo();
     }
 }
@@ -343,6 +428,7 @@ void TextCtrl::Clear() {
 void TextCtrl::WriteText(const wxString& text) {
     if (m_textCtrl) {
         m_textCtrl->WriteText(text);
+        SanitizeNativeTextAttributes();
         UpdateScrollInfo();
     }
 }
@@ -355,7 +441,9 @@ void TextCtrl::SetHint(const wxString& hint) {
 
 bool TextCtrl::SetDefaultStyle(const wxTextAttr& style) {
     if (m_textCtrl) {
-        return m_textCtrl->SetDefaultStyle(style);
+        bool res = m_textCtrl->SetDefaultStyle(style);
+        SanitizeNativeTextAttributes();
+        return res;
     }
     return false;
 }
@@ -379,10 +467,14 @@ void TextCtrl::SetMarkdown(const std::string& markdownText) {
         return;
 
     m_textCtrl->Freeze();
+    wxTextAttr emptyAttr;
+    m_textCtrl->SetDefaultStyle(emptyAttr);
     m_textCtrl->Clear();
+    SanitizeNativeTextAttributes(true);
 
     if (markdownText.empty()) {
         m_textCtrl->Thaw();
+        SanitizeNativeTextAttributes(false);
         UpdateScrollInfo();
         return;
     }
@@ -421,10 +513,7 @@ void TextCtrl::SetMarkdown(const std::string& markdownText) {
     if (!baseFg.IsOk()) {
         baseFg = palette.textPrimary;
     }
-    wxColour baseBg = m_textCtrl->GetBackgroundColour();
-    if (!baseBg.IsOk()) {
-        baseBg = palette.cardBg;
-    }
+    wxColour baseBg = wxNullColour; // 普通文本不加字符底色，保持透明融入背景
 
     // 样式属性定义 (严格继承控件的 ForegroundColour，确保如译文蓝色不被重置为默认黑色)
     wxTextAttr defaultAttr(baseFg, baseBg, defaultFont);
@@ -507,9 +596,10 @@ void TextCtrl::SetMarkdown(const std::string& markdownText) {
         m_textCtrl->SetDefaultStyle(getStyleAttr(seg.style));
         m_textCtrl->AppendText(wxString::FromUTF8(seg.text));
     }
-    m_textCtrl->SetDefaultStyle(defaultAttr);
+    m_textCtrl->SetDefaultStyle(emptyAttr);
 
     m_textCtrl->Thaw();
+    SanitizeNativeTextAttributes(false);
     ScrollToLine(0);
     UpdateScrollInfo();
 }
@@ -628,7 +718,18 @@ bool TextCtrl::SetBackgroundColour(const wxColour& colour) {
     bool res = wxPanel::SetBackgroundColour(colour);
     if (m_textCtrl) {
         m_textCtrl->SetBackgroundColour(colour);
+        wxTextAttr emptyAttr;
+        m_textCtrl->SetDefaultStyle(emptyAttr);
+        wxTextAttr attr(m_textCtrl->GetForegroundColour(), wxNullColour, m_textCtrl->GetFont());
+        m_textCtrl->SetDefaultStyle(attr);
+        if (!m_isMarkdownMode) {
+            long lastPos = m_textCtrl->GetLastPosition();
+            if (lastPos > 0) {
+                m_textCtrl->SetStyle(0, lastPos, attr);
+            }
+        }
     }
+    SanitizeNativeTextAttributes(true);
     if (m_scrollBar) {
         m_scrollBar->SetBackgroundColour(colour);
         m_scrollBar->Refresh();
@@ -643,7 +744,18 @@ bool TextCtrl::SetForegroundColour(const wxColour& colour) {
     bool res = wxPanel::SetForegroundColour(colour);
     if (m_textCtrl) {
         m_textCtrl->SetForegroundColour(colour);
+        wxTextAttr emptyAttr;
+        m_textCtrl->SetDefaultStyle(emptyAttr);
+        wxTextAttr attr(colour, wxNullColour, m_textCtrl->GetFont());
+        m_textCtrl->SetDefaultStyle(attr);
+        if (!m_isMarkdownMode) {
+            long lastPos = m_textCtrl->GetLastPosition();
+            if (lastPos > 0) {
+                m_textCtrl->SetStyle(0, lastPos, attr);
+            }
+        }
     }
+    SanitizeNativeTextAttributes(true);
     if (m_isMarkdownMode && !m_rawMarkdown.empty()) {
         SetMarkdown(m_rawMarkdown);
     }

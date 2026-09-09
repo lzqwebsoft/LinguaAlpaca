@@ -4,6 +4,7 @@
 #include "core/Downloader.hpp"
 #include "theme/IconManager.hpp"
 #include "theme/Theme.hpp"
+#include "theme/PlatformThemeHelper.hpp"
 #include <wx/clipbrd.h>
 #include <wx/filedlg.h>
 #include <wx/filename.h>
@@ -337,7 +338,7 @@ void SettingsView::InitUI() {
     // mmproj GPU 加速开关
     m_ocrMmprojOffloadCheck = new wxCheckBox(m_ocrCard, wxID_ANY, L"启用 mmproj 视觉投影器 GPU 硬件加速（显存 < 8GB 建议取消勾选，使用 CPU 运行）");
     m_ocrMmprojOffloadCheck->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
-    m_ocrMmprojOffloadCheck->SetForegroundColour(palette.textPrimary);
+    PlatformThemeHelper::ApplyControlTheme(m_ocrMmprojOffloadCheck, palette);
     ocrCardSizer->Add(m_ocrMmprojOffloadCheck, 0, wxLEFT | wxRIGHT | wxBOTTOM, 12_dip);
 
     // OCR 本地 API 访问端点展示卡片
@@ -441,7 +442,7 @@ void SettingsView::InitUI() {
     // 1. 启用开关
     m_selectionEnableCheck = new wxCheckBox(m_selectionCard, wxID_ANY, L"启用全局划词翻译（选中文本后在光标旁显示悬浮按钮）");
     m_selectionEnableCheck->SetFont(wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
-    m_selectionEnableCheck->SetForegroundColour(palette.textPrimary);
+    PlatformThemeHelper::ApplyControlTheme(m_selectionEnableCheck, palette);
     selSizer->Add(m_selectionEnableCheck, 0, wxLEFT | wxRIGHT | wxBOTTOM, 16_dip);
 
     // 2. 触发模式选择
@@ -451,7 +452,7 @@ void SettingsView::InitUI() {
     modes.Add(L"③ 双击划词 / 三击划段（双击选词或三击选段触发）");
     m_selectionModeRadio = new LeftAlignedRadioBox(m_selectionCard, wxID_ANY, L"划词触发模式", wxDefaultPosition, wxDefaultSize, modes, 1, wxRA_SPECIFY_COLS);
     m_selectionModeRadio->SetFont(ThemeFont::GetFont(FontRole::Control));
-    m_selectionModeRadio->SetForegroundColour(palette.textPrimary);
+    PlatformThemeHelper::ApplyControlTheme(m_selectionModeRadio, palette);
     selSizer->Add(m_selectionModeRadio, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 16_dip);
 
     // 3. 辅助按键选择
@@ -474,7 +475,7 @@ void SettingsView::InitUI() {
     // 4. 保护剪贴板复选框
     m_preserveClipCheck = new wxCheckBox(m_selectionCard, wxID_ANY, L"保护剪贴板（划词提取完成后自动恢复系统原剪贴板内容，避免污染复制历史）");
     m_preserveClipCheck->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
-    m_preserveClipCheck->SetForegroundColour(palette.textPrimary);
+    PlatformThemeHelper::ApplyControlTheme(m_preserveClipCheck, palette);
     selSizer->Add(m_preserveClipCheck, 0, wxLEFT | wxRIGHT | wxBOTTOM, 16_dip);
 
     // 5. 保存按钮与状态
@@ -609,7 +610,7 @@ void SettingsView::InitUI() {
     // 1. 保存日志到文件开关
     m_saveLogToFileCheck = new wxCheckBox(m_logCard, wxID_ANY, L"保存运行日志到本地文件（便于问题排查与诊断）");
     m_saveLogToFileCheck->SetFont(wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
-    m_saveLogToFileCheck->SetForegroundColour(palette.textPrimary);
+    PlatformThemeHelper::ApplyControlTheme(m_saveLogToFileCheck, palette);
     logSizer->Add(m_saveLogToFileCheck, 0, wxLEFT | wxRIGHT | wxBOTTOM, 12_dip);
 
     // 2. 日志文件保存路径说明
@@ -663,7 +664,7 @@ void SettingsView::InitUI() {
     themeOptions.Add(L"跟随系统");
     m_themeRadioBox = new LeftAlignedRadioBox(m_prefCard, wxID_ANY, L"主题外观选择", wxDefaultPosition, wxDefaultSize, themeOptions, 3, wxRA_SPECIFY_COLS);
     m_themeRadioBox->SetFont(ThemeFont::GetFont(FontRole::Control));
-    m_themeRadioBox->SetForegroundColour(palette.textPrimary);
+    PlatformThemeHelper::ApplyControlTheme(m_themeRadioBox, palette);
     prefSizer->Add(m_themeRadioBox, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 16_dip);
 
     // 关于说明栏
@@ -1244,7 +1245,7 @@ void SettingsView::UpdateTheme() {
     if (m_ocrCtxLabel)
         m_ocrCtxLabel->SetForegroundColour(palette.textPrimary);
     if (m_ocrMmprojOffloadCheck)
-        m_ocrMmprojOffloadCheck->SetForegroundColour(palette.textPrimary);
+        PlatformThemeHelper::ApplyControlTheme(m_ocrMmprojOffloadCheck, palette);
 
     if (m_transModelLink) {
         m_transModelLink->SetNormalColour(palette.accentPrimary);
@@ -1269,13 +1270,13 @@ void SettingsView::UpdateTheme() {
     if (m_selectionTitleText)
         m_selectionTitleText->SetForegroundColour(palette.textPrimary);
     if (m_selectionEnableCheck)
-        m_selectionEnableCheck->SetForegroundColour(palette.textPrimary);
+        PlatformThemeHelper::ApplyControlTheme(m_selectionEnableCheck, palette);
     if (m_selectionModeRadio)
-        m_selectionModeRadio->SetForegroundColour(palette.textPrimary);
+        PlatformThemeHelper::ApplyControlTheme(m_selectionModeRadio, palette);
     if (m_modifierKeyLabel)
         m_modifierKeyLabel->SetForegroundColour(palette.textPrimary);
     if (m_preserveClipCheck)
-        m_preserveClipCheck->SetForegroundColour(palette.textPrimary);
+        PlatformThemeHelper::ApplyControlTheme(m_preserveClipCheck, palette);
     if (m_selectionSaveBtn)
         m_selectionSaveBtn->Refresh();
 
@@ -1306,7 +1307,9 @@ void SettingsView::UpdateTheme() {
     if (m_logTitleText)
         m_logTitleText->SetForegroundColour(palette.textPrimary);
     if (m_saveLogToFileCheck)
-        m_saveLogToFileCheck->SetForegroundColour(palette.textPrimary);
+        PlatformThemeHelper::ApplyControlTheme(m_saveLogToFileCheck, palette);
+    if (m_themeRadioBox)
+        PlatformThemeHelper::ApplyControlTheme(m_themeRadioBox, palette);
     if (m_logPathInfoText)
         m_logPathInfoText->SetForegroundColour(palette.textSecondary);
     if (m_logSaveBtn)

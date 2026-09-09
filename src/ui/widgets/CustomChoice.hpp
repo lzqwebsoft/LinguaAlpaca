@@ -29,6 +29,7 @@ public:
     void SetItems(const std::vector<ChoiceItem>& items, int selection);
     void UpdateTheme();
     void ShowPopup(const wxPoint& pos, const wxSize& size);
+    void Dismiss() override;
 
 protected:
     void OnDismiss() override;

@@ -1,6 +1,7 @@
 #include "MainFrame.hpp"
 #include "theme/Theme.hpp"
 #include "theme/IconManager.hpp"
+#include "theme/PlatformThemeHelper.hpp"
 #include "widgets/WelcomeModelDialog.hpp"
 #include "widgets/AppTaskBarIcon.hpp"
 #include <wx/dcbuffer.h>
@@ -18,7 +19,9 @@ namespace LinguaAlpaca::UI {
             wxDefaultSize, wxBORDER_NONE),
         m_modelManager(std::move(modelManager)) {
         SetIcons(IconManager::GetAppIconBundle());
-#ifdef __WXMSW__
+#ifdef __APPLE__
+        IconManager::SetupApplicationIcon();
+#elif defined(__WXMSW__)
         HWND hwnd = (HWND)GetHWND();
         if (hwnd) {
             // 1. 设置 WS_EX_APPWINDOW 样式，确保无边框窗体在 Windows 任务栏正常常驻与显示
@@ -79,6 +82,7 @@ namespace LinguaAlpaca::UI {
             auto cfg = m_modelManager->GetConfigManager()->GetConfig();
             ThemeManager::GetInstance().SetPreferenceByString(cfg.themeMode);
         }
+        ApplyTheme();
 
         // 启动完全后，如果没有配置翻译模型则弹出欢迎引导
         CallAfter([this]() {
@@ -416,6 +420,10 @@ namespace LinguaAlpaca::UI {
     }
 
     void MainFrame::ApplyTheme() {
+        ThemeMode currentTheme = ThemeManager::GetInstance().GetCurrentTheme();
+        PlatformThemeHelper::ApplyAppAppearance(currentTheme);
+        PlatformThemeHelper::ApplyWindowAppearance(this, currentTheme);
+
         auto palette = ThemeColors::GetCurrentPalette();
 
         SetBackgroundColour(palette.cardBorder);

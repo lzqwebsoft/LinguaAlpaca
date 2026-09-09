@@ -20,471 +20,495 @@
 
 namespace LinguaAlpaca::UI {
 
-    FloatingIconFrame::FloatingIconFrame(wxWindow* parent)
-        : wxFrame(parent, wxID_ANY, "", wxDefaultPosition, wxDefaultSize,
-            wxFRAME_NO_TASKBAR | wxSTAY_ON_TOP | wxBORDER_NONE),
-        m_autoHideTimer(this) {
-        SetBackgroundStyle(wxBG_STYLE_PAINT);
-        int iconSize = 40_dip;
-        SetSize(iconSize, iconSize);
+FloatingIconFrame::FloatingIconFrame(wxWindow* parent)
+    : wxFrame(parent, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxFRAME_NO_TASKBAR | wxSTAY_ON_TOP | wxBORDER_NONE)
+    , m_autoHideTimer(this) {
+    SetBackgroundStyle(wxBG_STYLE_PAINT);
+    int iconSize = 40_dip;
+    SetSize(iconSize, iconSize);
 
-        InitUI();
+    InitUI();
 
-        Bind(wxEVT_PAINT, &FloatingIconFrame::OnPaint, this);
-        Bind(wxEVT_ENTER_WINDOW, &FloatingIconFrame::OnMouseEnter, this);
-        Bind(wxEVT_LEAVE_WINDOW, &FloatingIconFrame::OnMouseLeave, this);
-        Bind(wxEVT_LEFT_DOWN, &FloatingIconFrame::OnLeftDown, this);
-        Bind(wxEVT_MOTION, &FloatingIconFrame::OnMouseMove, this);
-        Bind(wxEVT_LEFT_UP, &FloatingIconFrame::OnLeftUp, this);
-        Bind(wxEVT_TIMER, &FloatingIconFrame::OnTimer, this);
-    }
+    Bind(wxEVT_PAINT, &FloatingIconFrame::OnPaint, this);
+    Bind(wxEVT_ENTER_WINDOW, &FloatingIconFrame::OnMouseEnter, this);
+    Bind(wxEVT_LEAVE_WINDOW, &FloatingIconFrame::OnMouseLeave, this);
+    Bind(wxEVT_LEFT_DOWN, &FloatingIconFrame::OnLeftDown, this);
+    Bind(wxEVT_MOTION, &FloatingIconFrame::OnMouseMove, this);
+    Bind(wxEVT_LEFT_UP, &FloatingIconFrame::OnLeftUp, this);
+    Bind(wxEVT_TIMER, &FloatingIconFrame::OnTimer, this);
+}
 
-    void FloatingIconFrame::InitUI() {
+void FloatingIconFrame::InitUI() {
 #ifdef _WIN32
-        HWND hwnd = (HWND)GetHWND();
-        if (hwnd) {
-            LONG_PTR exStyle = GetWindowLongPtr(hwnd, GWL_EXSTYLE);
-            SetWindowLongPtr(hwnd, GWL_EXSTYLE,
-                exStyle | WS_EX_LAYERED | WS_EX_NOACTIVATE | WS_EX_TOPMOST | WS_EX_TOOLWINDOW);
-            SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0,
-                SWP_NOMOVE | SWP_NOSIZE | SWP_FRAMECHANGED | SWP_NOACTIVATE);
-        }
+    HWND hwnd = (HWND)GetHWND();
+    if (hwnd) {
+        LONG_PTR exStyle = GetWindowLongPtr(hwnd, GWL_EXSTYLE);
+        SetWindowLongPtr(hwnd, GWL_EXSTYLE, exStyle | WS_EX_LAYERED | WS_EX_NOACTIVATE | WS_EX_TOPMOST | WS_EX_TOOLWINDOW);
+        SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_FRAMECHANGED | SWP_NOACTIVATE);
+    }
 #elif defined(__APPLE__)
-        NSView* nsview = (NSView*)GetHandle();
-        if (nsview) {
-            NSWindow* nswin = [nsview window];
-            if (nswin) {
-                [nswin setOpaque:NO];
-                [nswin setBackgroundColor:[NSColor clearColor]];
-                [nswin setLevel:NSPopUpMenuWindowLevel];
-                [nswin setCollectionBehavior:NSWindowCollectionBehaviorCanJoinAllSpaces |
-                                             NSWindowCollectionBehaviorFullScreenAuxiliary];
-                [nswin setHidesOnDeactivate:NO];
-            }
+    NSView* nsview = (NSView*)GetHandle();
+    if (nsview) {
+        NSWindow* nswin = [nsview window];
+        if (nswin) {
+            [nswin setOpaque:NO];
+            [nswin setBackgroundColor:[NSColor clearColor]];
+            [nswin setLevel:NSPopUpMenuWindowLevel];
+            [nswin setCollectionBehavior:NSWindowCollectionBehaviorCanJoinAllSpaces | NSWindowCollectionBehaviorFullScreenAuxiliary];
+            [nswin setHidesOnDeactivate:NO];
         }
-#endif
     }
+#endif
+}
 
-    void FloatingIconFrame::RenderLayeredWindow(int screenX, int screenY) {
+void FloatingIconFrame::RenderLayeredWindow(int screenX, int screenY) {
 #ifdef _WIN32
-        HWND hwnd = (HWND)GetHWND();
-        if (!hwnd) return;
+    HWND hwnd = (HWND)GetHWND();
+    if (!hwnd)
+        return;
 
-        const int iconSize = 38_dip;
-        int w = iconSize;
-        int h = iconSize;
-        if (w <= 0 || h <= 0) return;
+    const int iconSize = 38_dip;
+    int w = iconSize;
+    int h = iconSize;
+    if (w <= 0 || h <= 0)
+        return;
 
-        BITMAPINFO bmi = { 0 };
-        bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-        bmi.bmiHeader.biWidth = w;
-        bmi.bmiHeader.biHeight = -h; // Top-down DIB
-        bmi.bmiHeader.biPlanes = 1;
-        bmi.bmiHeader.biBitCount = 32;
-        bmi.bmiHeader.biCompression = BI_RGB;
+    BITMAPINFO bmi = {0};
+    bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bmi.bmiHeader.biWidth = w;
+    bmi.bmiHeader.biHeight = -h; // Top-down DIB
+    bmi.bmiHeader.biPlanes = 1;
+    bmi.bmiHeader.biBitCount = 32;
+    bmi.bmiHeader.biCompression = BI_RGB;
 
-        void* pvBits = nullptr;
-        HDC hdcScreen = ::GetDC(NULL);
-        HDC hdcMem = ::CreateCompatibleDC(hdcScreen);
-        HBITMAP hBmp = ::CreateDIBSection(hdcMem, &bmi, DIB_RGB_COLORS, &pvBits, NULL, 0);
-        HGDIOBJ hOldBmp = ::SelectObject(hdcMem, hBmp);
+    void* pvBits = nullptr;
+    HDC hdcScreen = ::GetDC(NULL);
+    HDC hdcMem = ::CreateCompatibleDC(hdcScreen);
+    HBITMAP hBmp = ::CreateDIBSection(hdcMem, &bmi, DIB_RGB_COLORS, &pvBits, NULL, 0);
+    HGDIOBJ hOldBmp = ::SelectObject(hdcMem, hBmp);
 
-        if (pvBits) {
-            memset(pvBits, 0, w * h * 4);
+    if (pvBits) {
+        memset(pvBits, 0, w * h * 4);
 
-            {
-                Gdiplus::Bitmap memBmp(w, h, w * 4, PixelFormat32bppPARGB, (BYTE*)pvBits);
-                Gdiplus::Graphics g(&memBmp);
-                g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
-                g.SetInterpolationMode(Gdiplus::InterpolationModeHighQualityBicubic);
-                g.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHighQuality);
+        {
+            Gdiplus::Bitmap memBmp(w, h, w * 4, PixelFormat32bppPARGB, (BYTE*)pvBits);
+            Gdiplus::Graphics g(&memBmp);
+            g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+            g.SetInterpolationMode(Gdiplus::InterpolationModeHighQualityBicubic);
+            g.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHighQuality);
 
-                ThemePalette palette = ThemeManager::GetCurrentPalette();
+            ThemePalette palette = ThemeManager::GetCurrentPalette();
 
-                float pad = 1.5f;
-                float diam = (float)w - 2.0f * pad;
-                Gdiplus::RectF circleRect(pad, pad, diam, diam);
+            float pad = 1.5f;
+            float diam = (float)w - 2.0f * pad;
+            Gdiplus::RectF circleRect(pad, pad, diam, diam);
 
-                // 1. 设置平滑抗锯齿圆形剪裁路径，杜绝任何方角或外部像素泄露
-                Gdiplus::GraphicsPath clipPath;
-                clipPath.AddEllipse(circleRect);
-                g.SetClip(&clipPath);
+            // 1. 设置平滑抗锯齿圆形剪裁路径，杜绝任何方角或外部像素泄露
+            Gdiplus::GraphicsPath clipPath;
+            clipPath.AddEllipse(circleRect);
+            g.SetClip(&clipPath);
 
-                // 绘制平滑抗锯齿基底圆角卡片背景 (纯白底色)
-                Gdiplus::SolidBrush bgBrush(Gdiplus::Color(255, 255, 255, 255));
-                g.FillEllipse(&bgBrush, circleRect);
+            // 绘制平滑抗锯齿基底圆角卡片背景 (纯白底色)
+            Gdiplus::SolidBrush bgBrush(Gdiplus::Color(255, 255, 255, 255));
+            g.FillEllipse(&bgBrush, circleRect);
 
-                // 2. 加载并高质量抗锯齿绘制应用图标 (预留内边距，确保图标完整处于圆形之内)
-                wxImage iconImg = IconManager::GetAppLogoImage();
-                if (iconImg.IsOk()) {
-                    int imgW = iconImg.GetWidth();
-                    int imgH = iconImg.GetHeight();
-                    Gdiplus::Bitmap srcBmp(imgW, imgH, PixelFormat32bppARGB);
-                    Gdiplus::BitmapData bmpData;
-                    Gdiplus::Rect r(0, 0, imgW, imgH);
-                    if (srcBmp.LockBits(&r, Gdiplus::ImageLockModeWrite, PixelFormat32bppARGB, &bmpData) == Gdiplus::Ok) {
-                        const unsigned char* rgb = iconImg.GetData();
-                        const unsigned char* alpha = iconImg.HasAlpha() ? iconImg.GetAlpha() : nullptr;
-                        unsigned char* dst = (unsigned char*)bmpData.Scan0;
-                        for (int y = 0; y < imgH; ++y) {
-                            unsigned char* row = dst + y * bmpData.Stride;
-                            for (int x = 0; x < imgW; ++x) {
-                                int srcIdx = (y * imgW + x);
-                                unsigned char a = alpha ? alpha[srcIdx] : 255;
-                                unsigned char red = rgb[srcIdx * 3];
-                                unsigned char green = rgb[srcIdx * 3 + 1];
-                                unsigned char blue = rgb[srcIdx * 3 + 2];
-                                row[x * 4 + 0] = blue;
-                                row[x * 4 + 1] = green;
-                                row[x * 4 + 2] = red;
-                                row[x * 4 + 3] = a;
-                            }
+            // 2. 加载并高质量抗锯齿绘制应用图标 (预留内边距，确保图标完整处于圆形之内)
+            wxImage iconImg = IconManager::GetAppLogoImage();
+            if (iconImg.IsOk()) {
+                int imgW = iconImg.GetWidth();
+                int imgH = iconImg.GetHeight();
+                Gdiplus::Bitmap srcBmp(imgW, imgH, PixelFormat32bppARGB);
+                Gdiplus::BitmapData bmpData;
+                Gdiplus::Rect r(0, 0, imgW, imgH);
+                if (srcBmp.LockBits(&r, Gdiplus::ImageLockModeWrite, PixelFormat32bppARGB, &bmpData) == Gdiplus::Ok) {
+                    const unsigned char* rgb = iconImg.GetData();
+                    const unsigned char* alpha = iconImg.HasAlpha() ? iconImg.GetAlpha() : nullptr;
+                    unsigned char* dst = (unsigned char*)bmpData.Scan0;
+                    for (int y = 0; y < imgH; ++y) {
+                        unsigned char* row = dst + y * bmpData.Stride;
+                        for (int x = 0; x < imgW; ++x) {
+                            int srcIdx = (y * imgW + x);
+                            unsigned char a = alpha ? alpha[srcIdx] : 255;
+                            unsigned char red = rgb[srcIdx * 3];
+                            unsigned char green = rgb[srcIdx * 3 + 1];
+                            unsigned char blue = rgb[srcIdx * 3 + 2];
+                            row[x * 4 + 0] = blue;
+                            row[x * 4 + 1] = green;
+                            row[x * 4 + 2] = red;
+                            row[x * 4 + 3] = a;
                         }
-                        srcBmp.UnlockBits(&bmpData);
-
-                        float imgPad = m_isHovered ? 1.5_dip : 2.0_dip;
-                        Gdiplus::RectF imgRect(imgPad, imgPad, (float)w - 2.0f * imgPad, (float)h - 2.0f * imgPad);
-                        g.DrawImage(&srcBmp, imgRect);
                     }
-                }
+                    srcBmp.UnlockBits(&bmpData);
 
-                g.ResetClip();
-
-                // 3. 绘制平滑抗锯齿边缘光晕与边框 (高亮清新边框，杜绝黑色边缘)
-                if (m_isHovered) {
-                    wxColour accent = palette.accentPrimary;
-                    Gdiplus::SolidBrush hoverGlow(Gdiplus::Color(40, accent.Red(), accent.Green(), accent.Blue()));
-                    g.FillEllipse(&hoverGlow, circleRect);
-
-                    Gdiplus::Pen hoverPen(Gdiplus::Color(255, accent.Red(), accent.Green(), accent.Blue()), 1.8f);
-                    g.DrawEllipse(&hoverPen, circleRect);
-                } else {
-                    Gdiplus::Pen borderPen(Gdiplus::Color(180, 200, 220, 245), 1.2f);
-                    g.DrawEllipse(&borderPen, circleRect);
+                    float imgPad = m_isHovered ? 1.5_dip : 2.0_dip;
+                    Gdiplus::RectF imgRect(imgPad, imgPad, (float)w - 2.0f * imgPad, (float)h - 2.0f * imgPad);
+                    g.DrawImage(&srcBmp, imgRect);
                 }
             }
 
-            POINT ptSrc = { 0, 0 };
-            POINT ptDst = { screenX, screenY };
-            SIZE size = { w, h };
-            BLENDFUNCTION blend = { AC_SRC_OVER, 0, 255, AC_SRC_ALPHA };
-            ::UpdateLayeredWindow(hwnd, hdcScreen, &ptDst, &size, hdcMem, &ptSrc, 0, &blend, ULW_ALPHA);
+            g.ResetClip();
+
+            // 3. 绘制平滑抗锯齿边缘光晕与边框 (高亮清新边框，杜绝黑色边缘)
+            if (m_isHovered) {
+                wxColour accent = palette.accentPrimary;
+                Gdiplus::SolidBrush hoverGlow(Gdiplus::Color(40, accent.Red(), accent.Green(), accent.Blue()));
+                g.FillEllipse(&hoverGlow, circleRect);
+
+                Gdiplus::Pen hoverPen(Gdiplus::Color(255, accent.Red(), accent.Green(), accent.Blue()), 1.8f);
+                g.DrawEllipse(&hoverPen, circleRect);
+            } else {
+                Gdiplus::Pen borderPen(Gdiplus::Color(180, 200, 220, 245), 1.2f);
+                g.DrawEllipse(&borderPen, circleRect);
+            }
         }
 
-        ::SelectObject(hdcMem, hOldBmp);
-        ::DeleteObject(hBmp);
-        ::DeleteDC(hdcMem);
-        ::ReleaseDC(NULL, hdcScreen);
-#else
-        Refresh();
-#endif
+        POINT ptSrc = {0, 0};
+        POINT ptDst = {screenX, screenY};
+        SIZE size = {w, h};
+        BLENDFUNCTION blend = {AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
+        ::UpdateLayeredWindow(hwnd, hdcScreen, &ptDst, &size, hdcMem, &ptSrc, 0, &blend, ULW_ALPHA);
     }
 
-    void FloatingIconFrame::ShowAt(int screenX, int screenY, const std::string& selectedText) {
-        m_selectedText = selectedText;
-        m_isHovered = false;
-        m_isDragging = false;
-        const int iconSize = 40_dip;
-        int targetX = screenX + 8_dip;
-        int targetY = screenY + 10_dip;
+    ::SelectObject(hdcMem, hOldBmp);
+    ::DeleteObject(hBmp);
+    ::DeleteDC(hdcMem);
+    ::ReleaseDC(NULL, hdcScreen);
+#else
+    Refresh();
+#endif
+}
+
+void FloatingIconFrame::ShowAt(int screenX, int screenY, const std::string& selectedText) {
+    m_selectedText = selectedText;
+    m_isHovered = false;
+    m_isDragging = false;
+    const int iconSize = 40_dip;
+    int targetX = screenX + 8_dip;
+    int targetY = screenY + 10_dip;
 
 #ifdef _WIN32
-        POINT pt = { targetX, targetY };
-        HMONITOR hMon = MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST);
-        if (hMon) {
-            MONITORINFO mi = { sizeof(mi) };
-            if (GetMonitorInfo(hMon, &mi)) {
-                int workLeft = mi.rcWork.left;
-                int workRight = mi.rcWork.right;
-                int workTop = mi.rcWork.top;
-                int workBottom = mi.rcWork.bottom;
+    POINT pt = {targetX, targetY};
+    HMONITOR hMon = MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST);
+    if (hMon) {
+        MONITORINFO mi = {sizeof(mi)};
+        if (GetMonitorInfo(hMon, &mi)) {
+            int workLeft = mi.rcWork.left;
+            int workRight = mi.rcWork.right;
+            int workTop = mi.rcWork.top;
+            int workBottom = mi.rcWork.bottom;
 
-                // 如果右侧超出工作区，则翻转至光标左侧
-                if (targetX + iconSize > workRight) {
-                    targetX = screenX - iconSize - 8_dip;
-                }
-                // 如果底部超出工作区，则翻转至光标上方
-                if (targetY + iconSize > workBottom) {
-                    targetY = screenY - iconSize - 8_dip;
-                }
-
-                // 严格钳位在当前屏幕工作区范围内，杜绝任何越界出屏
-                if (targetX > workRight - iconSize - 4_dip) {
-                    targetX = workRight - iconSize - 4_dip;
-                }
-                if (targetX < workLeft + 4_dip) {
-                    targetX = workLeft + 4_dip;
-                }
-                if (targetY > workBottom - iconSize - 4_dip) {
-                    targetY = workBottom - iconSize - 4_dip;
-                }
-                if (targetY < workTop + 4_dip) {
-                    targetY = workTop + 4_dip;
-                }
-            }
-        }
-#else
-        wxPoint pos(targetX, targetY);
-        int displayIdx = wxDisplay::GetFromPoint(pos);
-        if (displayIdx == wxNOT_FOUND) {
-            displayIdx = wxDisplay::GetFromPoint(wxPoint(screenX, screenY));
-        }
-        if (displayIdx != wxNOT_FOUND) {
-            wxDisplay display(displayIdx);
-            wxRect geom = display.GetClientArea();
-            if (targetX + iconSize > geom.GetRight()) {
+            // 如果右侧超出工作区，则翻转至光标左侧
+            if (targetX + iconSize > workRight) {
                 targetX = screenX - iconSize - 8_dip;
             }
-            if (targetY + iconSize > geom.GetBottom()) {
+            // 如果底部超出工作区，则翻转至光标上方
+            if (targetY + iconSize > workBottom) {
                 targetY = screenY - iconSize - 8_dip;
             }
-            if (targetX > geom.GetRight() - iconSize - 4_dip) targetX = geom.GetRight() - iconSize - 4_dip;
-            if (targetX < geom.GetLeft() + 4_dip) targetX = geom.GetLeft() + 4_dip;
-            if (targetY > geom.GetBottom() - iconSize - 4_dip) targetY = geom.GetBottom() - iconSize - 4_dip;
-            if (targetY < geom.GetTop() + 4_dip) targetY = geom.GetTop() + 4_dip;
+
+            // 严格钳位在当前屏幕工作区范围内，杜绝任何越界出屏
+            if (targetX > workRight - iconSize - 4_dip) {
+                targetX = workRight - iconSize - 4_dip;
+            }
+            if (targetX < workLeft + 4_dip) {
+                targetX = workLeft + 4_dip;
+            }
+            if (targetY > workBottom - iconSize - 4_dip) {
+                targetY = workBottom - iconSize - 4_dip;
+            }
+            if (targetY < workTop + 4_dip) {
+                targetY = workTop + 4_dip;
+            }
         }
+    }
+#else
+    wxPoint pos(targetX, targetY);
+    int displayIdx = wxDisplay::GetFromPoint(pos);
+    if (displayIdx == wxNOT_FOUND) {
+        displayIdx = wxDisplay::GetFromPoint(wxPoint(screenX, screenY));
+    }
+    if (displayIdx != wxNOT_FOUND) {
+        wxDisplay display(displayIdx);
+        wxRect geom = display.GetClientArea();
+        if (targetX + iconSize > geom.GetRight()) {
+            targetX = screenX - iconSize - 8_dip;
+        }
+        if (targetY + iconSize > geom.GetBottom()) {
+            targetY = screenY - iconSize - 8_dip;
+        }
+        if (targetX > geom.GetRight() - iconSize - 4_dip)
+            targetX = geom.GetRight() - iconSize - 4_dip;
+        if (targetX < geom.GetLeft() + 4_dip)
+            targetX = geom.GetLeft() + 4_dip;
+        if (targetY > geom.GetBottom() - iconSize - 4_dip)
+            targetY = geom.GetBottom() - iconSize - 4_dip;
+        if (targetY < geom.GetTop() + 4_dip)
+            targetY = geom.GetTop() + 4_dip;
+    }
 #endif
 
-        m_currentPos = wxPoint(targetX, targetY);
-        SetPosition(m_currentPos);
-        SetSize(iconSize, iconSize);
+    m_currentPos = wxPoint(targetX, targetY);
+    SetPosition(m_currentPos);
+    SetSize(iconSize, iconSize);
 
 #ifdef _WIN32
-        RenderLayeredWindow(targetX, targetY);
-        HWND hwnd = (HWND)GetHWND();
-        if (hwnd) {
-            ::SetWindowPos(hwnd, HWND_TOPMOST, targetX, targetY, iconSize, iconSize,
-                SWP_NOACTIVATE | SWP_SHOWWINDOW);
-            ::ShowWindow(hwnd, SW_SHOWNOACTIVATE);
-        }
+    RenderLayeredWindow(targetX, targetY);
+    HWND hwnd = (HWND)GetHWND();
+    if (hwnd) {
+        ::SetWindowPos(hwnd, HWND_TOPMOST, targetX, targetY, iconSize, iconSize, SWP_NOACTIVATE | SWP_SHOWWINDOW);
+        ::ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+    }
 #endif
 
-        LOG_INFO("FloatingIconFrame", "显示浮动图标: (" + std::to_string(targetX) + ", " + std::to_string(targetY) + ")");
-        ShowWithoutActivating();
+    LOG_INFO("FloatingIconFrame", "显示浮动图标: (" + std::to_string(targetX) + ", " + std::to_string(targetY) + ")");
+    ShowWithoutActivating();
 #ifdef __APPLE__
-        NSView* nsview = (NSView*)GetHandle();
-        if (nsview) {
-            NSWindow* nswin = [nsview window];
-            if (nswin) {
-                [nswin setLevel:NSPopUpMenuWindowLevel];
-                [nswin setCollectionBehavior:NSWindowCollectionBehaviorCanJoinAllSpaces |
-                                             NSWindowCollectionBehaviorFullScreenAuxiliary];
-                [nswin setHidesOnDeactivate:NO];
-                [nswin orderFrontRegardless];
-            }
+    NSView* nsview = (NSView*)GetHandle();
+    if (nsview) {
+        NSWindow* nswin = [nsview window];
+        if (nswin) {
+            [nswin setLevel:NSPopUpMenuWindowLevel];
+            [nswin setCollectionBehavior:NSWindowCollectionBehaviorCanJoinAllSpaces | NSWindowCollectionBehaviorFullScreenAuxiliary];
+            [nswin setHidesOnDeactivate:NO];
+            [nswin orderFrontRegardless];
         }
+    }
 #endif
 #ifndef _WIN32
-        Refresh();
-        Update();
+    Refresh();
+    Update();
 #endif
 
-        // 启动 2.5 秒无操作自动隐藏定时器
-        m_autoHideTimer.StartOnce(2500);
-    }
+    // 启动 2.5 秒无操作自动隐藏定时器
+    m_autoHideTimer.StartOnce(2500);
+}
 
-    void FloatingIconFrame::Dismiss() {
-        if (HasCapture()) {
-            ReleaseMouse();
-        }
-        m_isDragging = false;
-        m_autoHideTimer.Stop();
-        Hide();
+void FloatingIconFrame::Dismiss() {
+    if (HasCapture()) {
+        ReleaseMouse();
     }
+    m_isDragging = false;
+    m_autoHideTimer.Stop();
+    Hide();
+}
 
-    void FloatingIconFrame::OnPaint(wxPaintEvent& WXUNUSED(event)) {
+void FloatingIconFrame::OnPaint(wxPaintEvent& WXUNUSED(event)) {
 #ifndef _WIN32
-        wxAutoBufferedPaintDC dc(this);
-        dc.Clear();
+    wxAutoBufferedPaintDC dc(this);
+    dc.Clear();
 
-        std::unique_ptr<wxGraphicsContext> gc(wxGraphicsContext::Create(dc));
-        if (!gc) return;
+    std::unique_ptr<wxGraphicsContext> gc(wxGraphicsContext::Create(dc));
+    if (!gc)
+        return;
 
-        wxSize sz = GetClientSize();
-        double w = sz.x;
-        double h = sz.y;
-        if (w <= 0 || h <= 0) return;
+    wxSize sz = GetClientSize();
+    double w = sz.x;
+    double h = sz.y;
+    if (w <= 0 || h <= 0)
+        return;
 
-        gc->Clip(1.5, 1.5, w - 3.0, h - 3.0);
+#if defined(__APPLE__)
+    CGContextRef cgContext = (CGContextRef)gc->GetNativeContext();
+    if (cgContext) {
+        CGContextSaveGState(cgContext);
+        CGContextAddEllipseInRect(cgContext, CGRectMake(1.5, 1.5, w - 3.0, h - 3.0));
+        CGContextClip(cgContext);
+    }
+#endif
 
-        gc->SetBrush(*wxWHITE_BRUSH);
-        gc->SetPen(*wxTRANSPARENT_PEN);
+    // 绘制纯白底色平滑抗锯齿基底卡片
+    gc->SetBrush(*wxWHITE_BRUSH);
+    gc->SetPen(*wxTRANSPARENT_PEN);
+    gc->DrawEllipse(1.5, 1.5, w - 3.0, h - 3.0);
+
+    // 2. 从原始 500x500 高清图像创建 CoreGraphics 纹理，在 Retina 高分屏下实现原生全像素抗锯齿渲染
+    wxImage logoImg = IconManager::GetAppLogoImage();
+    if (!logoImg.IsOk()) {
+        logoImg = IconManager::GetAppWindowIconImage();
+    }
+    if (logoImg.IsOk()) {
+        wxGraphicsBitmap gbmp = gc->CreateBitmapFromImage(logoImg);
+        double pad = 2.0_dip;
+        gc->DrawBitmap(gbmp, pad, pad, w - 2.0 * pad, h - 2.0 * pad);
+    }
+
+#if defined(__APPLE__)
+    if (cgContext) {
+        CGContextRestoreGState(cgContext);
+    }
+#endif
+
+    // 3. 绘制平滑抗锯齿边缘光晕与高保真边框
+    ThemePalette palette = ThemeManager::GetCurrentPalette();
+    if (m_isHovered) {
+        gc->SetBrush(wxBrush(wxColour(palette.accentPrimary.Red(), palette.accentPrimary.Green(), palette.accentPrimary.Blue(), 40)));
+        wxGraphicsPen hoverPen = gc->CreatePen(wxGraphicsPenInfo(palette.accentPrimary).Width(1.8));
+        gc->SetPen(hoverPen);
         gc->DrawEllipse(1.5, 1.5, w - 3.0, h - 3.0);
-
-        wxBitmapBundle iconBundle = IconManager::GetAppLogoBundle(sz);
-        wxBitmap bmp = iconBundle.GetBitmap(sz);
-        if (bmp.IsOk()) {
-            double pad = m_isHovered ? 4.5_dip : 5.5_dip;
-            gc->DrawBitmap(bmp, pad, pad, w - 2 * pad, h - 2 * pad);
-        }
-
-        gc->ResetClip();
-
-        if (m_isHovered) {
-            ThemePalette palette = ThemeManager::GetCurrentPalette();
-            gc->SetBrush(wxBrush(wxColour(palette.accentPrimary.Red(), palette.accentPrimary.Green(), palette.accentPrimary.Blue(), 40)));
-            gc->SetPen(wxPen(palette.accentPrimary, 2));
-            gc->DrawEllipse(1.5, 1.5, w - 3.0, h - 3.0);
-        } else {
-            gc->SetBrush(*wxTRANSPARENT_BRUSH);
-            gc->SetPen(wxPen(wxColour(200, 220, 245), 1));
-            gc->DrawEllipse(1.5, 1.5, w - 3.0, h - 3.0);
-        }
-#endif
+    } else {
+        gc->SetBrush(*wxTRANSPARENT_BRUSH);
+        wxGraphicsPen borderPen = gc->CreatePen(wxGraphicsPenInfo(wxColour(180, 200, 220, 245)).Width(1.2));
+        gc->SetPen(borderPen);
+        gc->DrawEllipse(1.5, 1.5, w - 3.0, h - 3.0);
     }
+#endif
+}
 
-    void FloatingIconFrame::OnMouseEnter(wxMouseEvent& WXUNUSED(event)) {
-        if (m_isDragging) return;
-        m_isHovered = true;
-        m_autoHideTimer.Stop();
-        SetCursor(wxCursor(wxCURSOR_HAND));
+void FloatingIconFrame::OnMouseEnter(wxMouseEvent& WXUNUSED(event)) {
+    if (m_isDragging)
+        return;
+    m_isHovered = true;
+    m_autoHideTimer.Stop();
+    SetCursor(wxCursor(wxCURSOR_HAND));
 #ifdef _WIN32
-        RenderLayeredWindow(m_currentPos.x, m_currentPos.y);
+    RenderLayeredWindow(m_currentPos.x, m_currentPos.y);
 #else
-        Refresh();
+    Refresh();
 #endif
-    }
+}
 
-    void FloatingIconFrame::OnMouseLeave(wxMouseEvent& event) {
-        if (m_isDragging || (HasCapture() && event.LeftIsDown())) {
-            return;
-        }
-        m_isHovered = false;
-        SetCursor(wxCursor(wxCURSOR_ARROW));
+void FloatingIconFrame::OnMouseLeave(wxMouseEvent& event) {
+    if (m_isDragging || (HasCapture() && event.LeftIsDown())) {
+        return;
+    }
+    m_isHovered = false;
+    SetCursor(wxCursor(wxCURSOR_ARROW));
 #ifdef _WIN32
-        RenderLayeredWindow(m_currentPos.x, m_currentPos.y);
+    RenderLayeredWindow(m_currentPos.x, m_currentPos.y);
 #else
-        Refresh();
+    Refresh();
 #endif
-        // 鼠标移出后 2.5 秒淡出
-        m_autoHideTimer.StartOnce(2500);
+    // 鼠标移出后 2.5 秒淡出
+    m_autoHideTimer.StartOnce(2500);
+}
+
+void FloatingIconFrame::OnLeftDown(wxMouseEvent& WXUNUSED(event)) {
+    m_autoHideTimer.Stop();
+    m_isDragging = false;
+    m_dragStartMousePos = wxGetMousePosition();
+    m_dragStartFramePos = m_currentPos;
+    if (!HasCapture()) {
+        CaptureMouse();
     }
+}
 
-    void FloatingIconFrame::OnLeftDown(wxMouseEvent& WXUNUSED(event)) {
-        m_autoHideTimer.Stop();
-        m_isDragging = false;
-        m_dragStartMousePos = wxGetMousePosition();
-        m_dragStartFramePos = m_currentPos;
-        if (!HasCapture()) {
-            CaptureMouse();
-        }
-    }
+void FloatingIconFrame::OnMouseMove(wxMouseEvent& event) {
+    if (event.LeftIsDown() || HasCapture()) {
+        wxPoint mousePos = wxGetMousePosition();
+        int dx = mousePos.x - m_dragStartMousePos.x;
+        int dy = mousePos.y - m_dragStartMousePos.y;
 
-    void FloatingIconFrame::OnMouseMove(wxMouseEvent& event) {
-        if (event.LeftIsDown() || HasCapture()) {
-            wxPoint mousePos = wxGetMousePosition();
-            int dx = mousePos.x - m_dragStartMousePos.x;
-            int dy = mousePos.y - m_dragStartMousePos.y;
-
-            const int dragThreshold = 3_dip;
-            if (!m_isDragging) {
-                if (std::abs(dx) > dragThreshold || std::abs(dy) > dragThreshold) {
-                    m_isDragging = true;
-                    SetCursor(wxCursor(wxCURSOR_SIZING));
-                }
+        const int dragThreshold = 3_dip;
+        if (!m_isDragging) {
+            if (std::abs(dx) > dragThreshold || std::abs(dy) > dragThreshold) {
+                m_isDragging = true;
+                SetCursor(wxCursor(wxCURSOR_SIZING));
             }
-
-            if (m_isDragging) {
-                int targetX = m_dragStartFramePos.x + dx;
-                int targetY = m_dragStartFramePos.y + dy;
-                const int iconSize = 40_dip;
-
-#ifdef _WIN32
-                POINT pt = { targetX, targetY };
-                HMONITOR hMon = MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST);
-                if (hMon) {
-                    MONITORINFO mi = { sizeof(mi) };
-                    if (GetMonitorInfo(hMon, &mi)) {
-                        int workLeft = mi.rcWork.left;
-                        int workRight = mi.rcWork.right;
-                        int workTop = mi.rcWork.top;
-                        int workBottom = mi.rcWork.bottom;
-
-                        if (targetX > workRight - iconSize - 4_dip) {
-                            targetX = workRight - iconSize - 4_dip;
-                        }
-                        if (targetX < workLeft + 4_dip) {
-                            targetX = workLeft + 4_dip;
-                        }
-                        if (targetY > workBottom - iconSize - 4_dip) {
-                            targetY = workBottom - iconSize - 4_dip;
-                        }
-                        if (targetY < workTop + 4_dip) {
-                            targetY = workTop + 4_dip;
-                        }
-                    }
-                }
-#else
-                wxPoint pos(targetX, targetY);
-                int displayIdx = wxDisplay::GetFromPoint(pos);
-                if (displayIdx == wxNOT_FOUND) {
-                    displayIdx = wxDisplay::GetFromPoint(m_dragStartMousePos);
-                }
-                if (displayIdx != wxNOT_FOUND) {
-                    wxDisplay display(displayIdx);
-                    wxRect geom = display.GetClientArea();
-                    if (targetX > geom.GetRight() - iconSize - 4_dip) targetX = geom.GetRight() - iconSize - 4_dip;
-                    if (targetX < geom.GetLeft() + 4_dip) targetX = geom.GetLeft() + 4_dip;
-                    if (targetY > geom.GetBottom() - iconSize - 4_dip) targetY = geom.GetBottom() - iconSize - 4_dip;
-                    if (targetY < geom.GetTop() + 4_dip) targetY = geom.GetTop() + 4_dip;
-                }
-#endif
-
-                m_currentPos = wxPoint(targetX, targetY);
-                SetPosition(m_currentPos);
-#ifdef _WIN32
-                RenderLayeredWindow(targetX, targetY);
-#else
-                Refresh();
-#endif
-            }
-        }
-    }
-
-    void FloatingIconFrame::OnLeftUp(wxMouseEvent& WXUNUSED(event)) {
-        if (HasCapture()) {
-            ReleaseMouse();
         }
 
         if (m_isDragging) {
-            m_isDragging = false;
-            SetCursor(wxCursor(wxCURSOR_HAND));
-            // 拖动释放后，重新开启 3 秒倒计时自动隐藏
-            m_autoHideTimer.StartOnce(3000);
-            return;
-        }
-
-        // 点击操作：触发点击回调并关闭自身
-        m_autoHideTimer.Stop();
-        Hide();
-
-        if (m_onClickCallback) {
-            m_onClickCallback(m_currentPos, m_selectedText);
-        }
-    }
-
-    void FloatingIconFrame::OnTimer(wxTimerEvent& WXUNUSED(event)) {
-        if (!m_isDragging) {
-            Hide();
-        }
-    }
+            int targetX = m_dragStartFramePos.x + dx;
+            int targetY = m_dragStartFramePos.y + dy;
+            const int iconSize = 40_dip;
 
 #ifdef _WIN32
-    WXLRESULT FloatingIconFrame::MSWWindowProc(WXUINT nMsg, WXWPARAM wParam, WXLPARAM lParam) {
-        if (nMsg == WM_MOUSEACTIVATE) {
-            // 极简 O(1) 拦截：鼠标划过/点击悬浮球时禁止激活窗体，杜绝抢占宿主终端焦点导致文本取消选中
-            return MA_NOACTIVATE;
+            POINT pt = {targetX, targetY};
+            HMONITOR hMon = MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST);
+            if (hMon) {
+                MONITORINFO mi = {sizeof(mi)};
+                if (GetMonitorInfo(hMon, &mi)) {
+                    int workLeft = mi.rcWork.left;
+                    int workRight = mi.rcWork.right;
+                    int workTop = mi.rcWork.top;
+                    int workBottom = mi.rcWork.bottom;
+
+                    if (targetX > workRight - iconSize - 4_dip) {
+                        targetX = workRight - iconSize - 4_dip;
+                    }
+                    if (targetX < workLeft + 4_dip) {
+                        targetX = workLeft + 4_dip;
+                    }
+                    if (targetY > workBottom - iconSize - 4_dip) {
+                        targetY = workBottom - iconSize - 4_dip;
+                    }
+                    if (targetY < workTop + 4_dip) {
+                        targetY = workTop + 4_dip;
+                    }
+                }
+            }
+#else
+            wxPoint pos(targetX, targetY);
+            int displayIdx = wxDisplay::GetFromPoint(pos);
+            if (displayIdx == wxNOT_FOUND) {
+                displayIdx = wxDisplay::GetFromPoint(m_dragStartMousePos);
+            }
+            if (displayIdx != wxNOT_FOUND) {
+                wxDisplay display(displayIdx);
+                wxRect geom = display.GetClientArea();
+                if (targetX > geom.GetRight() - iconSize - 4_dip)
+                    targetX = geom.GetRight() - iconSize - 4_dip;
+                if (targetX < geom.GetLeft() + 4_dip)
+                    targetX = geom.GetLeft() + 4_dip;
+                if (targetY > geom.GetBottom() - iconSize - 4_dip)
+                    targetY = geom.GetBottom() - iconSize - 4_dip;
+                if (targetY < geom.GetTop() + 4_dip)
+                    targetY = geom.GetTop() + 4_dip;
+            }
+#endif
+
+            m_currentPos = wxPoint(targetX, targetY);
+            SetPosition(m_currentPos);
+#ifdef _WIN32
+            RenderLayeredWindow(targetX, targetY);
+#else
+            Refresh();
+#endif
         }
-        if (nMsg == WM_ACTIVATE && LOWORD(wParam) != WA_INACTIVE) {
-            return 0; // 阻止窗体获得激活状态
-        }
-        if (nMsg == WM_NCACTIVATE && wParam != FALSE) {
-            return 0; // 阻止非客户区激活
-        }
-        return wxFrame::MSWWindowProc(nMsg, wParam, lParam);
     }
+}
+
+void FloatingIconFrame::OnLeftUp(wxMouseEvent& WXUNUSED(event)) {
+    if (HasCapture()) {
+        ReleaseMouse();
+    }
+
+    if (m_isDragging) {
+        m_isDragging = false;
+        SetCursor(wxCursor(wxCURSOR_HAND));
+        // 拖动释放后，重新开启 3 秒倒计时自动隐藏
+        m_autoHideTimer.StartOnce(3000);
+        return;
+    }
+
+    // 点击操作：触发点击回调并关闭自身
+    m_autoHideTimer.Stop();
+    Hide();
+
+    if (m_onClickCallback) {
+        m_onClickCallback(m_currentPos, m_selectedText);
+    }
+}
+
+void FloatingIconFrame::OnTimer(wxTimerEvent& WXUNUSED(event)) {
+    if (!m_isDragging) {
+        Hide();
+    }
+}
+
+#ifdef _WIN32
+WXLRESULT FloatingIconFrame::MSWWindowProc(WXUINT nMsg, WXWPARAM wParam, WXLPARAM lParam) {
+    if (nMsg == WM_MOUSEACTIVATE) {
+        // 极简 O(1) 拦截：鼠标划过/点击悬浮球时禁止激活窗体，杜绝抢占宿主终端焦点导致文本取消选中
+        return MA_NOACTIVATE;
+    }
+    if (nMsg == WM_ACTIVATE && LOWORD(wParam) != WA_INACTIVE) {
+        return 0; // 阻止窗体获得激活状态
+    }
+    if (nMsg == WM_NCACTIVATE && wParam != FALSE) {
+        return 0; // 阻止非客户区激活
+    }
+    return wxFrame::MSWWindowProc(nMsg, wParam, lParam);
+}
 #endif
 
 } // namespace LinguaAlpaca::UI
-
-

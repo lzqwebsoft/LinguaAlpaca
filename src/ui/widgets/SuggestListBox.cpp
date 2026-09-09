@@ -36,7 +36,7 @@ void SuggestListBox::InitUI() {
 }
 
 int SuggestListBox::GetItemAtPoint(const wxPoint& pt) const {
-    int itemHeight = 34_dip;
+    int itemHeight = 38_dip;
     if (itemHeight <= 0 || m_items.empty()) return -1;
 
     int clientW = GetClientSize().GetWidth();
@@ -52,7 +52,7 @@ int SuggestListBox::GetItemAtPoint(const wxPoint& pt) const {
 }
 
 void SuggestListBox::UpdateScrollParams() {
-    int itemHeight = 34_dip;
+    int itemHeight = 38_dip;
     int clientH = GetClientSize().GetHeight();
     if (itemHeight <= 0 || clientH <= 0) return;
 
@@ -68,7 +68,7 @@ void SuggestListBox::UpdateScrollParams() {
 }
 
 void SuggestListBox::ScrollToItem(int targetIndex) {
-    int itemHeight = 34_dip;
+    int itemHeight = 38_dip;
     int clientH = GetClientSize().GetHeight();
     if (itemHeight <= 0 || clientH <= 0) return;
 
@@ -140,12 +140,12 @@ void SuggestListBox::OnPaint(wxPaintEvent& WXUNUSED(event)) {
 
     gc->Clip(0, 0, size.x, size.y);
 
-    int itemHeight = 34_dip;
+    int itemHeight = 38_dip;
     int visibleCount = (size.y / itemHeight) + 1;
 
     // 空状态提示
     if (m_items.empty()) {
-        wxFont hintFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei");
+        wxFont hintFont = ThemeFont::MakeFont(11, wxFONTWEIGHT_NORMAL);
         gc->SetFont(hintFont, palette.textSecondary);
         wxString hint = L"输入单词开始联想...";
         double tw = 0, th = 0;
@@ -157,8 +157,8 @@ void SuggestListBox::OnPaint(wxPaintEvent& WXUNUSED(event)) {
     int endIndex = std::min(static_cast<int>(m_items.size()), m_firstVisibleIndex + visibleCount);
     int itemWidth = size.x - 16_dip;
 
-    wxFont itemFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei");
-    wxFont selectedFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei");
+    wxFont itemFont = ThemeFont::MakeFont(11, wxFONTWEIGHT_NORMAL);
+    wxFont selectedFont = ThemeFont::MakeFont(11, wxFONTWEIGHT_BOLD);
 
     for (int i = m_firstVisibleIndex; i < endIndex; ++i) {
         int y = (i - m_firstVisibleIndex) * itemHeight + 2_dip;
@@ -172,6 +172,7 @@ void SuggestListBox::OnPaint(wxPaintEvent& WXUNUSED(event)) {
 
         int x = 4_dip;
         double radius = 6.0_dip;
+        double tw = 0, th = 0;
 
         if (i == m_selectedIndex) {
             // 选中项高亮
@@ -180,7 +181,8 @@ void SuggestListBox::OnPaint(wxPaintEvent& WXUNUSED(event)) {
             gc->DrawRoundedRectangle(x, y, itemWidth, h, radius);
 
             gc->SetFont(selectedFont, *wxWHITE);
-            gc->DrawText(m_items[i], x + 10_dip, y + (itemHeight - 4_dip - 14_dip) / 2);
+            gc->GetTextExtent(m_items[i], &tw, &th);
+            gc->DrawText(m_items[i], x + 12_dip, y + (h - th) / 2.0);
         } else if (i == m_hoverIndex) {
             // 悬停项高亮
             gc->SetBrush(gc->CreateBrush(wxBrush(palette.bannerBg)));
@@ -188,11 +190,13 @@ void SuggestListBox::OnPaint(wxPaintEvent& WXUNUSED(event)) {
             gc->DrawRoundedRectangle(x, y, itemWidth, h, radius);
 
             gc->SetFont(itemFont, palette.accentPrimary);
-            gc->DrawText(m_items[i], x + 10_dip, y + (itemHeight - 4_dip - 14_dip) / 2);
+            gc->GetTextExtent(m_items[i], &tw, &th);
+            gc->DrawText(m_items[i], x + 12_dip, y + (h - th) / 2.0);
         } else {
             // 普通项
             gc->SetFont(itemFont, palette.textPrimary);
-            gc->DrawText(m_items[i], x + 10_dip, y + (itemHeight - 4_dip - 14_dip) / 2);
+            gc->GetTextExtent(m_items[i], &tw, &th);
+            gc->DrawText(m_items[i], x + 12_dip, y + (h - th) / 2.0);
         }
     }
 }

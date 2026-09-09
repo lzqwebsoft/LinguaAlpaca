@@ -86,6 +86,7 @@ private:
 
   wxRect GetClearBtnRect() const;
   void RebuildLayout();
+  void SetupNativeWindowStyles();
 
   wxTextCtrl *m_textCtrl{nullptr};
   wxBoxSizer *m_mainSizer{nullptr};

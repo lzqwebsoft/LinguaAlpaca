@@ -2,6 +2,7 @@
 #include "core/ClipboardHelper.hpp"
 #include "theme/Theme.hpp"
 #include "theme/IconManager.hpp"
+#include "theme/PlatformThemeHelper.hpp"
 #include <wx/clipbrd.h>
 #include <wx/dcbuffer.h>
 #include <wx/filename.h>
@@ -80,7 +81,7 @@ void LogView::InitUI() {
     m_autoScrollCheck = new wxCheckBox(m_headerPanel, wxID_ANY, L"自动滚动");
     m_autoScrollCheck->SetValue(true);
     m_autoScrollCheck->SetFont(ThemeFont::GetFont(FontRole::Control));
-    m_autoScrollCheck->SetForegroundColour(palette.textPrimary);
+    PlatformThemeHelper::ApplyControlTheme(m_autoScrollCheck, palette);
 
     // 功能按钮
     m_clearBtn = new CustomButton(m_headerPanel, wxID_ANY, L"清空", ButtonStyle::Secondary, wxDefaultPosition, dip(64, 28));
@@ -183,7 +184,7 @@ void LogView::AppendLogMessage(const LogMessage& msg) {
         break;
     }
 
-    wxTextAttr attr(levelCol, palette.cardBg);
+    wxTextAttr attr(levelCol, wxNullColour);
     bool isBold = (msg.level == LogLevel::Error || msg.level == LogLevel::Warning);
     attr.SetFont(isBold ? m_monoBoldFont : m_monoNormalFont);
     m_logTextCtrl->SetDefaultStyle(attr);
@@ -275,7 +276,7 @@ void LogView::UpdateTheme() {
         m_filterChoice->UpdateTheme();
     }
     if (m_autoScrollCheck) {
-        m_autoScrollCheck->SetForegroundColour(palette.textPrimary);
+        PlatformThemeHelper::ApplyControlTheme(m_autoScrollCheck, palette);
     }
 
     if (m_clearBtn)

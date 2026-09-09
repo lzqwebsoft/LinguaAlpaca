@@ -6,6 +6,12 @@
 #include <wx/dcbuffer.h>
 #include <wx/graphics.h>
 
+#ifdef _WIN32
+#include <windows.h>
+#elif defined(__APPLE__)
+#import <Cocoa/Cocoa.h>
+#endif
+
 namespace LinguaAlpaca::UI {
 
 CustomInputBox::CustomInputBox(wxWindow *parent, wxWindowID id,
@@ -41,6 +47,7 @@ void CustomInputBox::InitUI(const wxString &value, const wxString &hint,
   m_textCtrl->SetBackgroundColour(palette.cardBg);
   m_textCtrl->SetForegroundColour(palette.textPrimary);
 
+  SetupNativeWindowStyles();
   RebuildLayout();
 
   // 绑定事件
@@ -57,6 +64,7 @@ void CustomInputBox::InitUI(const wxString &value, const wxString &hint,
 
   m_textCtrl->Bind(wxEVT_SET_FOCUS, [this](wxFocusEvent &event) {
     m_isFocused = true;
+    SetupNativeWindowStyles();
     Refresh();
     event.Skip();
   });
@@ -385,7 +393,48 @@ void CustomInputBox::UpdateTheme() {
     m_textCtrl->SetForegroundColour(palette.textPrimary);
     m_textCtrl->Refresh();
   }
+  SetupNativeWindowStyles();
   Refresh();
+}
+
+void CustomInputBox::SetupNativeWindowStyles() {
+#ifdef __APPLE__
+  if (!m_textCtrl)
+    return;
+  NSView *view = (NSView *)m_textCtrl->GetHandle();
+  if (!view)
+    return;
+
+  [view setFocusRingType:NSFocusRingTypeNone];
+
+  if ([view isKindOfClass:[NSTextField class]]) {
+    NSTextField *tf = (NSTextField *)view;
+    [tf setFocusRingType:NSFocusRingTypeNone];
+    [[tf cell] setFocusRingType:NSFocusRingTypeNone];
+    [tf setBordered:NO];
+    [tf setBezeled:NO];
+    [tf setDrawsBackground:NO];
+    NSText *editor = [tf currentEditor];
+    if (editor) {
+      [editor setFocusRingType:NSFocusRingTypeNone];
+      if ([editor isKindOfClass:[NSTextView class]]) {
+        [(NSTextView *)editor setDrawsBackground:NO];
+      }
+    }
+  } else if ([view isKindOfClass:[NSScrollView class]]) {
+    NSScrollView *sv = (NSScrollView *)view;
+    [sv setFocusRingType:NSFocusRingTypeNone];
+    [sv setBorderType:NSNoBorder];
+    [sv setDrawsBackground:NO];
+    NSView *docView = (NSView *)[sv documentView];
+    if (docView) {
+      [docView setFocusRingType:NSFocusRingTypeNone];
+      if ([docView isKindOfClass:[NSTextView class]]) {
+        [(NSTextView *)docView setDrawsBackground:NO];
+      }
+    }
+  }
+#endif
 }
 
 } // namespace LinguaAlpaca::UI

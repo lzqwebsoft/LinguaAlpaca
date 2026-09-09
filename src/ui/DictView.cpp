@@ -180,7 +180,7 @@ void DictView::InitUI() {
     wxBoxSizer* rightCardSizer = new wxBoxSizer(wxVERTICAL);
 
     // 单词标题与操作栏
-    m_wordHeaderBar = new wxPanel(m_rightResultCard, wxID_ANY, wxDefaultPosition, wxSize(-1, 32_dip), wxBORDER_NONE);
+    m_wordHeaderBar = new wxPanel(m_rightResultCard, wxID_ANY, wxDefaultPosition, wxSize(-1, 38_dip), wxBORDER_NONE);
     m_wordHeaderBar->SetBackgroundColour(palette.cardBg);
 
     wxBoxSizer* wordHeaderSizer = new wxBoxSizer(wxHORIZONTAL);
@@ -188,12 +188,12 @@ void DictView::InitUI() {
     m_resultIcon = new wxStaticBitmap(m_wordHeaderBar, wxID_ANY, resultIconBundle);
 
     m_headwordText = new wxStaticText(m_wordHeaderBar, wxID_ANY, L"输入单词开始查询");
-    m_headwordText->SetFont(ThemeFont::GetFont(FontRole::SectionTitle));
+    m_headwordText->SetFont(ThemeFont::MakeFont(16, wxFONTWEIGHT_BOLD));
     m_headwordText->SetForegroundColour(palette.textPrimary);
     m_headwordText->SetBackgroundColour(palette.cardBg);
 
     m_phoneticText = new wxStaticText(m_wordHeaderBar, wxID_ANY, L"");
-    m_phoneticText->SetFont(ThemeFont::MakeFont(11, wxFONTWEIGHT_NORMAL, true, "Lucida Sans Unicode"));
+    m_phoneticText->SetFont(ThemeFont::MakeFont(13, wxFONTWEIGHT_NORMAL, true, "Lucida Sans Unicode"));
     m_phoneticText->SetForegroundColour(palette.accentPrimary);
     m_phoneticText->SetBackgroundColour(palette.cardBg);
 
@@ -219,7 +219,7 @@ void DictView::InitUI() {
 
     // 释义内容文本展示框 (启用 wxTE_RICH2 支持富文本样式)
     m_definitionCtrl = new TextCtrl(m_rightResultCard, wxID_ANY, L"", wxDefaultPosition, wxDefaultSize, wxTE_MULTILINE | wxTE_READONLY | wxBORDER_NONE | wxTE_RICH2);
-    m_definitionCtrl->SetFont(ThemeFont::GetFont(FontRole::Body));
+    m_definitionCtrl->SetFont(ThemeFont::MakeFont(11));
     m_definitionCtrl->SetBackgroundColour(palette.cardBg);
     m_definitionCtrl->SetForegroundColour(palette.textPrimary);
 
@@ -468,19 +468,19 @@ void DictView::RenderRichDictionaryResults(const std::vector<DictSearchResult>& 
 
     auto palette = ThemeColors::GetCurrentPalette();
 
-    // 字体规范定义 (高DPI适配，层级清晰)
-    wxFont defaultFont = ThemeFont::GetFont(FontRole::Body);
-    wxFont dictHeaderFont = ThemeFont::GetFont(FontRole::CardTitle);
-    wxFont posFont = ThemeFont::GetFont(FontRole::Control, true);
-    wxFont numFont = ThemeFont::GetFont(FontRole::Body, true);
-    wxFont phoneticFont = ThemeFont::MakeFont(10, wxFONTWEIGHT_NORMAL, true, "Lucida Sans Unicode");
-    wxFont exampleFont = ThemeFont::GetFont(FontRole::Body);
-    wxFont tagFont = ThemeFont::GetFont(FontRole::Control, true);
+    // 字体规范定义 (高DPI适配，层级清晰，字号适度加大提升阅读舒适度)
+    wxFont defaultFont = ThemeFont::MakeFont(11, wxFONTWEIGHT_NORMAL);
+    wxFont dictHeaderFont = ThemeFont::MakeFont(12, wxFONTWEIGHT_BOLD);
+    wxFont posFont = ThemeFont::MakeFont(10, wxFONTWEIGHT_BOLD);
+    wxFont numFont = ThemeFont::MakeFont(11, wxFONTWEIGHT_BOLD);
+    wxFont phoneticFont = ThemeFont::MakeFont(11, wxFONTWEIGHT_NORMAL, true, "Lucida Sans Unicode");
+    wxFont exampleFont = ThemeFont::MakeFont(11, wxFONTWEIGHT_NORMAL);
+    wxFont tagFont = ThemeFont::MakeFont(10, wxFONTWEIGHT_BOLD);
     wxFont dividerFont = ThemeFont::GetFont(FontRole::Caption);
 
     // 样式属性定义：针对各类语义元素应用专属的前景色、胶囊徽章背景与字重
-    // 1. 普通释义正文
-    wxTextAttr defaultAttr(palette.textPrimary, palette.cardBg, defaultFont);
+    // 1. 普通释义正文 (背景色置为 wxNullColour 保持透明底色)
+    wxTextAttr defaultAttr(palette.textPrimary, wxNullColour, defaultFont);
 
     // 2. 词典来源标头 (轻量横幅徽章样式)
     wxTextAttr dictHeaderAttr(palette.bannerText, palette.bannerBg, dictHeaderFont);
@@ -489,19 +489,19 @@ void DictView::RenderRichDictionaryResults(const std::vector<DictSearchResult>& 
     wxTextAttr posAttr(palette.bannerText, palette.bannerBg, posFont);
 
     // 4. 编号列表项 (强调色加粗)
-    wxTextAttr numAttr(palette.accentPrimary, palette.cardBg, numFont);
+    wxTextAttr numAttr(palette.accentPrimary, wxNullColour, numFont);
 
     // 5. 词典音标 (雅致翡翠绿倾斜)
-    wxTextAttr phoneticAttr(palette.accentGreen, palette.cardBg, phoneticFont);
+    wxTextAttr phoneticAttr(palette.accentGreen, wxNullColour, phoneticFont);
 
     // 6. 例句与双语注释 (次级文字色)
-    wxTextAttr exampleAttr(palette.textSecondary, palette.cardBg, exampleFont);
+    wxTextAttr exampleAttr(palette.textSecondary, wxNullColour, exampleFont);
 
     // 7. 版块标签 (如【例】【用法】【短语】，微绿药丸徽章)
     wxTextAttr tagAttr(palette.badgeText, palette.badgeBg, tagFont);
 
     // 8. 词典间高雅分割线
-    wxTextAttr dividerAttr(palette.cardBorderActive, palette.cardBg, dividerFont);
+    wxTextAttr dividerAttr(palette.cardBorderActive, wxNullColour, dividerFont);
 
     auto getStyleAttr = [&](DictTextStyle style) -> const wxTextAttr& {
         switch (style) {
@@ -524,6 +524,7 @@ void DictView::RenderRichDictionaryResults(const std::vector<DictSearchResult>& 
     }
 
     inner->Thaw();
+    m_definitionCtrl->SanitizeNativeTextAttributes();
     m_definitionCtrl->ScrollToLine(0);
 }
 

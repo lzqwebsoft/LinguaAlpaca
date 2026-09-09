@@ -72,6 +72,9 @@ public:
     void ScrollToLine(int targetLine);
     void UpdateScrollInfo();
 
+    // 净化原生 Cocoa/RichEdit 文本与视图属性，杜绝底色残留
+    void SanitizeNativeTextAttributes(bool stripStorageBg = true);
+
 private:
     void InitUI(const wxString& value, long style);
     void SetupNativeScrollHandling();

@@ -5,6 +5,7 @@
 #include "../theme/AppIcons.hpp"
 #include "../theme/IconManager.hpp"
 #include "../theme/Theme.hpp"
+#include "../theme/PlatformThemeHelper.hpp"
 
 #include <algorithm>
 #include <wx/dcbuffer.h>
@@ -50,6 +51,7 @@ void TranslationBubbleFrame::InitUI() {
         }
     }
 #endif
+    PlatformThemeHelper::ApplyWindowAppearance(this, ThemeManager::GetInstance().GetCurrentTheme());
     ThemePalette palette = ThemeManager::GetCurrentPalette();
     SetBackgroundColour(palette.cardBorder);
 
@@ -379,6 +381,7 @@ void TranslationBubbleFrame::ShowAndTranslate(const wxPoint& spawnPos, const std
     WinTtsHelper::GetInstance().Stop();
     m_lastSourceText = sourceText;
     UpdateLanguageBadge();
+    UpdateTheme();
 
     // 同步加载最新字号设置
     if (m_modelManager && m_modelManager->GetConfigManager()) {
@@ -669,6 +672,7 @@ void TranslationBubbleFrame::Dismiss() {
 }
 
 void TranslationBubbleFrame::UpdateTheme() {
+    PlatformThemeHelper::ApplyWindowAppearance(this, ThemeManager::GetInstance().GetCurrentTheme());
     ThemePalette palette = ThemeManager::GetCurrentPalette();
     SetBackgroundColour(palette.cardBorder);
 

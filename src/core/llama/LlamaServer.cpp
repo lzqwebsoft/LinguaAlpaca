@@ -43,6 +43,7 @@ std::string LlamaServer::FindLlamaServerBinary() {
         std::vector<std::filesystem::path> candidates = {
             appDir / "llama-server",
             appDir / "llama-server.exe",
+            appDir / ".." / ".." / ".." / "llama-server",
             appDir / ".." / "bin" / "llama-server",
             appDir / ".." / "bin" / "Release" / "llama-server",
             appDir / ".." / "bin" / "Debug" / "llama-server",

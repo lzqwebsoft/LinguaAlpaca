@@ -289,6 +289,8 @@ if(APPLE)
         COMMAND ${CMAKE_COMMAND} -E create_symlink
             "$<TARGET_FILE_DIR:llama-server>/llama-server"
             "$<TARGET_FILE_DIR:${PROJECT_NAME}>/llama-server"
+        COMMAND /usr/bin/touch
+            "$<TARGET_FILE_DIR:${PROJECT_NAME}>/../.."
     )
 else()
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD

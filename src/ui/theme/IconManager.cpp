@@ -250,6 +250,18 @@ wxIcon IconManager::GetAppIcon(const wxSize& targetSize) {
         }
         ::DestroyIcon(hIcon);
     }
+#elif defined(__APPLE__)
+    wxString macPngPath = ResolveResourcePath("resources/app_icon_mac.png");
+    if (macPngPath.IsEmpty()) macPngPath = ResolveResourcePath("app_icon_mac.png");
+    if (!macPngPath.IsEmpty() && wxFileExists(macPngPath)) {
+        wxImage macImg;
+        if (macImg.LoadFile(macPngPath, wxBITMAP_TYPE_PNG)) {
+            wxBitmap bmp(macImg.Scale(targetSize.x, targetSize.y, wxIMAGE_QUALITY_HIGH));
+            wxIcon icon;
+            icon.CopyFromBitmap(bmp);
+            return icon;
+        }
+    }
 #endif
 
     // 尝试从 resources/app_icon.ico 解析多分辨率图标
@@ -303,6 +315,23 @@ wxIconBundle IconManager::GetAppIconBundle() {
     if (bundle.IsOk() && bundle.GetIcon(wxSize(32, 32)).IsOk()) {
         return bundle;
     }
+#elif defined(__APPLE__)
+    // 优先从 resources/app_icon_mac.png 加载多分辨率图标集合
+    wxString macPngPath = ResolveResourcePath("resources/app_icon_mac.png");
+    if (macPngPath.IsEmpty()) macPngPath = ResolveResourcePath("app_icon_mac.png");
+    if (!macPngPath.IsEmpty() && wxFileExists(macPngPath)) {
+        wxImage macImg;
+        if (macImg.LoadFile(macPngPath, wxBITMAP_TYPE_PNG)) {
+            const int sizes[] = { 16, 24, 32, 48, 64, 128, 256, 512 };
+            for (int sz : sizes) {
+                wxBitmap bmp(macImg.Scale(sz, sz, wxIMAGE_QUALITY_HIGH));
+                wxIcon icon;
+                icon.CopyFromBitmap(bmp);
+                bundle.AddIcon(icon);
+            }
+            return bundle;
+        }
+    }
 #endif
 
     // 尝试从 resources/app_icon.ico 加载全部规格图标
@@ -336,30 +365,24 @@ static void SetupMacDockIcon() {
     @autoreleasepool {
         NSImage* appIconImage = nil;
 
-        // 1. 优先从 resources/app_icon.icns 加载原生多分辨率矢量与位图图标
-        wxString icnsPath = ResolveResourcePath("resources/app_icon.icns");
-        if (icnsPath.IsEmpty()) {
-            icnsPath = ResolveResourcePath("app_icon.icns");
+        // 1. 优先从 resources/app_icon_mac.png 加载 1024x1024 高清圆角矩形图标
+        wxString pngPath = ResolveResourcePath("resources/app_icon_mac.png");
+        if (pngPath.IsEmpty()) {
+            pngPath = ResolveResourcePath("app_icon_mac.png");
         }
-        if (!icnsPath.IsEmpty() && wxFileExists(icnsPath)) {
-            NSString* nsPath = [NSString stringWithUTF8String:icnsPath.ToUTF8().data()];
+        if (!pngPath.IsEmpty() && wxFileExists(pngPath)) {
+            NSString* nsPath = [NSString stringWithUTF8String:pngPath.ToUTF8().data()];
             appIconImage = [[NSImage alloc] initWithContentsOfFile:nsPath];
         }
 
-        // 2. 次选从 resources/app_icon_mac.png 或 resources/app_icon.png 加载
+        // 2. 次选从 resources/app_icon.icns 加载原生多分辨率矢量与位图图标
         if (!appIconImage) {
-            wxString pngPath = ResolveResourcePath("resources/app_icon_mac.png");
-            if (pngPath.IsEmpty()) {
-                pngPath = ResolveResourcePath("app_icon_mac.png");
+            wxString icnsPath = ResolveResourcePath("resources/app_icon.icns");
+            if (icnsPath.IsEmpty()) {
+                icnsPath = ResolveResourcePath("app_icon.icns");
             }
-            if (pngPath.IsEmpty() || !wxFileExists(pngPath)) {
-                pngPath = ResolveResourcePath("resources/app_icon.png");
-                if (pngPath.IsEmpty()) {
-                    pngPath = ResolveResourcePath("app_icon.png");
-                }
-            }
-            if (!pngPath.IsEmpty() && wxFileExists(pngPath)) {
-                NSString* nsPath = [NSString stringWithUTF8String:pngPath.ToUTF8().data()];
+            if (!icnsPath.IsEmpty() && wxFileExists(icnsPath)) {
+                NSString* nsPath = [NSString stringWithUTF8String:icnsPath.ToUTF8().data()];
                 appIconImage = [[NSImage alloc] initWithContentsOfFile:nsPath];
             }
         }
@@ -392,16 +415,17 @@ static void SetupMacDockIcon() {
             [app setApplicationIconImage:appIconImage];
             [[app dockTile] display];
 
-            // 5. 将自定义图标固化到可执行文件与 Bundle 磁盘本体 (通过 NSWorkspace 文件元数据扩展属性)，
-            // 确保用户在 macOS 程序坞中勾选「在程序坞中保留」并退出程序后，程序坞依然常驻显示精美图标
+            // 5. 确保 Bundle 目录上没有遗留过时的自定义 Icon\r 掩码与扩展属性，
+            // 使得 macOS 原生、动态根据 Info.plist 中的 CFBundleIconFile (app_icon.icns) 展示常驻 Dock 坞图标
             wxString exePath = wxStandardPaths::Get().GetExecutablePath();
             if (!exePath.IsEmpty() && wxFileExists(exePath)) {
                 NSString* nsExePath = [NSString stringWithUTF8String:exePath.ToUTF8().data()];
-                [[NSWorkspace sharedWorkspace] setIcon:appIconImage forFile:nsExePath options:0];
-
                 if ([nsExePath containsString:@".app/Contents/MacOS"]) {
                     NSString* appBundlePath = [nsExePath componentsSeparatedByString:@"/Contents/MacOS"][0];
-                    [[NSWorkspace sharedWorkspace] setIcon:appIconImage forFile:appBundlePath options:0];
+                    // 传递 nil 以清除自定义图标，让系统完全遵循 Bundle 内部 resources/app_icon.icns 原生展现
+                    [[NSWorkspace sharedWorkspace] setIcon:nil forFile:appBundlePath options:0];
+                } else {
+                    [[NSWorkspace sharedWorkspace] setIcon:appIconImage forFile:nsExePath options:0];
                 }
             }
 

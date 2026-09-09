@@ -16,7 +16,7 @@ enum class FontRole {
     Control,      // 标准控件/按钮/下拉选项/表格 (Win 9pt / Mac 13pt)
     Badge,        // 状态药丸/胶囊标签 (Win 9pt Bold / Mac 13pt Bold)
     Caption,      // 辅助提示/折叠预览/底部状态 (Win 8pt / Mac 11pt)
-    Code,         // 等宽代码/控制台日志 (Win 10pt / Mac 14pt Mono)
+    Code,         // 等宽代码/控制台日志 (Win 9pt / Mac 12pt Mono)
 };
 
 class ThemeFont {
@@ -106,7 +106,7 @@ public:
         case FontRole::Caption:
             return MakeFont(8, bold ? wxFONTWEIGHT_BOLD : wxFONTWEIGHT_NORMAL);
         case FontRole::Code:
-            return MakeFont(10, bold ? wxFONTWEIGHT_BOLD : wxFONTWEIGHT_NORMAL, false, GetDefaultMonoFamily());
+            return MakeFont(9, bold ? wxFONTWEIGHT_BOLD : wxFONTWEIGHT_NORMAL, false, GetDefaultMonoFamily());
         default:
             return MakeFont(10, bold ? wxFONTWEIGHT_BOLD : wxFONTWEIGHT_NORMAL);
         }

@@ -346,11 +346,17 @@ static void SetupMacDockIcon() {
             appIconImage = [[NSImage alloc] initWithContentsOfFile:nsPath];
         }
 
-        // 2. 次选从 resources/app_icon.png 或 resources/logo.png 加载
+        // 2. 次选从 resources/app_icon_mac.png 或 resources/app_icon.png 加载
         if (!appIconImage) {
-            wxString pngPath = ResolveResourcePath("resources/app_icon.png");
+            wxString pngPath = ResolveResourcePath("resources/app_icon_mac.png");
             if (pngPath.IsEmpty()) {
-                pngPath = ResolveResourcePath("app_icon.png");
+                pngPath = ResolveResourcePath("app_icon_mac.png");
+            }
+            if (pngPath.IsEmpty() || !wxFileExists(pngPath)) {
+                pngPath = ResolveResourcePath("resources/app_icon.png");
+                if (pngPath.IsEmpty()) {
+                    pngPath = ResolveResourcePath("app_icon.png");
+                }
             }
             if (!pngPath.IsEmpty() && wxFileExists(pngPath)) {
                 NSString* nsPath = [NSString stringWithUTF8String:pngPath.ToUTF8().data()];

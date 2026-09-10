@@ -16,12 +16,14 @@
 #include <wx/msw/wrapgdip.h>
 #elif defined(__APPLE__)
 #import <Cocoa/Cocoa.h>
+#import <objc/runtime.h>
 #endif
 
 namespace LinguaAlpaca::UI {
 
 FloatingIconFrame::FloatingIconFrame(wxWindow* parent)
-    : wxFrame(parent, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxFRAME_NO_TASKBAR | wxSTAY_ON_TOP | wxBORDER_NONE)
+    : wxFrame(parent, wxID_ANY, "", wxDefaultPosition, wxDefaultSize,
+              wxFRAME_NO_TASKBAR | wxSTAY_ON_TOP | wxBORDER_NONE | wxFRAME_TOOL_WINDOW)
     , m_autoHideTimer(this) {
     SetBackgroundStyle(wxBG_STYLE_PAINT);
     int iconSize = 40_dip;
@@ -56,6 +58,34 @@ void FloatingIconFrame::InitUI() {
             [nswin setLevel:NSPopUpMenuWindowLevel];
             [nswin setCollectionBehavior:NSWindowCollectionBehaviorCanJoinAllSpaces | NSWindowCollectionBehaviorFullScreenAuxiliary];
             [nswin setHidesOnDeactivate:NO];
+            [nswin setStyleMask:[nswin styleMask] | NSWindowStyleMaskNonactivatingPanel];
+            if ([nswin isKindOfClass:[NSPanel class]]) {
+                NSPanel* panel = (NSPanel*)nswin;
+                [panel setFloatingPanel:YES];
+                [panel setBecomesKeyOnlyIfNeeded:YES];
+                [panel setWorksWhenModal:YES];
+            }
+
+            // 关键：wxNSPanel 默认重写了 canBecomeKeyWindow 返回 YES，
+            // 这会导致点击悬浮图标时激活主应用，夺走原宿主应用（如 WPS、VS Code、PDF 阅读器）的焦点，
+            // 进而导致选区丢失或 Cmd+C 快捷键被截胡。
+            // 通过 Objective-C Runtime 动态派生微子类，强制 canBecomeKeyWindow 和 canBecomeMainWindow 严格返回 NO。
+            Class baseClass = [nswin class];
+            const char* subclassName = "LinguaAlpacaNonActivatingFloatingIconPanel";
+            Class subClass = objc_getClass(subclassName);
+            if (!subClass) {
+                subClass = objc_allocateClassPair(baseClass, subclassName, 0);
+                if (subClass) {
+                    IMP returnNO = imp_implementationWithBlock(^BOOL(id self) { return NO; });
+                    class_addMethod(subClass, @selector(canBecomeKeyWindow), returnNO, "c@:");
+                    class_addMethod(subClass, @selector(canBecomeMainWindow), returnNO, "c@:");
+                    class_addMethod(subClass, @selector(needsPanelToBecomeKey), returnNO, "c@:");
+                    objc_registerClassPair(subClass);
+                }
+            }
+            if (subClass) {
+                object_setClass(nswin, subClass);
+            }
         }
     }
 #endif
@@ -178,8 +208,8 @@ void FloatingIconFrame::RenderLayeredWindow(int screenX, int screenY) {
 #endif
 }
 
-void FloatingIconFrame::ShowAt(int screenX, int screenY, const std::string& selectedText) {
-    m_selectedText = selectedText;
+void FloatingIconFrame::ShowAt(int screenX, int screenY, const SelectionContext& ctx) {
+    m_selectionContext = ctx;
     m_isHovered = false;
     m_isDragging = false;
     const int iconSize = 40_dip;
@@ -485,7 +515,7 @@ void FloatingIconFrame::OnLeftUp(wxMouseEvent& WXUNUSED(event)) {
     Hide();
 
     if (m_onClickCallback) {
-        m_onClickCallback(m_currentPos, m_selectedText);
+        m_onClickCallback(m_currentPos, m_selectionContext);
     }
 }
 

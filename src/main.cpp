@@ -79,16 +79,20 @@ public:
             m_floatingIcon = new UI::FloatingIconFrame(nullptr);
             m_translationBubble = new UI::TranslationBubbleFrame(m_modelManager, nullptr);
 
-            m_floatingIcon->SetClickCallback([this](const wxPoint& pos, const std::string& text) {
-                if (m_translationBubble) {
-                    m_translationBubble->ShowAndTranslate(pos, text);
+            m_floatingIcon->SetClickCallback([this](const wxPoint& pos, const SelectionContext& ctx) {
+                if (m_selectionService) {
+                    m_selectionService->ExtractSelectionAsync(ctx, [this, pos](const std::string& text) {
+                        if (!text.empty() && m_translationBubble) {
+                            m_translationBubble->ShowAndTranslate(pos, text);
+                        }
+                    });
                 }
             });
 
             m_selectionService = std::make_unique<SelectionService>(configManager);
-            m_selectionService->SetCallback([this](int x, int y, const std::string& text) {
+            m_selectionService->SetCallback([this](int x, int y, const SelectionContext& ctx) {
                 if (m_floatingIcon) {
-                    m_floatingIcon->ShowAt(x, y, text);
+                    m_floatingIcon->ShowAt(x, y, ctx);
                 }
             });
             m_selectionService->Start();

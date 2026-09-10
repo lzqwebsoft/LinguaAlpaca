@@ -5,10 +5,11 @@
 #include <wx/timer.h>
 #include <functional>
 #include <string>
+#include "core/SelectionContext.hpp"
 
 namespace LinguaAlpaca::UI {
 
-using FloatingIconClickCallback = std::function<void(const wxPoint& pos, const std::string& selectedText)>;
+using FloatingIconClickCallback = std::function<void(const wxPoint& pos, const SelectionContext& ctx)>;
 
 class FloatingIconFrame : public wxFrame {
 public:
@@ -16,7 +17,7 @@ public:
     ~FloatingIconFrame() override = default;
 
     // 在指定屏幕坐标展示悬浮图标
-    void ShowAt(int screenX, int screenY, const std::string& selectedText);
+    void ShowAt(int screenX, int screenY, const SelectionContext& ctx);
 
     // 隐藏悬浮图标
     void Dismiss();
@@ -38,7 +39,7 @@ private:
     void OnTimer(wxTimerEvent& event);
 
     wxPoint m_currentPos;
-    std::string m_selectedText;
+    SelectionContext m_selectionContext;
     bool m_isHovered{false};
     bool m_isDragging{false};
     wxPoint m_dragStartMousePos;

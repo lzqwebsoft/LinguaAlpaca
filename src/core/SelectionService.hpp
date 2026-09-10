@@ -8,11 +8,12 @@
 #include <atomic>
 #include <mutex>
 #include "Config.hpp"
+#include "SelectionContext.hpp"
 
 namespace LinguaAlpaca {
 
-// 划词触发后的回调函数 (屏幕坐标 X, Y, 提取到的文本)
-using SelectionDetectedCallback = std::function<void(int screenX, int screenY, const std::string& text)>;
+// 划词触发后的轻量回调函数 (屏幕坐标 X, Y, 划词上下文)
+using SelectionDetectedCallback = std::function<void(int screenX, int screenY, const SelectionContext& ctx)>;
 
 class SelectionService {
 public:
@@ -31,8 +32,14 @@ public:
     // 检查当前是否在运行
     bool IsRunning() const { return m_isRunning.load(); }
 
-    // 注册划词选中文本回调
+    // 注册划词手势触发回调 (单纯显示悬浮按钮)
     void SetCallback(SelectionDetectedCallback callback);
+
+    // 异步提取划词文本 (当用户主动点击悬浮按钮后调用)
+    void ExtractSelectionAsync(
+        const SelectionContext& ctx,
+        std::function<void(const std::string& text)> onComplete
+    );
 
     // 动态同步最新配置
     void ApplyConfig(const AppConfig& config);
@@ -41,7 +48,8 @@ public:
     void OnLowLevelMouseEvent(int message, int x, int y);
 
 private:
-    void ProcessSelectionAsync(int startX, int startY, int endX, int endY);
+    void NotifySelectionDetected(const SelectionContext& ctx);
+    void CheckAndNotifyIfTextSelectedAsync(const SelectionContext& ctx);
 
     // 检查当前的鼠标操作是否应被忽略（如自身窗口、拖拽窗口标题栏、滑动滚动条、调节窗体尺寸等非文本选中操作）
     bool ShouldIgnoreMouseEvent(int startX, int startY, int endX, int endY) const;

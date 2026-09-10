@@ -85,6 +85,7 @@ set(CORE_SOURCES
     src/core/WinMediaOcrHelper.cpp
     src/core/ScreenTextExtractor.hpp
     src/core/ScreenTextExtractor.cpp
+    src/core/SelectionContext.hpp
     src/core/SelectionService.hpp
     src/core/SelectionService.cpp
     src/core/llama/LlamaServer.hpp

@@ -5,6 +5,8 @@
 #include "core/ClipboardHelper.hpp"
 #include "core/ScreenTextExtractor.hpp"
 #include "core/WinTtsHelper.hpp"
+#include <thread>
+#include <chrono>
 
 using namespace LinguaAlpaca;
 
@@ -124,7 +126,7 @@ TEST_CASE("SelectionService - Lifecycle and Config Management", "[core][selectio
 
     SECTION("Callback registration and config update") {
         bool callbackInvoked = false;
-        service.SetCallback([&](int, int, const std::string&) {
+        service.SetCallback([&](int, int, const SelectionContext&) {
             callbackInvoked = true;
         });
 
@@ -136,6 +138,59 @@ TEST_CASE("SelectionService - Lifecycle and Config Management", "[core][selectio
         // Service stopped clean
         service.Stop();
         REQUIRE(service.IsRunning() == false);
+    }
+
+    SECTION("Mode 0 filters out empty selections when no text is highlighted") {
+        bool started = service.Start();
+        REQUIRE(started == true);
+
+        bool callbackInvoked = false;
+        service.SetCallback([&](int, int, const SelectionContext&) {
+            callbackInvoked = true;
+        });
+
+        AppConfig cfg = configManager->GetConfig();
+        cfg.selectionTranslateEnabled = true;
+        cfg.selectionTriggerMode = 0; // Mode 0: Direct selection
+        service.ApplyConfig(cfg);
+
+        // Single click at empty area (500, 500) should NOT trigger
+        service.OnLowLevelMouseEvent(0x0201 /* WM_LBUTTONDOWN */, 500, 500);
+        service.OnLowLevelMouseEvent(0x0202 /* WM_LBUTTONUP */, 500, 500);
+        wxYield();
+        REQUIRE(callbackInvoked == false);
+
+        // Double click at empty area (501, 501) with no text selected should NOT trigger floating icon
+        service.OnLowLevelMouseEvent(0x0201 /* WM_LBUTTONDOWN */, 501, 501);
+        service.OnLowLevelMouseEvent(0x0202 /* WM_LBUTTONUP */, 501, 501);
+        std::this_thread::sleep_for(std::chrono::milliseconds(80));
+        wxYield();
+        REQUIRE(callbackInvoked == false);
+
+        service.Stop();
+    }
+
+    SECTION("ExtractSelectionAsync directly reuses preExtractedText") {
+        bool started = service.Start();
+        REQUIRE(started == true);
+
+        SelectionContext ctx;
+        ctx.preExtractedText = "Pre-extracted selection test";
+        ctx.endX = 300;
+        ctx.endY = 400;
+
+        bool extracted = false;
+        std::string resultText;
+        service.ExtractSelectionAsync(ctx, [&](const std::string& text) {
+            extracted = true;
+            resultText = text;
+        });
+
+        wxYield();
+        REQUIRE(extracted == true);
+        REQUIRE(resultText == "Pre-extracted selection test");
+
+        service.Stop();
     }
 }
 

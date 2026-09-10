@@ -30,17 +30,19 @@ ExtractedSelection ScreenTextExtractor::ExtractSelection(
     result.anchorX = endX;
     result.anchorY = endY;
 
-    // 阶段 1：首选 Windows UI Automation 无障碍选区精准查询 (非侵入式，完全不触碰/不污染剪贴板，不破坏选区)
+    std::string text;
+
+#if defined(_WIN32) || defined(__APPLE__)
+    // 阶段 1：首选 Windows UI Automation / macOS Accessibility (AXUIElement) 无障碍选区精准查询 (非侵入式，完全不触碰/不污染剪贴板，不破坏选区)
     int uiaAnchorX = endX;
     int uiaAnchorY = endY;
-    std::string text;
     if (ExtractViaUIAutomation(endX, endY, text, uiaAnchorX, uiaAnchorY)) {
         if (!text.empty() && text.size() <= 8000) {
             result.text = text;
-            result.anchorX = endX;
-            result.anchorY = endY;
+            result.anchorX = uiaAnchorX;
+            result.anchorY = uiaAnchorY;
             result.source = "UIAutomation";
-            LOG_INFO("ScreenTextExtractor", "Extracted via UIAutomation: \"" + text + "\"");
+            LOG_INFO("ScreenTextExtractor", "Extracted via UIAutomation / AX: \"" + text + "\"");
             return result;
         }
     }
@@ -50,13 +52,14 @@ ExtractedSelection ScreenTextExtractor::ExtractSelection(
     if (ExtractViaUIAutomation(endX, endY, text, uiaAnchorX, uiaAnchorY)) {
         if (!text.empty() && text.size() <= 8000) {
             result.text = text;
-            result.anchorX = endX;
-            result.anchorY = endY;
+            result.anchorX = uiaAnchorX;
+            result.anchorY = uiaAnchorY;
             result.source = "UIAutomation";
-            LOG_INFO("ScreenTextExtractor", "Extracted via UIAutomation (retry): \"" + text + "\"");
+            LOG_INFO("ScreenTextExtractor", "Extracted via UIAutomation / AX (retry): \"" + text + "\"");
             return result;
         }
     }
+#endif
 
     // 阶段 2：UI Automation 未命中时（如 VS Code 终端 canvas/xterm.js、各类编辑器与终端），
     // 使用增强版数字剪贴板提取（优先发送无破坏性的 Ctrl+Insert，100% 精确获取原始数字字符且不取消选区）

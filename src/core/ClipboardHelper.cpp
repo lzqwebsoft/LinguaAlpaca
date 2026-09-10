@@ -482,7 +482,7 @@ bool ClipboardHelper::SendCtrlC() {
         CGEventSetFlags(keyUp, kCGEventFlagMaskCommand);
 
         CGEventPost(kCGHIDEventTap, keyDown);
-        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        std::this_thread::sleep_for(std::chrono::milliseconds(15));
         CGEventPost(kCGHIDEventTap, keyUp);
 
         CFRelease(keyDown);
@@ -525,29 +525,49 @@ std::string ClipboardHelper::GetSelectedTextViaSendInput(bool preserveClipboard)
             return "";
         }
 
-        // 3. 轮询等待系统剪贴板 changeCount 发生变化（最长约 150ms）
-        bool updated = false;
-        for (int i = 0; i < 15; ++i) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-            if ([pb changeCount] != initialChangeCount) {
-                updated = true;
-                break;
-            }
-        }
-
-        if (!updated) {
-            return "";
-        }
-
-        NSInteger copyChangeCount = [pb changeCount];
-
-        // 提取剪贴板文本并去除两端空白
-        NSString *str = [pb stringForType:NSPasteboardTypeString];
+        // 3. 轮询等待系统剪贴板更新并成功解析出文本（最长约 250ms）
         std::string selectedText;
-        if (str) {
-            NSString *trimmed = [str stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-            if (trimmed && trimmed.length > 0) {
-                selectedText = [trimmed UTF8String];
+        NSInteger copyChangeCount = 0;
+
+        for (int i = 0; i < 25; ++i) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            NSInteger currentChangeCount = [pb changeCount];
+            if (currentChangeCount != initialChangeCount) {
+                // 优先通过 readObjectsForClasses 读取（自动兼容纯文本、富文本 RTF、HTML 及延迟加载的 Promised Text）
+                NSArray *classes = @[[NSString class], [NSAttributedString class]];
+                NSArray *objects = [pb readObjectsForClasses:classes options:nil];
+                NSString *str = nil;
+                if (objects && objects.count > 0) {
+                    id obj = objects[0];
+                    if ([obj isKindOfClass:[NSString class]]) {
+                        str = (NSString*)obj;
+                    } else if ([obj isKindOfClass:[NSAttributedString class]]) {
+                        str = [(NSAttributedString*)obj string];
+                    }
+                }
+                if (!str || str.length == 0) {
+                    str = [pb stringForType:NSPasteboardTypeString];
+                }
+                if (!str || str.length == 0) {
+                    str = [pb stringForType:@"public.utf8-plain-text"];
+                }
+                if (!str || str.length == 0) {
+                    str = [pb stringForType:@"NSStringPboardType"];
+                }
+
+                if (str && str.length > 0) {
+                    NSString *trimmed = [str stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+                    if (trimmed && trimmed.length > 0) {
+                        selectedText = [trimmed UTF8String];
+                        copyChangeCount = currentChangeCount;
+                        break; // 成功解析到有效文本才退出轮询
+                    }
+                }
+            }
+
+            // 若前 70ms 宿主应用未响应（如 WPS/Acrobat 刚弹出工具条丢键），自动重发一次 Cmd+C 兜底
+            if (i == 7 && currentChangeCount == initialChangeCount) {
+                SendCtrlC();
             }
         }
 

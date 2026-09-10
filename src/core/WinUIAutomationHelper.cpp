@@ -226,38 +226,98 @@ std::string CleanAXString(NSString* nsStr) {
     return [trimmed UTF8String] ? [trimmed UTF8String] : "";
 }
 
-bool ExtractFromAXElement(AXUIElementRef element, std::string& outText, int& outAnchorX, int& outAnchorY) {
+bool ExtractFromAXElement(AXUIElementRef element, int mouseX, int mouseY, std::string& outText, int& outAnchorX, int& outAnchorY) {
     if (!element) return false;
 
+    auto tryCalculateBounds = [&](CFTypeRef selectedRangeVal) {
+        if (!selectedRangeVal) return;
+        CFTypeRef boundsVal = NULL;
+        if (AXUIElementCopyParameterizedAttributeValue(element, kAXBoundsForRangeParameterizedAttribute, selectedRangeVal, &boundsVal) == kAXErrorSuccess && boundsVal) {
+            CGRect rect = CGRectZero;
+            if (AXValueGetValue((AXValueRef)boundsVal, kAXValueTypeCGRect, &rect) && (rect.size.width > 0 || rect.size.height > 0)) {
+                outAnchorX = static_cast<int>(rect.origin.x + rect.size.width);
+                outAnchorY = static_cast<int>(rect.origin.y + rect.size.height + 6);
+            }
+            CFRelease(boundsVal);
+        }
+    };
+
+    // 1. 尝试直接获取 kAXSelectedTextAttribute (支持 NSString 与 CFAttributedString)
     CFTypeRef selectedTextVal = NULL;
     AXError err = AXUIElementCopyAttributeValue(element, kAXSelectedTextAttribute, &selectedTextVal);
     if (err == kAXErrorSuccess && selectedTextVal) {
+        std::string text;
         if (CFGetTypeID(selectedTextVal) == CFStringGetTypeID()) {
-            NSString* str = (__bridge NSString*)selectedTextVal;
-            std::string text = CleanAXString(str);
-            if (!text.empty()) {
-                outText = text;
+            text = CleanAXString((__bridge NSString*)selectedTextVal);
+        } else if (CFGetTypeID(selectedTextVal) == CFAttributedStringGetTypeID()) {
+            CFAttributedStringRef attrStr = (CFAttributedStringRef)selectedTextVal;
+            text = CleanAXString((__bridge NSString*)CFAttributedStringGetString(attrStr));
+        }
 
-                // 尝试获取选中文本的外接包围矩形以提供精准悬浮锚点
-                CFTypeRef selectedRangeVal = NULL;
-                if (AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute, &selectedRangeVal) == kAXErrorSuccess && selectedRangeVal) {
-                    CFTypeRef boundsVal = NULL;
-                    if (AXUIElementCopyParameterizedAttributeValue(element, kAXBoundsForRangeParameterizedAttribute, selectedRangeVal, &boundsVal) == kAXErrorSuccess && boundsVal) {
-                        CGRect rect = CGRectZero;
-                        if (AXValueGetValue((AXValueRef)boundsVal, kAXValueTypeCGRect, &rect)) {
-                            outAnchorX = static_cast<int>(rect.origin.x + rect.size.width);
-                            outAnchorY = static_cast<int>(rect.origin.y + rect.size.height + 6);
-                        }
-                        CFRelease(boundsVal);
-                    }
-                    CFRelease(selectedRangeVal);
-                }
+        if (!text.empty()) {
+            outText = text;
+            outAnchorX = mouseX;
+            outAnchorY = mouseY + 12;
 
-                CFRelease(selectedTextVal);
-                return true;
+            CFTypeRef selectedRangeVal = NULL;
+            if (AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute, &selectedRangeVal) == kAXErrorSuccess && selectedRangeVal) {
+                tryCalculateBounds(selectedRangeVal);
+                CFRelease(selectedRangeVal);
             }
+
+            CFRelease(selectedTextVal);
+            return true;
         }
         CFRelease(selectedTextVal);
+    }
+
+    // 2. 尝试基于 kAXSelectedTextRangeAttribute 获取选区范围，并通过 kAXStringForRangeParameterizedAttribute 提取文本
+    CFTypeRef rangeVal = NULL;
+    if (AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute, &rangeVal) == kAXErrorSuccess && rangeVal) {
+        CFRange range = {0, 0};
+        if (AXValueGetValue((AXValueRef)rangeVal, kAXValueTypeCFRange, &range) && range.length > 0) {
+            CFTypeRef strVal = NULL;
+            if (AXUIElementCopyParameterizedAttributeValue(element, kAXStringForRangeParameterizedAttribute, rangeVal, &strVal) == kAXErrorSuccess && strVal) {
+                std::string text;
+                if (CFGetTypeID(strVal) == CFStringGetTypeID()) {
+                    text = CleanAXString((__bridge NSString*)strVal);
+                } else if (CFGetTypeID(strVal) == CFAttributedStringGetTypeID()) {
+                    text = CleanAXString((__bridge NSString*)CFAttributedStringGetString((CFAttributedStringRef)strVal));
+                }
+                CFRelease(strVal);
+
+                if (!text.empty()) {
+                    outText = text;
+                    outAnchorX = mouseX;
+                    outAnchorY = mouseY + 12;
+                    tryCalculateBounds(rangeVal);
+                    CFRelease(rangeVal);
+                    return true;
+                }
+            }
+        }
+        CFRelease(rangeVal);
+    }
+
+    return false;
+}
+
+bool TryExtractFromTree(AXUIElementRef start, int mouseX, int mouseY, std::string& outText, int& outAnchorX, int& outAnchorY) {
+    if (!start) return false;
+    AXUIElementRef curr = start;
+    for (int depth = 0; depth < 10 && curr; ++depth) {
+        if (ExtractFromAXElement(curr, mouseX, mouseY, outText, outAnchorX, outAnchorY)) {
+            if (curr != start) CFRelease(curr);
+            return true;
+        }
+        AXUIElementRef parent = NULL;
+        if (AXUIElementCopyAttributeValue(curr, kAXParentAttribute, (CFTypeRef*)&parent) == kAXErrorSuccess && parent) {
+            if (curr != start) CFRelease(curr);
+            curr = parent;
+        } else {
+            if (curr != start) CFRelease(curr);
+            break;
+        }
     }
     return false;
 }
@@ -266,57 +326,62 @@ bool ExtractFromAXElement(AXUIElementRef element, std::string& outText, int& out
 
 bool WinUIAutomationHelper::TryExtract(int x, int y, std::string& outText, int& outAnchorX, int& outAnchorY) {
     @autoreleasepool {
-        AXUIElementRef systemWide = AXUIElementCreateSystemWide();
-        if (!systemWide) return false;
+        outAnchorX = x;
+        outAnchorY = y + 12;
 
-        // 1. 优先从系统级当前聚焦元素及其父级祖先中提取
-        AXUIElementRef focused = NULL;
-        if (AXUIElementCopyAttributeValue(systemWide, kAXFocusedUIElementAttribute, (CFTypeRef*)&focused) == kAXErrorSuccess && focused) {
-            AXUIElementRef curr = focused;
-            for (int depth = 0; depth < 8 && curr; ++depth) {
-                if (ExtractFromAXElement(curr, outText, outAnchorX, outAnchorY)) {
-                    if (curr != focused) CFRelease(curr);
+        // 1. 优先：通过当前前台激活的应用进程 (AXUIElementCreateApplication) 获取聚焦元素
+        NSRunningApplication* frontApp = [[NSWorkspace sharedWorkspace] frontmostApplication];
+        if (frontApp) {
+            pid_t pid = [frontApp processIdentifier];
+            AXUIElementRef appElem = AXUIElementCreateApplication(pid);
+            if (appElem) {
+                // 1.1 尝试从应用级当前聚焦元素及其父级祖先中提取
+                AXUIElementRef focused = NULL;
+                if (AXUIElementCopyAttributeValue(appElem, kAXFocusedUIElementAttribute, (CFTypeRef*)&focused) == kAXErrorSuccess && focused) {
+                    if (TryExtractFromTree(focused, x, y, outText, outAnchorX, outAnchorY)) {
+                        CFRelease(focused);
+                        CFRelease(appElem);
+                        return true;
+                    }
                     CFRelease(focused);
-                    CFRelease(systemWide);
-                    return true;
                 }
-                AXUIElementRef parent = NULL;
-                if (AXUIElementCopyAttributeValue(curr, kAXParentAttribute, (CFTypeRef*)&parent) == kAXErrorSuccess && parent) {
-                    if (curr != focused) CFRelease(curr);
-                    curr = parent;
-                } else {
-                    if (curr != focused) CFRelease(curr);
-                    break;
+
+                // 1.2 尝试从当前聚焦窗口的聚焦控件中提取
+                AXUIElementRef focusedWin = NULL;
+                if (AXUIElementCopyAttributeValue(appElem, kAXFocusedWindowAttribute, (CFTypeRef*)&focusedWin) == kAXErrorSuccess && focusedWin) {
+                    AXUIElementRef winFocused = NULL;
+                    if (AXUIElementCopyAttributeValue(focusedWin, kAXFocusedUIElementAttribute, (CFTypeRef*)&winFocused) == kAXErrorSuccess && winFocused) {
+                        if (TryExtractFromTree(winFocused, x, y, outText, outAnchorX, outAnchorY)) {
+                            CFRelease(winFocused);
+                            CFRelease(focusedWin);
+                            CFRelease(appElem);
+                            return true;
+                        }
+                        CFRelease(winFocused);
+                    }
+                    CFRelease(focusedWin);
                 }
+
+                CFRelease(appElem);
             }
-            CFRelease(focused);
         }
 
-        // 2. 若聚焦元素未命中，从鼠标释放点坐标处的元素及其祖先提取
-        CGPoint pt = CGPointMake(static_cast<CGFloat>(x), static_cast<CGFloat>(y));
-        AXUIElementRef elementAtPoint = NULL;
-        if (AXUIElementCopyElementAtPosition(systemWide, (float)pt.x, (float)pt.y, &elementAtPoint) == kAXErrorSuccess && elementAtPoint) {
-            AXUIElementRef curr = elementAtPoint;
-            for (int depth = 0; depth < 8 && curr; ++depth) {
-                if (ExtractFromAXElement(curr, outText, outAnchorX, outAnchorY)) {
-                    if (curr != elementAtPoint) CFRelease(curr);
+        // 2. 次选：从鼠标释放坐标处的 UI 元素及其祖先提取
+        AXUIElementRef systemWide = AXUIElementCreateSystemWide();
+        if (systemWide) {
+            CGPoint pt = CGPointMake(static_cast<CGFloat>(x), static_cast<CGFloat>(y));
+            AXUIElementRef elementAtPoint = NULL;
+            if (AXUIElementCopyElementAtPosition(systemWide, (float)pt.x, (float)pt.y, &elementAtPoint) == kAXErrorSuccess && elementAtPoint) {
+                if (TryExtractFromTree(elementAtPoint, x, y, outText, outAnchorX, outAnchorY)) {
                     CFRelease(elementAtPoint);
                     CFRelease(systemWide);
                     return true;
                 }
-                AXUIElementRef parent = NULL;
-                if (AXUIElementCopyAttributeValue(curr, kAXParentAttribute, (CFTypeRef*)&parent) == kAXErrorSuccess && parent) {
-                    if (curr != elementAtPoint) CFRelease(curr);
-                    curr = parent;
-                } else {
-                    if (curr != elementAtPoint) CFRelease(curr);
-                    break;
-                }
+                CFRelease(elementAtPoint);
             }
-            CFRelease(elementAtPoint);
+            CFRelease(systemWide);
         }
 
-        CFRelease(systemWide);
         return false;
     }
 }

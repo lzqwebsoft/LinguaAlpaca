@@ -84,6 +84,8 @@ void TranslationBubbleFrame::InitUI() {
     // 辅助 lambda: 统一创建扁平无边框操作按钮，消除几十行重复 new/SetToolTip 代码
     auto createHeaderBtn = [this](const wxString& tooltip) -> wxBitmapButton* {
         auto* btn = new wxBitmapButton(m_headerPanel, wxID_ANY, wxBitmapBundle(), wxDefaultPosition, dip(30, 30), wxBORDER_NONE);
+        btn->SetMinSize(dip(30, 30));
+        btn->SetMaxSize(dip(30, 30));
         btn->SetToolTip(tooltip);
         return btn;
     };
@@ -720,7 +722,7 @@ void TranslationBubbleFrame::UpdateTheme() {
 
     if (m_sourceToggleIcon) {
         m_sourceToggleIcon->SetBitmap(
-            IconManager::GetIconBundle(m_isSourceExpanded ? SVG::CHEVRON_DOWN : SVG::CHEVRON_RIGHT, wxSize(14, 14), m_isSourceExpanded ? palette.accentPrimary : palette.textSecondary));
+            IconManager::GetIconBundle(m_isSourceExpanded ? SVG::CHEVRON_DOWN : SVG::CHEVRON_RIGHT, wxSize(16, 16), m_isSourceExpanded ? palette.accentPrimary : palette.textSecondary));
     }
     if (m_sourceToggleLabel) {
         m_sourceToggleLabel->SetForegroundColour(palette.textSecondary);
@@ -1003,7 +1005,7 @@ void TranslationBubbleFrame::OnTogglePin(wxCommandEvent&) {
     }
     ThemePalette palette = ThemeManager::GetCurrentPalette();
     wxColour iconColor = m_isPinned ? palette.accentPrimary : palette.textSecondary;
-    m_pinBtn->SetBitmap(IconManager::GetIconBundle(SVG::PIN, wxSize(15, 15), iconColor));
+    m_pinBtn->SetBitmap(IconManager::GetIconBundle(SVG::PIN, wxSize(19, 19), iconColor));
     m_pinBtn->SetToolTip(m_isPinned ? L"已固定窗口位置 (再次点击取消固定)" : L"固定窗口位置");
 }
 

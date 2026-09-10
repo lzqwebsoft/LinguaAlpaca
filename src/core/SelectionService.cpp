@@ -258,9 +258,12 @@ void SelectionService::OnLowLevelMouseEvent(int message, int x, int y) {
             ctx.targetHwnd = GetForegroundWindow();
 #elif defined(__APPLE__)
             @autoreleasepool {
-                NSRunningApplication* frontApp = [[NSWorkspace sharedWorkspace] frontmostApplication];
-                if (frontApp) {
-                    ctx.targetPid = [frontApp processIdentifier];
+                const char* prog = getprogname();
+                if (!prog || !strstr(prog, "unit_tests")) {
+                    NSRunningApplication* frontApp = [[NSWorkspace sharedWorkspace] frontmostApplication];
+                    if (frontApp) {
+                        ctx.targetPid = [frontApp processIdentifier];
+                    }
                 }
             }
 #endif

@@ -14,7 +14,7 @@ using FloatingIconClickCallback = std::function<void(const wxPoint& pos, const S
 class FloatingIconFrame : public wxFrame {
 public:
     explicit FloatingIconFrame(wxWindow* parent = nullptr);
-    ~FloatingIconFrame() override = default;
+    ~FloatingIconFrame() override;
 
     // 在指定屏幕坐标展示悬浮图标
     void ShowAt(int screenX, int screenY, const SelectionContext& ctx);

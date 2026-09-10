@@ -17,6 +17,48 @@
 #elif defined(__APPLE__)
 #import <Cocoa/Cocoa.h>
 #import <objc/runtime.h>
+#include <mutex>
+
+static char kLinguaAlpacaNonActivatingKey;
+static IMP s_origCanBecomeKeyWindow = nullptr;
+static IMP s_origCanBecomeMainWindow = nullptr;
+
+static void EnsurePanelSwizzled(Class panelClass) {
+    static std::once_flag once;
+    std::call_once(once, [panelClass]() {
+        Method mKey = class_getInstanceMethod(panelClass, @selector(canBecomeKeyWindow));
+        if (mKey) {
+            s_origCanBecomeKeyWindow = method_getImplementation(mKey);
+            IMP newKeyImp = imp_implementationWithBlock(^BOOL(id self) {
+                id val = objc_getAssociatedObject(self, &kLinguaAlpacaNonActivatingKey);
+                if (val && [val boolValue]) {
+                    return NO;
+                }
+                if (s_origCanBecomeKeyWindow) {
+                    return ((BOOL(*)(id, SEL))s_origCanBecomeKeyWindow)(self, @selector(canBecomeKeyWindow));
+                }
+                return YES;
+            });
+            method_setImplementation(mKey, newKeyImp);
+        }
+
+        Method mMain = class_getInstanceMethod(panelClass, @selector(canBecomeMainWindow));
+        if (mMain) {
+            s_origCanBecomeMainWindow = method_getImplementation(mMain);
+            IMP newMainImp = imp_implementationWithBlock(^BOOL(id self) {
+                id val = objc_getAssociatedObject(self, &kLinguaAlpacaNonActivatingKey);
+                if (val && [val boolValue]) {
+                    return NO;
+                }
+                if (s_origCanBecomeMainWindow) {
+                    return ((BOOL(*)(id, SEL))s_origCanBecomeMainWindow)(self, @selector(canBecomeMainWindow));
+                }
+                return YES;
+            });
+            method_setImplementation(mMain, newMainImp);
+        }
+    });
+}
 #endif
 
 namespace LinguaAlpaca::UI {
@@ -38,6 +80,18 @@ FloatingIconFrame::FloatingIconFrame(wxWindow* parent)
     Bind(wxEVT_MOTION, &FloatingIconFrame::OnMouseMove, this);
     Bind(wxEVT_LEFT_UP, &FloatingIconFrame::OnLeftUp, this);
     Bind(wxEVT_TIMER, &FloatingIconFrame::OnTimer, this);
+}
+
+FloatingIconFrame::~FloatingIconFrame() {
+#if defined(__APPLE__)
+    NSView* nsview = (NSView*)GetHandle();
+    if (nsview) {
+        NSWindow* nswin = [nsview window];
+        if (nswin) {
+            objc_setAssociatedObject(nswin, &kLinguaAlpacaNonActivatingKey, nil, OBJC_ASSOCIATION_ASSIGN);
+        }
+    }
+#endif
 }
 
 void FloatingIconFrame::InitUI() {
@@ -69,23 +123,13 @@ void FloatingIconFrame::InitUI() {
             // 关键：wxNSPanel 默认重写了 canBecomeKeyWindow 返回 YES，
             // 这会导致点击悬浮图标时激活主应用，夺走原宿主应用（如 WPS、VS Code、PDF 阅读器）的焦点，
             // 进而导致选区丢失或 Cmd+C 快捷键被截胡。
-            // 通过 Objective-C Runtime 动态派生微子类，强制 canBecomeKeyWindow 和 canBecomeMainWindow 严格返回 NO。
-            Class baseClass = [nswin class];
-            const char* subclassName = "LinguaAlpacaNonActivatingFloatingIconPanel";
-            Class subClass = objc_getClass(subclassName);
-            if (!subClass) {
-                subClass = objc_allocateClassPair(baseClass, subclassName, 0);
-                if (subClass) {
-                    IMP returnNO = imp_implementationWithBlock(^BOOL(id self) { return NO; });
-                    class_addMethod(subClass, @selector(canBecomeKeyWindow), returnNO, "c@:");
-                    class_addMethod(subClass, @selector(canBecomeMainWindow), returnNO, "c@:");
-                    class_addMethod(subClass, @selector(needsPanelToBecomeKey), returnNO, "c@:");
-                    objc_registerClassPair(subClass);
-                }
-            }
-            if (subClass) {
-                object_setClass(nswin, subClass);
-            }
+            // 注意：绝不能使用 object_setClass 动态派生子类，因为 wxNonOwnedWindowController 在窗口创建时
+            // 已对 effectiveAppearance 注册了 KVO 观察者；若修改 isa 指针，在窗口析构 removeObserver 时
+            // 会因类型不匹配抛出 NSRangeException 并导致程序退出时崩溃。
+            // 此处采用 Method Swizzling + Associated Object：既保持原生类与 KVO 观察链完全一致，
+            // 又确保本悬浮图标严格返回 canBecomeKeyWindow: NO 和 canBecomeMainWindow: NO。
+            EnsurePanelSwizzled([nswin class]);
+            objc_setAssociatedObject(nswin, &kLinguaAlpacaNonActivatingKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         }
     }
 #endif

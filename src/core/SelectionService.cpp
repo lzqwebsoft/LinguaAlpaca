@@ -503,34 +503,25 @@ void SelectionService::CheckAndNotifyIfTextSelectedAsync(const SelectionContext&
                     NSString* name = [[frontApp localizedName] lowercaseString];
                     if (bid && ([bid containsString:@"code"] || [bid containsString:@"wps"] || [bid containsString:@"sublime"] || [bid containsString:@"terminal"] || [bid containsString:@"iterm"] ||
                                 [bid containsString:@"jetbrains"] || [bid containsString:@"antigravity"] || [bid containsString:@"cursor"] || [bid containsString:@"idea"] ||
-                                [bid containsString:@"clion"] || [bid containsString:@"pycharm"] || [bid containsString:@"webstorm"])) {
+                                [bid containsString:@"clion"] || [bid containsString:@"pycharm"] || [bid containsString:@"webstorm"] ||
+                                [bid containsString:@"adobe"] || [bid containsString:@"acrobat"] || [bid containsString:@"reader"])) {
                         isNonAxTarget = true;
                     }
                     if (!isNonAxTarget && name &&
                         ([name containsString:@"code"] || [name containsString:@"wps"] || [name containsString:@"terminal"] || [name containsString:@"iterm"] || [name containsString:@"sublime"] ||
-                         [name containsString:@"antigravity"])) {
+                         [name containsString:@"antigravity"] || [name containsString:@"acrobat"] || [name containsString:@"reader"])) {
                         isNonAxTarget = true;
                     }
                 }
             }
 #elif defined(_WIN32)
-            if (ctx.targetHwnd) {
-                DWORD pid = 0;
-                GetWindowThreadProcessId(ctx.targetHwnd, &pid);
-                HANDLE hProc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
-                if (hProc) {
-                    wchar_t path[MAX_PATH] = {0};
-                    DWORD sz = MAX_PATH;
-                    if (QueryFullProcessImageNameW(hProc, 0, path, &sz)) {
-                        std::wstring exe(path);
-                        for (auto& c : exe)
-                            c = towlower(c);
-                        if (exe.find(L"code.exe") != std::wstring::npos || exe.find(L"wps.exe") != std::wstring::npos || exe.find(L"sublime_text.exe") != std::wstring::npos ||
-                            exe.find(L"windowsterminal.exe") != std::wstring::npos || exe.find(L"idea64.exe") != std::wstring::npos || exe.find(L"clion64.exe") != std::wstring::npos) {
-                            isNonAxTarget = true;
-                        }
-                    }
-                    CloseHandle(hProc);
+            if (ctx.targetHwnd && ClipboardHelper::IsNonAxTargetWindow(ctx.targetHwnd)) {
+                isNonAxTarget = true;
+            } else {
+                POINT ptEnd = { ctx.endX, ctx.endY };
+                HWND hwndUnderMouse = WindowFromPoint(ptEnd);
+                if (hwndUnderMouse && ClipboardHelper::IsNonAxTargetWindow(hwndUnderMouse)) {
+                    isNonAxTarget = true;
                 }
             }
 #endif

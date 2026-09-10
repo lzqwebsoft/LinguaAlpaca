@@ -167,14 +167,27 @@ static bool SendCopyKey(WORD vkKey) {
   return true;
 }
 
-static bool IsPdfReaderWindow(HWND hwnd) {
+bool ClipboardHelper::IsPdfReaderWindow(HWND hwnd) {
   if (!hwnd) return false;
 
-  // 1. 类名检测
+  // 1. 类名检测 (自身类名与顶级祖先类名)
   wchar_t className[128] = { 0 };
   if (GetClassNameW(hwnd, className, 128)) {
     if (_wcsicmp(className, L"AcrobatSDIWindow") == 0 ||
         _wcsicmp(className, L"AVL_AVView") == 0 ||
+        _wcsicmp(className, L"AdobeAcrobat") == 0 ||
+        _wcsicmp(className, L"FoxitReader") == 0 ||
+        _wcsicmp(className, L"SumatraPDF") == 0 ||
+        _wcsicmp(className, L"PDFXEdit") == 0 ||
+        _wcsicmp(className, L"CAJViewerClass") == 0) {
+      return true;
+    }
+  }
+
+  HWND hRoot = GetAncestor(hwnd, GA_ROOT);
+  if (hRoot && hRoot != hwnd && GetClassNameW(hRoot, className, 128)) {
+    if (_wcsicmp(className, L"AcrobatSDIWindow") == 0 ||
+        _wcsicmp(className, L"AdobeAcrobat") == 0 ||
         _wcsicmp(className, L"FoxitReader") == 0 ||
         _wcsicmp(className, L"SumatraPDF") == 0 ||
         _wcsicmp(className, L"PDFXEdit") == 0) {
@@ -193,13 +206,14 @@ static bool IsPdfReaderWindow(HWND hwnd) {
       if (QueryFullProcessImageNameW(hProc, 0, fullPath, &size)) {
         std::wstring path(fullPath);
         for (auto& c : path) c = towlower(c);
-        if (path.find(L"acrobat.exe") != std::wstring::npos ||
-            path.find(L"acrord32.exe") != std::wstring::npos ||
+        if (path.find(L"acrobat") != std::wstring::npos ||
+            path.find(L"acrord") != std::wstring::npos ||
+            path.find(L"adobe") != std::wstring::npos ||
             path.find(L"foxit") != std::wstring::npos ||
-            path.find(L"sumatrapdf.exe") != std::wstring::npos ||
-            path.find(L"pdfxedit.exe") != std::wstring::npos ||
-            path.find(L"cajviewer.exe") != std::wstring::npos ||
-            path.find(L"wpspdf.exe") != std::wstring::npos) {
+            path.find(L"sumatra") != std::wstring::npos ||
+            path.find(L"pdfxedit") != std::wstring::npos ||
+            path.find(L"cajviewer") != std::wstring::npos ||
+            path.find(L"wpspdf") != std::wstring::npos) {
           CloseHandle(hProc);
           return true;
         }
@@ -207,6 +221,76 @@ static bool IsPdfReaderWindow(HWND hwnd) {
       CloseHandle(hProc);
     }
   }
+  return false;
+}
+
+bool ClipboardHelper::IsNonAxTargetWindow(HWND hwnd) {
+  if (!hwnd) return false;
+
+  // 1. 首先检测是否属于 PDF 阅读器 (Adobe Acrobat/Reader, Foxit, Sumatra 等)
+  if (IsPdfReaderWindow(hwnd)) {
+    return true;
+  }
+
+  // 2. 类名检测 (常见终端、特定自绘容器)
+  wchar_t className[128] = { 0 };
+  if (GetClassNameW(hwnd, className, 128)) {
+    if (_wcsicmp(className, L"ConsoleWindowClass") == 0 ||
+        _wcsicmp(className, L"mintty") == 0 ||
+        _wcsicmp(className, L"CASCADIA_HOSTING_WINDOW_CLASS") == 0) {
+      return true;
+    }
+  }
+
+  // 3. 进程可执行文件名称检测 (VS Code, Cursor, Antigravity, WPS, Sublime, JetBrains, 各类终端等)
+  DWORD pid = 0;
+  GetWindowThreadProcessId(hwnd, &pid);
+  if (pid != 0) {
+    HANDLE hProc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (hProc) {
+      wchar_t fullPath[MAX_PATH] = { 0 };
+      DWORD size = MAX_PATH;
+      if (QueryFullProcessImageNameW(hProc, 0, fullPath, &size)) {
+        std::wstring path(fullPath);
+        for (auto& c : path) c = towlower(c);
+        if (path.find(L"code.exe") != std::wstring::npos ||
+            path.find(L"cursor.exe") != std::wstring::npos ||
+            path.find(L"antigravity.exe") != std::wstring::npos ||
+            path.find(L"wps.exe") != std::wstring::npos ||
+            path.find(L"wpp.exe") != std::wstring::npos ||
+            path.find(L"et.exe") != std::wstring::npos ||
+            path.find(L"wpspdf.exe") != std::wstring::npos ||
+            path.find(L"sublime_text.exe") != std::wstring::npos ||
+            path.find(L"notepad++.exe") != std::wstring::npos ||
+            path.find(L"windowsterminal.exe") != std::wstring::npos ||
+            path.find(L"mintty.exe") != std::wstring::npos ||
+            path.find(L"mobaxterm.exe") != std::wstring::npos ||
+            path.find(L"xshell.exe") != std::wstring::npos ||
+            path.find(L"securecrt.exe") != std::wstring::npos ||
+            path.find(L"conemu.exe") != std::wstring::npos ||
+            path.find(L"conemu64.exe") != std::wstring::npos ||
+            path.find(L"wezterm.exe") != std::wstring::npos ||
+            path.find(L"alacritty.exe") != std::wstring::npos ||
+            path.find(L"putty.exe") != std::wstring::npos ||
+            path.find(L"idea") != std::wstring::npos ||
+            path.find(L"clion") != std::wstring::npos ||
+            path.find(L"pycharm") != std::wstring::npos ||
+            path.find(L"webstorm") != std::wstring::npos ||
+            path.find(L"goland") != std::wstring::npos ||
+            path.find(L"rider") != std::wstring::npos ||
+            path.find(L"rustrover") != std::wstring::npos ||
+            path.find(L"studio64") != std::wstring::npos ||
+            path.find(L"datagrip") != std::wstring::npos ||
+            path.find(L"phpstorm") != std::wstring::npos ||
+            path.find(L"rubymine") != std::wstring::npos) {
+          CloseHandle(hProc);
+          return true;
+        }
+      }
+      CloseHandle(hProc);
+    }
+  }
+
   return false;
 }
 #endif

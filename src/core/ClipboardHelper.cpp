@@ -502,6 +502,8 @@ ClipboardHelper::GetSelectedTextViaSendInput(bool preserveClipboard) {
 #include <wx/clipbrd.h>
 #include <wx/dataobj.h>
 
+#include "Logger.hpp"
+
 #if defined(__APPLE__)
 #import <Cocoa/Cocoa.h>
 #import <ApplicationServices/ApplicationServices.h>
@@ -549,6 +551,9 @@ bool ClipboardHelper::HasText() {
 bool ClipboardHelper::SendCtrlC() {
     @autoreleasepool {
         CGEventSourceRef source = CGEventSourceCreate(kCGEventSourceStateCombinedSessionState);
+        if (!source) {
+            source = CGEventSourceCreate(kCGEventSourceStateHIDSystemState);
+        }
         if (!source) return false;
 
         CGKeyCode cCode = static_cast<CGKeyCode>(kVK_ANSI_C);
@@ -565,8 +570,14 @@ bool ClipboardHelper::SendCtrlC() {
         CGEventSetFlags(keyDown, kCGEventFlagMaskCommand);
         CGEventSetFlags(keyUp, kCGEventFlagMaskCommand);
 
-        CGEventPost(kCGHIDEventTap, keyDown);
+        // 1. 优先投递到 kCGSessionEventTap（当前用户登录会话事件流，确保目标应用可靠接收 Cmd+C）
+        CGEventPost(kCGSessionEventTap, keyDown);
         std::this_thread::sleep_for(std::chrono::milliseconds(15));
+        CGEventPost(kCGSessionEventTap, keyUp);
+
+        // 2. 同时投递到 kCGHIDEventTap（系统 HID 层）提供全面双重保障
+        CGEventPost(kCGHIDEventTap, keyDown);
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
         CGEventPost(kCGHIDEventTap, keyUp);
 
         CFRelease(keyDown);
@@ -606,14 +617,15 @@ std::string ClipboardHelper::GetSelectedTextViaSendInput(bool preserveClipboard)
 
         // 2. 模拟发送 Cmd+C
         if (!SendCtrlC()) {
+            LOG_ERROR("ClipboardHelper", "SendCtrlC failed to post keyboard events");
             return "";
         }
 
-        // 3. 轮询等待系统剪贴板更新并成功解析出文本（最长约 250ms）
+        // 3. 轮询等待系统剪贴板更新并成功解析出文本（最长约 350ms）
         std::string selectedText;
         NSInteger copyChangeCount = 0;
 
-        for (int i = 0; i < 25; ++i) {
+        for (int i = 0; i < 35; ++i) {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
             NSInteger currentChangeCount = [pb changeCount];
             if (currentChangeCount != initialChangeCount) {
@@ -644,18 +656,20 @@ std::string ClipboardHelper::GetSelectedTextViaSendInput(bool preserveClipboard)
                     if (trimmed && trimmed.length > 0) {
                         selectedText = [trimmed UTF8String];
                         copyChangeCount = currentChangeCount;
+                        LOG_INFO("ClipboardHelper", "GetSelectedTextViaSendInput: copied successfully at " + std::to_string((i + 1) * 10) + "ms, len=" + std::to_string(selectedText.size()));
                         break; // 成功解析到有效文本才退出轮询
                     }
                 }
             }
 
-            // 若前 70ms 宿主应用未响应（如 WPS/Acrobat 刚弹出工具条丢键），自动重发一次 Cmd+C 兜底
-            if (i == 7 && currentChangeCount == initialChangeCount) {
+            // 若前 70ms / 170ms 宿主应用未响应（如 WPS/浏览器/Acrobat 刚弹出工具条丢键），自动重发一次 Cmd+C 兜底
+            if ((i == 7 || i == 17) && currentChangeCount == initialChangeCount) {
                 SendCtrlC();
             }
         }
 
         if (selectedText.empty()) {
+            LOG_INFO("ClipboardHelper", "GetSelectedTextViaSendInput: timeout, clipboard unchanged (count=" + std::to_string([pb changeCount]) + ")");
             return "";
         }
 

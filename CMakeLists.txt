@@ -279,6 +279,12 @@ if(APPLE)
             "${CMAKE_CURRENT_SOURCE_DIR}/resources/app_icon.icns"
             "$<TARGET_FILE_DIR:${PROJECT_NAME}>/../Resources/app_icon.icns"
         COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_CURRENT_SOURCE_DIR}/resources/zh_CN.lproj"
+            "$<TARGET_FILE_DIR:${PROJECT_NAME}>/../Resources/zh_CN.lproj"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_CURRENT_SOURCE_DIR}/resources/en.lproj"
+            "$<TARGET_FILE_DIR:${PROJECT_NAME}>/../Resources/en.lproj"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
             "${CMAKE_CURRENT_SOURCE_DIR}/resources"
             "$<TARGET_FILE_DIR:${PROJECT_NAME}>/../../../resources"
         COMMAND ${CMAKE_COMMAND} -E rm -f

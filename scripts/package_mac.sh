@@ -212,6 +212,12 @@ fi
 if [ -f "${PROJECT_ROOT}/resources/app_icon.icns" ]; then
     cp -f "${PROJECT_ROOT}/resources/app_icon.icns" "${DEST_APP}/Contents/Resources/app_icon.icns"
 fi
+if [ -d "${PROJECT_ROOT}/resources/zh_CN.lproj" ]; then
+    cp -R "${PROJECT_ROOT}/resources/zh_CN.lproj" "${DEST_APP}/Contents/Resources/"
+fi
+if [ -d "${PROJECT_ROOT}/resources/en.lproj" ]; then
+    cp -R "${PROJECT_ROOT}/resources/en.lproj" "${DEST_APP}/Contents/Resources/"
+fi
 
 # 6. 递归执行 Ad-hoc 代码签名 (Apple Silicon 兼容性保障)
 echo "[5/6] Performing recursive Ad-hoc code signing..."

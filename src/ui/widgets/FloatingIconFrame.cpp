@@ -558,6 +558,23 @@ void FloatingIconFrame::OnLeftUp(wxMouseEvent& WXUNUSED(event)) {
     m_autoHideTimer.Stop();
     Hide();
 
+#if defined(__APPLE__)
+    if (m_selectionContext.targetPid > 0) {
+        @autoreleasepool {
+            NSRunningApplication* targetApp = [NSRunningApplication runningApplicationWithProcessIdentifier:m_selectionContext.targetPid];
+            if (targetApp) {
+                if (@available(macOS 14.0, *)) {
+                    [[NSApplication sharedApplication] yieldActivationToApplication:targetApp];
+                }
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+                [targetApp activateWithOptions:NSApplicationActivateAllWindows | NSApplicationActivateIgnoringOtherApps];
+#pragma clang diagnostic pop
+            }
+        }
+    }
+#endif
+
     if (m_onClickCallback) {
         m_onClickCallback(m_currentPos, m_selectionContext);
     }

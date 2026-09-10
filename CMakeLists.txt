@@ -238,6 +238,7 @@ if(WIN32)
 elseif(APPLE)
     set_target_properties(${PROJECT_NAME} PROPERTIES
         MACOSX_BUNDLE TRUE
+        MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/resources/Info.plist.in"
         MACOSX_BUNDLE_BUNDLE_NAME "LinguaAlpaca"
         MACOSX_BUNDLE_BUNDLE_VERSION "1.0.2"
         MACOSX_BUNDLE_SHORT_VERSION_STRING "1.0.2"
@@ -292,6 +293,14 @@ if(APPLE)
             "$<TARGET_FILE_DIR:${PROJECT_NAME}>/llama-server"
         COMMAND /usr/bin/touch
             "$<TARGET_FILE_DIR:${PROJECT_NAME}>/../.."
+    )
+
+    # macOS 独立发布包打包 Target (包含 dylib 内嵌、rpath 修正、签名与 DMG 制作)
+    add_custom_target(package_mac
+        COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/scripts/package_mac.sh" "${CMAKE_BINARY_DIR}"
+        DEPENDS ${PROJECT_NAME} llama-server
+        COMMENT "[LinguaAlpaca] Packaging standalone macOS Application Bundle & DMG..."
+        VERBATIM
     )
 else()
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD

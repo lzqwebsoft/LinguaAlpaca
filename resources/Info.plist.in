@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>zh_CN</string>
+	<key>CFBundleExecutable</key>
+	<string>${MACOSX_BUNDLE_EXECUTABLE_NAME}</string>
+	<key>CFBundleIconFile</key>
+	<string>${MACOSX_BUNDLE_ICON_FILE}</string>
+	<key>CFBundleIdentifier</key>
+	<string>${MACOSX_BUNDLE_GUI_IDENTIFIER}</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>${MACOSX_BUNDLE_BUNDLE_NAME}</string>
+	<key>CFBundleDisplayName</key>
+	<string>译灵驼</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>${MACOSX_BUNDLE_SHORT_VERSION_STRING}</string>
+	<key>CFBundleSignature</key>
+	<string>LALP</string>
+	<key>CFBundleVersion</key>
+	<string>${MACOSX_BUNDLE_BUNDLE_VERSION}</string>
+	<key>CSResourcesFileMapped</key>
+	<true/>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSSupportsAutomaticGraphicsSwitching</key>
+	<true/>
+	<key>NSRequiresAquaSystemAppearance</key>
+	<false/>
+	<key>NSHumanReadableCopyright</key>
+	<string>Copyright © 2026 ZQLUO. All rights reserved.</string>
+	<key>NSAccessibilityUsageDescription</key>
+	<string>LinguaAlpaca 需要辅助功能权限以支持全局划词取词与快捷翻译功能。</string>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>LinguaAlpaca 需要自动化与事件监听权限以协同目标应用读取选中文本。</string>
+	<key>NSScreenCaptureUsageDescription</key>
+	<string>LinguaAlpaca 需要屏幕录制与截图权限以进行屏幕区域 OCR 文字识别与翻译。</string>
+</dict>
+</plist>

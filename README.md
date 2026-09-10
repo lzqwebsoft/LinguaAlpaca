@@ -215,6 +215,26 @@ cmake --build build --config Release --target unit_tests -j$(sysctl -n hw.ncpu)
 ./build/bin/unit_tests
 ```
 
+#### 5. 独立应用包与 DMG 镜像打包 (Packaging & Release)
+项目已内置全自动化的 macOS 自包含打包流水线。打包过程会自动：
+- 嵌入实体 `llama-server` 引擎二进制（消除软链接）；
+- 递归内嵌 `wxWidgets`、`llama.cpp`、`OpenSSL 3` 等全套动态库至 `Contents/Frameworks/`，并自动通过 `install_name_tool` 完成 `@rpath` 路径重定向（彻底解除对本地开发环境与 Homebrew 路径的依赖）；
+- 注入规范的 `Info.plist`（包含中文展示名“译灵驼”、Retina 高分屏支持、系统暗黑外观以及辅助功能/屏幕录制权限声明）；
+- 递归完成 Apple Silicon 平台严格要求的 Ad-hoc 代码签名，消除系统 AMFI 门禁校验闪退；
+- 制作带 `/Applications` 拖拽安装软链接的标准压缩版 `.dmg` 磁盘镜像。
+
+```bash
+# 推荐方式：通过 CMake 构建目标一键打包
+cmake --build build --config Release --target package_mac
+
+# 或直接运行打包脚本
+./scripts/package_mac.sh build
+```
+
+**📦 输出交付物（位于 `build/dist/`）**：
+- **`LinguaAlpaca.app`**：完全独立、开箱即用的 macOS 原生应用包（约 89 MB）。
+- **`LinguaAlpaca-1.0.2-macOS.dmg`**：体积高度优化的标准分发安装镜像（约 30 MB），可直接对外分发给任何 Mac 用户。
+
 ---
 
 ## 📦 核心依赖与致谢

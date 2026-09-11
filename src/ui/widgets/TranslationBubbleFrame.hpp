@@ -128,6 +128,7 @@ private:
 
     // 字体大小
     int m_currentFontSize{10};
+    bool m_themeDirty{false};
 };
 
 } // namespace LinguaAlpaca::UI

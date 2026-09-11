@@ -111,6 +111,19 @@ namespace LinguaAlpaca {
         Save();
     }
 
+    void ConfigManager::SaveThemeModeAsync(const std::string& themeMode) {
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            m_config.themeMode = themeMode;
+        }
+        if (m_asyncSaveFuture.valid()) {
+            m_asyncSaveFuture.wait();
+        }
+        m_asyncSaveFuture = std::async(std::launch::async, [this]() {
+            Save();
+        });
+    }
+
     void ConfigManager::SaveSelectionConfig(bool enabled, int mode, int modifierKey, bool preserveClip) {
         {
             std::lock_guard<std::mutex> lock(m_mutex);

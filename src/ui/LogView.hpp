@@ -18,7 +18,7 @@ public:
     ~LogView() override;
 
     void UpdateTheme();
-    void AppendLogMessage(const LogMessage& msg);
+    void AppendLogMessage(const LogMessage& msg, bool scrollToBottom = true);
     void ReloadLogs();
 
 private:

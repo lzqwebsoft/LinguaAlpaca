@@ -1,7 +1,10 @@
 #pragma once
 #include <wx/wx.h>
 #include <memory>
+#include <optional>
+#include <functional>
 #include "core/ModelManager.hpp"
+#include "theme/Theme.hpp"
 #include "widgets/SidebarNav.hpp"
 #include "TextView.hpp"
 #include "OcrView.hpp"
@@ -24,6 +27,8 @@ public:
 private:
     void InitUI();
     void ApplyTheme();
+    void UpdateActiveViewTheme();
+    void EnsureViewTheme(wxWindow* view, std::optional<ThemeMode>& appliedTheme, ThemeMode currentTheme, const std::function<void()>& updateFn);
     void OnThemeToggle(wxCommandEvent& event);
     void OnNavChanged(wxCommandEvent& event);
     void OnClose(wxCloseEvent& event);
@@ -55,6 +60,12 @@ private:
     DictView* m_dictView{nullptr};
     LogView* m_logView{nullptr};
     SettingsView* m_settingsView{nullptr};
+
+    std::optional<ThemeMode> m_textViewTheme;
+    std::optional<ThemeMode> m_ocrViewTheme;
+    std::optional<ThemeMode> m_dictViewTheme;
+    std::optional<ThemeMode> m_logViewTheme;
+    std::optional<ThemeMode> m_settingsViewTheme;
 
     wxStaticBitmap* m_logoIcon{nullptr};
     wxStaticText* m_appNameText{nullptr};

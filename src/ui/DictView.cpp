@@ -26,10 +26,6 @@ DictView::DictView(wxWindow* parent,
 
     InitUI();
     RefreshDictList();
-
-    ThemeManager::GetInstance().RegisterCallback([this](ThemeMode) {
-        UpdateTheme();
-    });
 }
 
 void DictView::InitUI() {

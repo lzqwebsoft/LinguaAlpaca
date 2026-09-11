@@ -1647,7 +1647,7 @@ void SettingsView::OnThemeRadioChanged(wxCommandEvent& WXUNUSED(event)) {
     }
 
     if (m_configManager) {
-        m_configManager->SaveThemeMode(themeModeStr);
+        m_configManager->SaveThemeModeAsync(themeModeStr);
     }
 
     ThemeManager::GetInstance().SetPreferenceByString(themeModeStr);

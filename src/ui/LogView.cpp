@@ -156,7 +156,7 @@ void LogView::InitUI() {
     m_autoScrollCheck->Bind(wxEVT_CHECKBOX, &LogView::OnAutoScrollToggled, this);
 }
 
-void LogView::AppendLogMessage(const LogMessage& msg) {
+void LogView::AppendLogMessage(const LogMessage& msg, bool scrollToBottom) {
     if (!m_logTextCtrl)
         return;
 
@@ -192,7 +192,7 @@ void LogView::AppendLogMessage(const LogMessage& msg) {
     wxString line = wxString::FromUTF8(msg.FormattedString() + "\n");
     m_logTextCtrl->AppendText(line);
 
-    if (m_autoScroll) {
+    if (scrollToBottom && m_autoScroll) {
         m_logTextCtrl->ShowPosition(m_logTextCtrl->GetLastPosition());
     }
 }
@@ -207,7 +207,10 @@ void LogView::ReloadLogs() {
 
     auto history = Logger::GetInstance().GetRecentLogs();
     for (const auto& msg : history) {
-        AppendLogMessage(msg);
+        AppendLogMessage(msg, /*scrollToBottom=*/false);
+    }
+    if (m_autoScroll) {
+        m_logTextCtrl->ShowPosition(m_logTextCtrl->GetLastPosition());
     }
     m_logTextCtrl->Thaw();
 }

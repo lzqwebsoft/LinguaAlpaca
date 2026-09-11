@@ -7,6 +7,7 @@
 #include <wx/dcbuffer.h>
 #include <wx/graphics.h>
 #include <wx/display.h>
+#include <wx/wupdlock.h>
 
 #ifdef __WXMSW__
 #include <windows.h>
@@ -419,7 +420,31 @@ namespace LinguaAlpaca::UI {
         m_maxBtn->Refresh();
     }
 
+    void MainFrame::EnsureViewTheme(wxWindow* view, std::optional<ThemeMode>& appliedTheme, ThemeMode currentTheme, const std::function<void()>& updateFn) {
+        if (view && (!appliedTheme.has_value() || *appliedTheme != currentTheme)) {
+            updateFn();
+            appliedTheme = currentTheme;
+        }
+    }
+
+    void MainFrame::UpdateActiveViewTheme() {
+        ThemeMode currentTheme = ThemeManager::GetInstance().GetCurrentTheme();
+        if (m_textView && m_textView->IsShown()) {
+            EnsureViewTheme(m_textView, m_textViewTheme, currentTheme, [this]() { m_textView->UpdateTheme(); });
+        } else if (m_ocrView && m_ocrView->IsShown()) {
+            EnsureViewTheme(m_ocrView, m_ocrViewTheme, currentTheme, [this]() { m_ocrView->UpdateTheme(); });
+        } else if (m_dictView && m_dictView->IsShown()) {
+            EnsureViewTheme(m_dictView, m_dictViewTheme, currentTheme, [this]() { m_dictView->UpdateTheme(); });
+        } else if (m_logView && m_logView->IsShown()) {
+            EnsureViewTheme(m_logView, m_logViewTheme, currentTheme, [this]() { m_logView->UpdateTheme(); });
+        } else if (m_settingsView && m_settingsView->IsShown()) {
+            EnsureViewTheme(m_settingsView, m_settingsViewTheme, currentTheme, [this]() { m_settingsView->UpdateTheme(); });
+        }
+    }
+
     void MainFrame::ApplyTheme() {
+        wxWindowUpdateLocker locker(this);
+
         ThemeMode currentTheme = ThemeManager::GetInstance().GetCurrentTheme();
         PlatformThemeHelper::ApplyAppAppearance(currentTheme);
         PlatformThemeHelper::ApplyWindowAppearance(this, currentTheme);
@@ -432,10 +457,9 @@ namespace LinguaAlpaca::UI {
         if (m_appNameText) {
             m_appNameText->SetForegroundColour(palette.textPrimary);
             m_appNameText->SetBackgroundColour(palette.sidebarBg);
-            m_appNameText->Refresh();
         }
 
-        bool isLight = ThemeManager::GetInstance().GetCurrentTheme() == ThemeMode::Light;
+        bool isLight = currentTheme == ThemeMode::Light;
         wxBitmapBundle themeBundle = IconManager::GetIconBundle(
             isLight ? SVG::MOON : SVG::SUN, wxSize(16, 16),
             palette.textPrimary);
@@ -461,25 +485,16 @@ namespace LinguaAlpaca::UI {
         m_contentContainer->SetBackgroundColour(palette.windowBg);
         m_sidebar->Refresh();
 
-        if (m_textView)
-            m_textView->UpdateTheme();
-        if (m_ocrView)
-            m_ocrView->UpdateTheme();
-        if (m_dictView)
-            m_dictView->UpdateTheme();
-        if (m_logView)
-            m_logView->UpdateTheme();
-        if (m_settingsView)
-            m_settingsView->UpdateTheme();
+        // 仅即时刷新当前活跃（可见）的视图，未激活的隐藏视图实施懒加载，切换 Tab 时再按需更新
+        UpdateActiveViewTheme();
 
         Refresh();
-        m_contentContainer->Refresh();
     }
 
     void MainFrame::OnThemeToggle(wxCommandEvent& WXUNUSED(event)) {
         ThemeManager::GetInstance().ToggleTheme();
         if (m_modelManager && m_modelManager->GetConfigManager()) {
-            m_modelManager->GetConfigManager()->SaveThemeMode(ThemeManager::GetInstance().GetPreferenceString());
+            m_modelManager->GetConfigManager()->SaveThemeModeAsync(ThemeManager::GetInstance().GetPreferenceString());
         }
     }
 
@@ -492,30 +507,38 @@ namespace LinguaAlpaca::UI {
         m_logView->Hide();
         m_settingsView->Hide();
 
+        ThemeMode currentTheme = ThemeManager::GetInstance().GetCurrentTheme();
+
         switch (index) {
         case 0:
+            EnsureViewTheme(m_textView, m_textViewTheme, currentTheme, [this]() { m_textView->UpdateTheme(); });
             m_textView->Show();
             if (m_modelManager) {
                 m_modelManager->EnsureModelAsync(TargetModelType::Translation);
             }
             break;
         case 1:
+            EnsureViewTheme(m_ocrView, m_ocrViewTheme, currentTheme, [this]() { m_ocrView->UpdateTheme(); });
             m_ocrView->Show();
             if (m_modelManager) {
                 m_modelManager->EnsureModelAsync(TargetModelType::Ocr);
             }
             break;
         case 2:
+            EnsureViewTheme(m_dictView, m_dictViewTheme, currentTheme, [this]() { m_dictView->UpdateTheme(); });
             m_dictView->Show();
             m_dictView->RefreshDictList();
             break;
         case 3:
+            EnsureViewTheme(m_logView, m_logViewTheme, currentTheme, [this]() { m_logView->UpdateTheme(); });
             m_logView->Show();
             break;
         case 4:
+            EnsureViewTheme(m_settingsView, m_settingsViewTheme, currentTheme, [this]() { m_settingsView->UpdateTheme(); });
             m_settingsView->Show();
             break;
         default:
+            EnsureViewTheme(m_textView, m_textViewTheme, currentTheme, [this]() { m_textView->UpdateTheme(); });
             m_textView->Show();
             if (m_modelManager) {
                 m_modelManager->EnsureModelAsync(TargetModelType::Translation);

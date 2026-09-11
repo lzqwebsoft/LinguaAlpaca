@@ -29,7 +29,13 @@ TranslationBubbleFrame::TranslationBubbleFrame(std::shared_ptr<ModelManager> mod
     InitUI();
     UpdateTheme();
 
-    ThemeManager::GetInstance().RegisterCallback([this](ThemeMode) { UpdateTheme(); });
+    ThemeManager::GetInstance().RegisterCallback([this](ThemeMode) {
+        if (IsShown()) {
+            UpdateTheme();
+        } else {
+            m_themeDirty = true;
+        }
+    });
 }
 
 TranslationBubbleFrame::~TranslationBubbleFrame() {
@@ -383,7 +389,10 @@ void TranslationBubbleFrame::ShowAndTranslate(const wxPoint& spawnPos, const std
     WinTtsHelper::GetInstance().Stop();
     m_lastSourceText = sourceText;
     UpdateLanguageBadge();
-    UpdateTheme();
+    if (m_themeDirty) {
+        UpdateTheme();
+        m_themeDirty = false;
+    }
 
     // 同步加载最新字号设置
     if (m_modelManager && m_modelManager->GetConfigManager()) {

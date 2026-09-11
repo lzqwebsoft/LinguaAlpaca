@@ -4,6 +4,7 @@
 #include <string>
 #include <mutex>
 #include <memory>
+#include <future>
 
 namespace LinguaAlpaca {
 
@@ -50,7 +51,11 @@ struct AppConfig {
 class ConfigManager {
 public:
     ConfigManager();
-    ~ConfigManager() = default;
+    ~ConfigManager() {
+        if (m_asyncSaveFuture.valid()) {
+            m_asyncSaveFuture.wait();
+        }
+    }
 
     static std::string GetConfigFilePath();
     static std::string GetDefaultModelDir();
@@ -65,6 +70,7 @@ public:
     void SaveModelConfig(const std::string& path, int gpuLayers, int port = 0, int ctxSize = 2048, int threads = 0);
     void SaveOcrConfig(const std::string& ocrModelPath, const std::string& ocrMmprojPath, int ocrGpuLayers = 0, int port = 0, int ctxSize = 4096, int threads = 0, bool ocrMmprojOffload = false);
     void SaveThemeMode(const std::string& themeMode);
+    void SaveThemeModeAsync(const std::string& themeMode);
     void SaveSelectionConfig(bool enabled, int mode, int modifierKey, bool preserveClip);
     void SaveBubbleFontSize(int fontSize);
     void SaveLogConfig(bool saveLogToFile);
@@ -76,6 +82,7 @@ public:
 private:
     mutable std::mutex m_mutex;
     AppConfig m_config;
+    std::future<void> m_asyncSaveFuture;
 };
 
 } // namespace LinguaAlpaca

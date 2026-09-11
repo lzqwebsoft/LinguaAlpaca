@@ -348,41 +348,27 @@ void TranslationBubbleFrame::InitUI() {
     m_retryBtn->Bind(wxEVT_BUTTON, &TranslationBubbleFrame::OnRetry, this);
     m_closeBtn->Bind(wxEVT_BUTTON, &TranslationBubbleFrame::OnCloseBtn, this);
 
-    // 监听鼠标移入移出事件，动态显示/隐藏朗读按钮
-    auto bindHoverWatcher = [this](wxWindow* win) {
-        if (!win)
-            return;
-        win->Bind(wxEVT_ENTER_WINDOW, [this](wxMouseEvent& e) {
-            e.Skip();
-            UpdateSpeakBtnVisibility();
-        });
-        win->Bind(wxEVT_LEAVE_WINDOW, [this](wxMouseEvent& e) {
-            e.Skip();
-            UpdateSpeakBtnVisibility();
-        });
-        win->Bind(wxEVT_MOTION, [this](wxMouseEvent& e) {
-            e.Skip();
-            UpdateSpeakBtnVisibility();
-        });
+    // 监听鼠标移动，当光标进入面板右上角区域时触发朗读按钮显隐判断
+    auto bindMotion = [this](wxWindow* win) {
+        if (win) {
+            win->Bind(wxEVT_MOTION, [this](wxMouseEvent& e) {
+                e.Skip();
+                UpdateSpeakBtnVisibility();
+            });
+        }
     };
 
-    bindHoverWatcher(m_sourcePanel);
-    bindHoverWatcher(m_sourceCtrl);
+    bindMotion(m_sourcePanel);
+    bindMotion(m_sourceCtrl);
     if (m_sourceCtrl)
-        bindHoverWatcher(m_sourceCtrl->GetInnerCtrl());
-    bindHoverWatcher(m_sourceSpeakBtn);
+        bindMotion(m_sourceCtrl->GetInnerCtrl());
+    bindMotion(m_sourceSpeakBtn);
 
-    bindHoverWatcher(m_targetPanel);
-    bindHoverWatcher(m_targetCtrl);
+    bindMotion(m_targetPanel);
+    bindMotion(m_targetCtrl);
     if (m_targetCtrl)
-        bindHoverWatcher(m_targetCtrl->GetInnerCtrl());
-    bindHoverWatcher(m_targetSpeakBtn);
-
-    bindHoverWatcher(m_headerPanel);
-    bindHoverWatcher(m_sourceToggleBar);
-    bindHoverWatcher(m_footerPanel);
-    bindHoverWatcher(m_splitter);
-    bindHoverWatcher(m_mainPanel);
+        bindMotion(m_targetCtrl->GetInnerCtrl());
+    bindMotion(m_targetSpeakBtn);
 }
 
 void TranslationBubbleFrame::ShowAndTranslate(const wxPoint& spawnPos, const std::string& sourceText) {
@@ -1162,10 +1148,16 @@ void TranslationBubbleFrame::UpdateSpeakBtnVisibility() {
     }
 
     wxPoint mousePos = wxGetMousePosition();
-    bool showSource = false;
-    if (m_sourcePanel && m_sourceSpeakBtn && m_isSourceExpanded && m_sourcePanel->IsShown()) {
-        showSource = m_sourcePanel->GetScreenRect().Contains(mousePos);
-    }
+    auto isInTopRightCorner = [&](wxWindow* panel) -> bool {
+        if (!panel || !panel->IsShown())
+            return false;
+        wxRect r = panel->GetScreenRect();
+        int w = std::min(r.width, 48_dip);
+        int h = std::min(r.height, 36_dip);
+        return wxRect(r.x + r.width - w, r.y, w, h).Contains(mousePos);
+    };
+
+    bool showSource = m_isSourceExpanded && isInTopRightCorner(m_sourcePanel);
     if (m_sourceSpeakBtn && m_sourceSpeakBtn->IsShown() != showSource) {
         m_sourceSpeakBtn->Show(showSource);
         if (showSource) {
@@ -1173,10 +1165,7 @@ void TranslationBubbleFrame::UpdateSpeakBtnVisibility() {
         }
     }
 
-    bool showTarget = false;
-    if (m_targetPanel && m_targetSpeakBtn && m_targetPanel->IsShown()) {
-        showTarget = m_targetPanel->GetScreenRect().Contains(mousePos);
-    }
+    bool showTarget = isInTopRightCorner(m_targetPanel);
     if (m_targetSpeakBtn && m_targetSpeakBtn->IsShown() != showTarget) {
         m_targetSpeakBtn->Show(showTarget);
         if (showTarget) {

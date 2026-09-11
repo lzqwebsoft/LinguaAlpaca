@@ -5,10 +5,7 @@
 
 namespace LinguaAlpaca::UI {
 
-SuggestListBox::SuggestListBox(wxWindow* parent,
-                               wxWindowID id,
-                               const wxPoint& pos,
-                               const wxSize& size)
+SuggestListBox::SuggestListBox(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize& size)
     : wxPanel(parent, id, pos, size, wxBORDER_NONE | wxFULL_REPAINT_ON_RESIZE) {
     SetBackgroundStyle(wxBG_STYLE_PAINT);
     InitUI();
@@ -17,10 +14,9 @@ SuggestListBox::SuggestListBox(wxWindow* parent,
 void SuggestListBox::InitUI() {
     auto palette = ThemeColors::GetCurrentPalette();
     SetBackgroundColour(palette.cardBg);
+    SetFont(ThemeFont::GetFont(FontRole::Body));
 
-    m_scrollBar = new ScrollBar(this, [this](int line) {
-        ScrollToItem(line);
-    });
+    m_scrollBar = new ScrollBar(this, [this](int line) { ScrollToItem(line); });
 
     wxBoxSizer* sizer = new wxBoxSizer(wxHORIZONTAL);
     sizer->AddStretchSpacer(1);
@@ -37,10 +33,12 @@ void SuggestListBox::InitUI() {
 
 int SuggestListBox::GetItemAtPoint(const wxPoint& pt) const {
     int itemHeight = 38_dip;
-    if (itemHeight <= 0 || m_items.empty()) return -1;
+    if (itemHeight <= 0 || m_items.empty())
+        return -1;
 
     int clientW = GetClientSize().GetWidth();
-    if (pt.x < 2_dip || pt.x > clientW - 12_dip) return -1;
+    if (pt.x < 2_dip || pt.x > clientW - 12_dip)
+        return -1;
 
     int relIndex = pt.y / itemHeight;
     int actualIndex = m_firstVisibleIndex + relIndex;
@@ -54,7 +52,8 @@ int SuggestListBox::GetItemAtPoint(const wxPoint& pt) const {
 void SuggestListBox::UpdateScrollParams() {
     int itemHeight = 38_dip;
     int clientH = GetClientSize().GetHeight();
-    if (itemHeight <= 0 || clientH <= 0) return;
+    if (itemHeight <= 0 || clientH <= 0)
+        return;
 
     int visibleCount = std::max(1, clientH / itemHeight);
     int totalCount = static_cast<int>(m_items.size());
@@ -70,7 +69,8 @@ void SuggestListBox::UpdateScrollParams() {
 void SuggestListBox::ScrollToItem(int targetIndex) {
     int itemHeight = 38_dip;
     int clientH = GetClientSize().GetHeight();
-    if (itemHeight <= 0 || clientH <= 0) return;
+    if (itemHeight <= 0 || clientH <= 0)
+        return;
 
     int visibleCount = std::max(1, clientH / itemHeight);
     int totalCount = static_cast<int>(m_items.size());
@@ -129,14 +129,16 @@ void SuggestListBox::SetSelection(int index) {
 void SuggestListBox::OnPaint(wxPaintEvent& WXUNUSED(event)) {
     wxAutoBufferedPaintDC dc(this);
     wxSize size = GetClientSize();
-    if (size.x <= 0 || size.y <= 0) return;
+    if (size.x <= 0 || size.y <= 0)
+        return;
 
     auto palette = ThemeColors::GetCurrentPalette();
     dc.SetBackground(wxBrush(palette.cardBg));
     dc.Clear();
 
     std::unique_ptr<wxGraphicsContext> gc(wxGraphicsContext::Create(dc));
-    if (!gc) return;
+    if (!gc)
+        return;
 
     gc->Clip(0, 0, size.x, size.y);
 
@@ -145,7 +147,7 @@ void SuggestListBox::OnPaint(wxPaintEvent& WXUNUSED(event)) {
 
     // 空状态提示
     if (m_items.empty()) {
-        wxFont hintFont = ThemeFont::MakeFont(11, wxFONTWEIGHT_NORMAL);
+        wxFont hintFont = ThemeFont::GetFont(FontRole::Body, false);
         gc->SetFont(hintFont, palette.textSecondary);
         wxString hint = L"输入单词开始联想...";
         double tw = 0, th = 0;
@@ -157,17 +159,19 @@ void SuggestListBox::OnPaint(wxPaintEvent& WXUNUSED(event)) {
     int endIndex = std::min(static_cast<int>(m_items.size()), m_firstVisibleIndex + visibleCount);
     int itemWidth = size.x - 16_dip;
 
-    wxFont itemFont = ThemeFont::MakeFont(11, wxFONTWEIGHT_NORMAL);
-    wxFont selectedFont = ThemeFont::MakeFont(11, wxFONTWEIGHT_BOLD);
+    wxFont itemFont = ThemeFont::GetFont(FontRole::Body, false);
+    wxFont selectedFont = ThemeFont::GetFont(FontRole::Body, true);
 
     for (int i = m_firstVisibleIndex; i < endIndex; ++i) {
         int y = (i - m_firstVisibleIndex) * itemHeight + 2_dip;
-        if (y >= size.y) break;
+        if (y >= size.y)
+            break;
 
         int h = itemHeight - 4_dip;
         if (y + h > size.y) {
             h = size.y - y;
-            if (h <= 4) break;
+            if (h <= 4)
+                break;
         }
 
         int x = 4_dip;

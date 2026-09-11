@@ -255,6 +255,7 @@ elseif(APPLE)
         src/ui/theme/IconManager.cpp
         src/ui/theme/PlatformThemeHelper.cpp
         src/ui/widgets/CustomInputBox.cpp
+        src/ui/MainFrame.cpp
         PROPERTIES COMPILE_FLAGS "-x objective-c++"
     )
     set_source_files_properties(

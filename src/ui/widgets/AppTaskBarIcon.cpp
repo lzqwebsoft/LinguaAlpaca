@@ -36,14 +36,24 @@ wxMenu* AppTaskBarIcon::CreatePopupMenu() {
 }
 
 void AppTaskBarIcon::OnLeftClick(wxTaskBarIconEvent& WXUNUSED(event)) {
-    if (m_mainFrame) {
-        m_mainFrame->RestoreAndFocus();
+    if (m_mainFrame && wxTheApp) {
+        wxTheApp->CallAfter([this]() {
+            if (m_mainFrame) {
+                m_mainFrame->RestoreAndFocus();
+            }
+        });
     }
 }
 
 void AppTaskBarIcon::OnShowMain(wxCommandEvent& WXUNUSED(event)) {
-    if (m_mainFrame) {
-        m_mainFrame->RestoreAndFocus();
+    if (m_mainFrame && wxTheApp) {
+        // 使用 CallAfter 确保在状态栏菜单完全关闭退出跟踪之后再执行置顶激活，
+        // 彻底消除 macOS 菜单关闭与主窗口前台抢占的时序冲突
+        wxTheApp->CallAfter([this]() {
+            if (m_mainFrame) {
+                m_mainFrame->RestoreAndFocus();
+            }
+        });
     }
 }
 

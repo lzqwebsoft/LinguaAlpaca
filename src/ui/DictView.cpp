@@ -11,16 +11,14 @@
 
 namespace LinguaAlpaca::UI {
 
-DictView::DictView(wxWindow* parent,
-                   std::shared_ptr<ModelManager> modelManager,
-                   wxWindowID id)
-    : wxPanel(parent, id, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE),
-      m_modelManager(std::move(modelManager)) {
-    
+DictView::DictView(wxWindow* parent, std::shared_ptr<ModelManager> modelManager, wxWindowID id)
+    : wxPanel(parent, id, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE)
+    , m_modelManager(std::move(modelManager)) {
+
     if (m_modelManager) {
         m_dictEngine = m_modelManager->GetDictEngine();
     }
-    
+
     m_suggestTimer.SetOwner(this);
     Bind(wxEVT_TIMER, &DictView::OnSuggestTimer, this, m_suggestTimer.GetId());
 
@@ -42,8 +40,7 @@ void DictView::InitUI() {
 
     wxBoxSizer* headerTopSizer = new wxBoxSizer(wxHORIZONTAL);
 
-    wxBitmapBundle titleBundle = IconManager::GetIconBundle(
-        SVG::DICTIONARY, wxSize(24, 24), palette.accentPrimary);
+    wxBitmapBundle titleBundle = IconManager::GetIconBundle(SVG::DICTIONARY, wxSize(24, 24), palette.accentPrimary);
     wxStaticBitmap* titleIcon = new wxStaticBitmap(m_headerPanel, wxID_ANY, titleBundle);
 
     m_titleText = new wxStaticText(m_headerPanel, wxID_ANY, L"词典查询");
@@ -67,9 +64,7 @@ void DictView::InitUI() {
     m_dictChoice->Bind(wxEVT_CHOICE, &DictView::OnDictChoiceSelected, this);
 
     // 现代圆角搜索输入框（内嵌搜索图标与实时清除 x 按钮）
-    m_searchBox = new CustomInputBox(m_headerPanel, wxID_ANY, L"",
-                                     L"输入要查询的单词或短语，按回车检索...",
-                                     wxDefaultPosition, wxSize(-1, 38_dip));
+    m_searchBox = new CustomInputBox(m_headerPanel, wxID_ANY, L"", L"输入要查询的单词或短语，按回车检索...", wxDefaultPosition, wxSize(-1, 38_dip));
     m_searchBox->SetPrefixIcon(SVG::BROWSE, dip(16, 16));
     m_searchBox->Bind(wxEVT_TEXT, &DictView::OnSearchTextChanged, this);
     m_searchBox->Bind(wxEVT_TEXT_ENTER, &DictView::OnSearchTextEnter, this);
@@ -79,8 +74,7 @@ void DictView::InitUI() {
     });
 
     // 检索按钮
-    m_searchBtn = new CustomButton(m_headerPanel, wxID_ANY, L"查询", ButtonStyle::Primary,
-                                   wxDefaultPosition, dip(90, 38));
+    m_searchBtn = new CustomButton(m_headerPanel, wxID_ANY, L"查询", ButtonStyle::Primary, wxDefaultPosition, dip(90, 38));
     m_searchBtn->SetIcon(SVG::BROWSE, dip(16, 16), *wxWHITE);
     m_searchBtn->Bind(wxEVT_BUTTON, &DictView::OnSearchClicked, this);
 
@@ -113,7 +107,8 @@ void DictView::InitUI() {
     m_leftSuggestCard->Bind(wxEVT_PAINT, [this](wxPaintEvent& WXUNUSED(event)) {
         wxAutoBufferedPaintDC dc(m_leftSuggestCard);
         wxSize size = m_leftSuggestCard->GetClientSize();
-        if (size.x <= 0 || size.y <= 0) return;
+        if (size.x <= 0 || size.y <= 0)
+            return;
         auto palette = ThemeColors::GetCurrentPalette();
         dc.SetBackground(wxBrush(palette.windowBg));
         dc.Clear();
@@ -161,7 +156,8 @@ void DictView::InitUI() {
     m_rightResultCard->Bind(wxEVT_PAINT, [this](wxPaintEvent& WXUNUSED(event)) {
         wxAutoBufferedPaintDC dc(m_rightResultCard);
         wxSize size = m_rightResultCard->GetClientSize();
-        if (size.x <= 0 || size.y <= 0) return;
+        if (size.x <= 0 || size.y <= 0)
+            return;
         auto palette = ThemeColors::GetCurrentPalette();
         dc.SetBackground(wxBrush(palette.windowBg));
         dc.Clear();
@@ -193,14 +189,12 @@ void DictView::InitUI() {
     m_phoneticText->SetForegroundColour(palette.accentPrimary);
     m_phoneticText->SetBackgroundColour(palette.cardBg);
 
-    m_speakBtn = new CustomButton(m_wordHeaderBar, wxID_ANY, L"发音", ButtonStyle::Secondary,
-                                  wxDefaultPosition, dip(74, 30));
+    m_speakBtn = new CustomButton(m_wordHeaderBar, wxID_ANY, L"发音", ButtonStyle::Secondary, wxDefaultPosition, dip(74, 30));
     m_speakBtn->SetIcon(SVG::SPEAKER, dip(14, 14));
     m_speakBtn->Bind(wxEVT_BUTTON, &DictView::OnSpeakClicked, this);
     m_speakBtn->Hide();
 
-    m_copyBtn = new CustomButton(m_wordHeaderBar, wxID_ANY, L"复制释义", ButtonStyle::Secondary,
-                                 wxDefaultPosition, dip(96, 30));
+    m_copyBtn = new CustomButton(m_wordHeaderBar, wxID_ANY, L"复制释义", ButtonStyle::Secondary, wxDefaultPosition, dip(96, 30));
     m_copyBtn->SetIcon(SVG::COPY, dip(14, 14));
     m_copyBtn->Bind(wxEVT_BUTTON, &DictView::OnCopyClicked, this);
     m_copyBtn->Hide();
@@ -228,8 +222,7 @@ void DictView::InitUI() {
     m_emptyStateCard->SetBackgroundColour(palette.cardBg);
 
     wxBoxSizer* emptySizer = new wxBoxSizer(wxVERTICAL);
-    wxBitmapBundle emptyBundle = IconManager::GetIconBundle(
-        SVG::DICTIONARY, wxSize(48, 48), palette.textSecondary);
+    wxBitmapBundle emptyBundle = IconManager::GetIconBundle(SVG::DICTIONARY, wxSize(48, 48), palette.textSecondary);
     m_emptyIcon = new wxStaticBitmap(m_emptyStateCard, wxID_ANY, emptyBundle);
 
     m_emptyTitle = new wxStaticText(m_emptyStateCard, wxID_ANY, L"欢迎使用 StarDict 本地词典");
@@ -237,13 +230,12 @@ void DictView::InitUI() {
     m_emptyTitle->SetForegroundColour(palette.textPrimary);
 
     m_emptyDesc = new wxStaticText(m_emptyStateCard, wxID_ANY,
-        L"在上方输入框中输入英文或中文单词，即可快速查询本地 StarDict 词典的详细释义与音标。\n"
-        L"如未加载词典，请前往【设置 -> 词典设置】指定 StarDict 词典目录。");
+                                   L"在上方输入框中输入英文或中文单词，即可快速查询本地 StarDict 词典的详细释义与音标。\n"
+                                   L"如未加载词典，请前往【设置 -> 词典设置】指定 StarDict 词典目录。");
     m_emptyDesc->SetFont(ThemeFont::GetFont(FontRole::Body));
     m_emptyDesc->SetForegroundColour(palette.textSecondary);
 
-    m_goToSettingsBtn = new CustomButton(m_emptyStateCard, wxID_ANY, L"前往词典设置", ButtonStyle::Primary,
-                                         wxDefaultPosition, dip(160, 38));
+    m_goToSettingsBtn = new CustomButton(m_emptyStateCard, wxID_ANY, L"前往词典设置", ButtonStyle::Primary, wxDefaultPosition, dip(160, 38));
     m_goToSettingsBtn->SetIcon(SVG::SETTINGS, dip(16, 16), *wxWHITE);
     m_goToSettingsBtn->Bind(wxEVT_BUTTON, &DictView::OnGoToSettingsClicked, this);
 
@@ -268,7 +260,8 @@ void DictView::InitUI() {
 }
 
 void DictView::RefreshDictList() {
-    if (!m_dictEngine) return;
+    if (!m_dictEngine)
+        return;
 
     m_cachedDictInfos = m_dictEngine->GetLoadedDictionaries();
     size_t count = m_cachedDictInfos.size();
@@ -305,7 +298,8 @@ void DictView::SearchWord(const wxString& word) {
 }
 
 void DictView::OnSearchClicked(wxCommandEvent& WXUNUSED(event)) {
-    if (!m_searchBox) return;
+    if (!m_searchBox)
+        return;
     wxString word = m_searchBox->GetValue().Trim(true).Trim(false);
     if (!word.IsEmpty()) {
         DoSearch(word.ToUTF8().data());
@@ -313,7 +307,8 @@ void DictView::OnSearchClicked(wxCommandEvent& WXUNUSED(event)) {
 }
 
 void DictView::OnSearchTextEnter(wxCommandEvent& WXUNUSED(event)) {
-    if (!m_searchBox) return;
+    if (!m_searchBox)
+        return;
     wxString word = m_searchBox->GetValue().Trim(true).Trim(false);
     if (!word.IsEmpty()) {
         DoSearch(word.ToUTF8().data());
@@ -321,13 +316,15 @@ void DictView::OnSearchTextEnter(wxCommandEvent& WXUNUSED(event)) {
 }
 
 void DictView::OnSearchTextChanged(wxCommandEvent& WXUNUSED(event)) {
-    if (!m_searchBox) return;
+    if (!m_searchBox)
+        return;
     // 延迟 200ms 触发联想词检索，避免按键频繁二分
     m_suggestTimer.StartOnce(200);
 }
 
 void DictView::OnSuggestTimer(wxTimerEvent& WXUNUSED(event)) {
-    if (!m_searchBox || !m_dictEngine || !m_suggestListBox) return;
+    if (!m_searchBox || !m_dictEngine || !m_suggestListBox)
+        return;
 
     std::string prefix = m_searchBox->GetValue().Trim(true).Trim(false).ToUTF8().data();
     if (prefix.empty()) {
@@ -367,13 +364,20 @@ void DictView::OnDictChoiceSelected(wxCommandEvent& event) {
 }
 
 void DictView::OnClearClicked(wxCommandEvent& WXUNUSED(event)) {
-    if (m_searchBox) m_searchBox->Clear();
-    if (m_suggestListBox) m_suggestListBox->Clear();
-    if (m_definitionCtrl) m_definitionCtrl->Clear();
-    if (m_headwordText) m_headwordText->SetLabel(L"");
-    if (m_phoneticText) m_phoneticText->SetLabel(L"");
-    if (m_speakBtn) m_speakBtn->Hide();
-    if (m_copyBtn) m_copyBtn->Hide();
+    if (m_searchBox)
+        m_searchBox->Clear();
+    if (m_suggestListBox)
+        m_suggestListBox->Clear();
+    if (m_definitionCtrl)
+        m_definitionCtrl->Clear();
+    if (m_headwordText)
+        m_headwordText->SetLabel(L"");
+    if (m_phoneticText)
+        m_phoneticText->SetLabel(L"");
+    if (m_speakBtn)
+        m_speakBtn->Hide();
+    if (m_copyBtn)
+        m_copyBtn->Hide();
     m_currentWord.clear();
     m_lastSearchResults.clear();
 
@@ -410,7 +414,8 @@ void DictView::OnGoToSettingsClicked(wxCommandEvent& WXUNUSED(event)) {
 }
 
 void DictView::DoSearch(const std::string& word) {
-    if (!m_dictEngine || word.empty()) return;
+    if (!m_dictEngine || word.empty())
+        return;
     m_currentWord = word;
 
     auto results = m_dictEngine->Lookup(word, m_currentSelectedDictId);
@@ -455,9 +460,11 @@ void DictView::DoSearch(const std::string& word) {
 }
 
 void DictView::RenderRichDictionaryResults(const std::vector<DictSearchResult>& results) {
-    if (!m_definitionCtrl) return;
+    if (!m_definitionCtrl)
+        return;
     wxTextCtrl* inner = m_definitionCtrl->GetInnerCtrl();
-    if (!inner) return;
+    if (!inner)
+        return;
 
     inner->Freeze();
     inner->Clear();
@@ -502,15 +509,23 @@ void DictView::RenderRichDictionaryResults(const std::vector<DictSearchResult>& 
 
     auto getStyleAttr = [&](DictTextStyle style) -> const wxTextAttr& {
         switch (style) {
-            case DictTextStyle::DictHeader:   return dictHeaderAttr;
-            case DictTextStyle::Phonetic:     return phoneticAttr;
-            case DictTextStyle::PartOfSpeech: return posAttr;
-            case DictTextStyle::Tag:          return tagAttr;
-            case DictTextStyle::Example:      return exampleAttr;
-            case DictTextStyle::NumberedItem: return numAttr;
-            case DictTextStyle::Divider:      return dividerAttr;
-            case DictTextStyle::Default:
-            default:                          return defaultAttr;
+        case DictTextStyle::DictHeader:
+            return dictHeaderAttr;
+        case DictTextStyle::Phonetic:
+            return phoneticAttr;
+        case DictTextStyle::PartOfSpeech:
+            return posAttr;
+        case DictTextStyle::Tag:
+            return tagAttr;
+        case DictTextStyle::Example:
+            return exampleAttr;
+        case DictTextStyle::NumberedItem:
+            return numAttr;
+        case DictTextStyle::Divider:
+            return dividerAttr;
+        case DictTextStyle::Default:
+        default:
+            return defaultAttr;
         }
     };
 
@@ -531,9 +546,8 @@ void DictView::UpdateEmptyStateView(bool hasDictionaries, bool hasSearched, bool
         m_rightResultCard->Hide();
         m_emptyStateCard->Show();
         m_emptyTitle->SetLabel(L"未检测到本地 StarDict 词典");
-        m_emptyDesc->SetLabel(
-            L"系统尚未在词典目录中检测到任何 StarDict 格式词典（.ifo / .idx / .dict 或 .dict.dz）。\n"
-            L"请点击下方按钮前往【设置 -> 词典设置】指定包含词典的目录。");
+        m_emptyDesc->SetLabel(L"系统尚未在词典目录中检测到任何 StarDict 格式词典（.ifo / .idx / .dict 或 .dict.dz）。\n"
+                              L"请点击下方按钮前往【设置 -> 词典设置】指定包含词典的目录。");
         m_goToSettingsBtn->Show();
     } else if (!hasSearched) {
         m_leftSuggestCard->Show();
@@ -556,15 +570,18 @@ void DictView::UpdateTheme() {
     auto palette = ThemeColors::GetCurrentPalette();
     SetBackgroundColour(palette.windowBg);
 
-    if (m_headerPanel) m_headerPanel->SetBackgroundColour(palette.windowBg);
-    if (m_titleText) m_titleText->SetForegroundColour(palette.textPrimary);
+    if (m_headerPanel)
+        m_headerPanel->SetBackgroundColour(palette.windowBg);
+    if (m_titleText)
+        m_titleText->SetForegroundColour(palette.textPrimary);
     if (m_dictChoice) {
         m_dictChoice->UpdateTheme();
     }
     if (m_searchBox) {
         m_searchBox->UpdateTheme();
     }
-    if (m_mainContentPanel) m_mainContentPanel->SetBackgroundColour(palette.windowBg);
+    if (m_mainContentPanel)
+        m_mainContentPanel->SetBackgroundColour(palette.windowBg);
 
     if (m_leftSuggestCard) {
         m_leftSuggestCard->SetBackgroundColour(palette.cardBg);
@@ -617,9 +634,12 @@ void DictView::UpdateTheme() {
         }
     }
 
-    if (m_emptyStateCard) m_emptyStateCard->SetBackgroundColour(palette.cardBg);
-    if (m_emptyTitle) m_emptyTitle->SetForegroundColour(palette.textPrimary);
-    if (m_emptyDesc) m_emptyDesc->SetForegroundColour(palette.textSecondary);
+    if (m_emptyStateCard)
+        m_emptyStateCard->SetBackgroundColour(palette.cardBg);
+    if (m_emptyTitle)
+        m_emptyTitle->SetForegroundColour(palette.textPrimary);
+    if (m_emptyDesc)
+        m_emptyDesc->SetForegroundColour(palette.textSecondary);
 
     Refresh();
 }

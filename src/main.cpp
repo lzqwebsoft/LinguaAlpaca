@@ -129,6 +129,14 @@ public:
         UI::ThemeManager::GetInstance().ClearCallbacks();
         return wxApp::OnExit();
     }
+
+#ifdef __APPLE__
+    void MacReopenApp() override {
+        if (m_mainFrame) {
+            m_mainFrame->RestoreAndFocus();
+        }
+    }
+#endif
 };
 
 wxIMPLEMENT_APP(LinguaAlpacaApp);

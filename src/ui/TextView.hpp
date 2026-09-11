@@ -14,9 +14,7 @@ namespace LinguaAlpaca::UI {
 
 class TextView : public wxPanel, public AsyncTrackable {
 public:
-    TextView(wxWindow* parent, 
-             std::shared_ptr<ModelManager> modelManager,
-             wxWindowID id = wxID_ANY);
+    TextView(wxWindow* parent, std::shared_ptr<ModelManager> modelManager, wxWindowID id = wxID_ANY);
     ~TextView() override;
 
     void UpdateTheme();

@@ -11,6 +11,8 @@
 
 #ifdef __WXMSW__
 #include <windows.h>
+#elif defined(__APPLE__)
+#import <Cocoa/Cocoa.h>
 #endif
 
 namespace LinguaAlpaca::UI {
@@ -22,6 +24,7 @@ namespace LinguaAlpaca::UI {
         SetIcons(IconManager::GetAppIconBundle());
 #ifdef __APPLE__
         IconManager::SetupApplicationIcon();
+        SetupPlatformWindowMac();
 #elif defined(__WXMSW__)
         HWND hwnd = (HWND)GetHWND();
         if (hwnd) {
@@ -283,8 +286,46 @@ namespace LinguaAlpaca::UI {
         if (hwnd) {
             ::SetForegroundWindow(hwnd);
         }
+#elif defined(__APPLE__)
+        ActivateAndBringToFrontMac();
 #endif
+        SetFocus();
     }
+
+#if defined(__APPLE__)
+    void MainFrame::SetupPlatformWindowMac() {
+        NSView* view = (NSView*)GetHandle();
+        if (view) {
+            NSWindow* win = [view window];
+            if (win) {
+                // 确保无边框主窗体在应用失去前台焦点时不会被系统自动隐式隐藏
+                [win setHidesOnDeactivate:NO];
+                // 允许窗口正常参与桌面空间分配与快捷键循环
+                [win setCollectionBehavior:[win collectionBehavior] |
+                                           NSWindowCollectionBehaviorManaged |
+                                           NSWindowCollectionBehaviorParticipatesInCycle];
+            }
+        }
+    }
+
+    void MainFrame::ActivateAndBringToFrontMac() {
+        // 1. 强制激活当前应用进程为前台活跃应用（忽略其他第三方应用抢占）
+        [NSApp activateIgnoringOtherApps:YES];
+
+        // 2. 底层 Cocoa 窗口反最小化、提升至最前台并取得键盘焦点
+        NSView* view = (NSView*)GetHandle();
+        if (view) {
+            NSWindow* win = [view window];
+            if (win) {
+                if ([win isMiniaturized]) {
+                    [win deminiaturize:nil];
+                }
+                [win orderFrontRegardless];
+                [win makeKeyAndOrderFront:nil];
+            }
+        }
+    }
+#endif
 
     void MainFrame::QuitApplication() {
         if (wxTheApp) {

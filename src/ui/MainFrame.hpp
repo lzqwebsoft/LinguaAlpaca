@@ -44,6 +44,9 @@ private:
 
 #ifdef __WXMSW__
     WXLRESULT MSWWindowProc(WXUINT nMsg, WXWPARAM wParam, WXLPARAM lParam) override;
+#elif defined(__APPLE__)
+    void SetupPlatformWindowMac();
+    void ActivateAndBringToFrontMac();
 #endif
 
     std::shared_ptr<ModelManager> m_modelManager;

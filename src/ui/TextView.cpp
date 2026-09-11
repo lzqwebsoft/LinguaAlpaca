@@ -235,6 +235,19 @@ void TextView::UpdateTheme() {
     Refresh();
 }
 
+void TextView::SetSourceText(const wxString& text) {
+    if (m_sourceCard && m_sourceCard->GetTextCtrl()) {
+        m_sourceCard->GetTextCtrl()->SetValue(text);
+        m_sourceCard->SetCharacterCount(text.Length());
+    }
+}
+
+void TextView::SetSourceTextAndTranslate(const wxString& text) {
+    SetSourceText(text);
+    wxCommandEvent dummy;
+    OnTranslateClicked(dummy);
+}
+
 void TextView::OnTranslateClicked(wxCommandEvent& WXUNUSED(event)) {
     std::string text = m_sourceCard->GetTextCtrl()->GetValue().ToUTF8().data();
     LanguageCode srcLang = m_langSelector ? m_langSelector->GetSourceLanguage() : LanguageCode::AutoDetect;

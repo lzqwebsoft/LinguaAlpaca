@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
-project(LinguaAlpaca LANGUAGES CXX)
+project(LinguaAlpaca VERSION 1.0.3 LANGUAGES CXX)
+
+add_compile_definitions(APP_VERSION="${PROJECT_VERSION}")
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -77,6 +79,8 @@ set(CORE_SOURCES
     src/core/Logger.cpp
     src/core/Config.hpp
     src/core/Config.cpp
+    src/core/AppVersion.hpp
+    src/core/AppVersion.cpp
     src/core/ClipboardHelper.hpp
     src/core/ClipboardHelper.cpp
     src/core/WinUIAutomationHelper.hpp
@@ -240,8 +244,8 @@ elseif(APPLE)
         MACOSX_BUNDLE TRUE
         MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/resources/Info.plist.in"
         MACOSX_BUNDLE_BUNDLE_NAME "LinguaAlpaca"
-        MACOSX_BUNDLE_BUNDLE_VERSION "1.0.2"
-        MACOSX_BUNDLE_SHORT_VERSION_STRING "1.0.2"
+        MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
+        MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
         MACOSX_BUNDLE_GUI_IDENTIFIER "com.zqluo.linguaalpaca"
         MACOSX_BUNDLE_ICON_FILE "app_icon.icns"
     )
@@ -249,6 +253,7 @@ elseif(APPLE)
         src/core/SelectionService.cpp
         src/core/ClipboardHelper.cpp
         src/core/WinUIAutomationHelper.cpp
+        src/core/AppVersion.cpp
         src/ui/widgets/FloatingIconFrame.cpp
         src/ui/widgets/TranslationBubbleFrame.cpp
         src/ui/widgets/TextCtrl.cpp
@@ -304,7 +309,7 @@ if(APPLE)
 
     # macOS 独立发布包打包 Target (包含 dylib 内嵌、rpath 修正、签名与 DMG 制作)
     add_custom_target(package_mac
-        COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/scripts/package_mac.sh" "${CMAKE_BINARY_DIR}"
+        COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/scripts/package_mac.sh" "${CMAKE_BINARY_DIR}" "${PROJECT_VERSION}"
         DEPENDS ${PROJECT_NAME} llama-server
         COMMENT "[LinguaAlpaca] Packaging standalone macOS Application Bundle & DMG..."
         VERBATIM

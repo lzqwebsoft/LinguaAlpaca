@@ -172,6 +172,9 @@ namespace LinguaAlpaca::UI {
         // 实例化各子视图并注入 ModelManager
         m_textView = new TextView(m_contentContainer, m_modelManager);
         m_ocrView = new OcrView(m_contentContainer, m_modelManager);
+        m_ocrView->SetTranslateCallback([this](const wxString& text) {
+            NavigateToTextView(text, true);
+        });
         m_dictView = new DictView(m_contentContainer, m_modelManager);
         m_logView = new LogView(m_contentContainer, m_modelManager ? m_modelManager->GetConfigManager() : nullptr);
         m_settingsView = new SettingsView(m_contentContainer, m_modelManager);
@@ -343,6 +346,22 @@ namespace LinguaAlpaca::UI {
             wxCommandEvent evt(EVT_SIDEBAR_NAV_CHANGED, m_sidebar->GetId());
             evt.SetInt(4);
             m_sidebar->ProcessWindowEvent(evt);
+        }
+    }
+
+    void MainFrame::NavigateToTextView(const wxString& text, bool autoTranslate) {
+        if (m_sidebar) {
+            m_sidebar->SetActiveItem(0);
+            wxCommandEvent evt(EVT_SIDEBAR_NAV_CHANGED, m_sidebar->GetId());
+            evt.SetInt(0);
+            m_sidebar->ProcessWindowEvent(evt);
+        }
+        if (m_textView && !text.IsEmpty()) {
+            if (autoTranslate) {
+                m_textView->SetSourceTextAndTranslate(text);
+            } else {
+                m_textView->SetSourceText(text);
+            }
         }
     }
 

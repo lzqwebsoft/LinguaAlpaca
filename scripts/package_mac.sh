@@ -13,7 +13,19 @@ SRC_APP="${BUILD_DIR}/bin/LinguaAlpaca.app"
 LLAMA_SERVER="${BUILD_DIR}/bin/llama-server"
 DEST_APP="${DIST_DIR}/LinguaAlpaca.app"
 APP_NAME="LinguaAlpaca"
-VERSION="1.0.2"
+
+# 自动与 CMakeLists.txt 中的版本保持完全一致
+VERSION="${2:-}"
+if [ -z "${VERSION}" ] && [ -f "${SRC_APP}/Contents/Info.plist" ]; then
+    VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "${SRC_APP}/Contents/Info.plist" 2>/dev/null || true)
+fi
+if [ -z "${VERSION}" ] && [ -f "${PROJECT_ROOT}/CMakeLists.txt" ]; then
+    VERSION=$(grep -E '^[[:space:]]*project\([^)]*VERSION[[:space:]]+' "${PROJECT_ROOT}/CMakeLists.txt" | head -n1 | sed -E 's/.*VERSION[[:space:]]+([0-9.]+).*/\1/' || true)
+fi
+if [ -z "${VERSION}" ]; then
+    VERSION="1.0.3"
+fi
+
 DMG_NAME="${APP_NAME}-${VERSION}-macOS.dmg"
 DMG_PATH="${DIST_DIR}/${DMG_NAME}"
 

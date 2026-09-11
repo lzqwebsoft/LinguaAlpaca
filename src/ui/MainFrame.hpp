@@ -20,6 +20,7 @@ public:
     ~MainFrame() override;
 
     void NavigateToSettings();
+    void NavigateToTextView(const wxString& text = wxEmptyString, bool autoTranslate = false);
     void CheckAndShowWelcomeDialog();
     void RestoreAndFocus();
     void QuitApplication();

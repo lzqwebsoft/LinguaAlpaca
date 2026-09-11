@@ -18,7 +18,7 @@
   <img src="https://img.shields.io/badge/License-MIT-2E7D32?style=flat-square" alt="License" />
 </p>
 
-**LinguaAlpaca (译灵驼)** 是一款基于 **C++17** 与 **wxWidgets** 打造的现代化、高颜值、高性能桌面离线 AI 翻译助手。项目深度内嵌 **llama.cpp** 原生后端引擎（推荐搭载腾讯 **Hy-MT2-1.8B-GGUF** 高质量离线翻译大模型与 **PaddleOCR-VL** 多模态视觉模型），集**端侧大模型流式打字翻译**、**多模态 OCR 视觉解析**（支持 Ctrl+V 剪贴板图像实时粘贴）、**StarDict 本地百万词典秒查**与**系统级全局划词悬浮气泡**于一体。
+**LinguaAlpaca (译灵驼)** 是一款基于 **C++17** 与 **wxWidgets** 打造的现代化、高颜值、高性能桌面离线 AI 翻译助手。项目深度内嵌 **llama.cpp** 原生后端引擎（推荐搭载腾讯 **Hy-MT2-1.8B-GGUF** 高质量离线翻译大模型与 **PaddleOCR-VL** 多模态视觉模型），集**端侧大模型流式打字翻译**、**多模态 OCR 视觉解析**（支持截图实时粘贴与识别后一键翻译）、**StarDict 本地百万词典秒查**与**系统级全局划词悬浮气泡**于一体。
 
 具备启动秒开、按需模型热切换、离线 TTS 语音朗读与深浅调色板热更新。全流程坚持 **100% 本地离线计算**，彻底杜绝隐私与敏感数据外泄风险。
 
@@ -50,7 +50,9 @@
 │ ├─ ScreenTextExtractor (UIAutomation / 剪贴板双通道文本提取器)        │
 │ ├─ ClipboardHelper / WinTtsHelper / WinMediaOcrHelper (系统能力封装)   │
 │ ├─ ConfigManager (轻量化 config.ini 持久化管理)                       │
+│ ├─ AppVersion (跨平台统一应用版本获取: Info.plist / CMake 宏)         │
 │ ├─ Downloader (HuggingFace / 镜像源断点续传模型下载器)                 │
+│ ├─ TableParser / MarkdownFormatter (表格与富文本解析引擎)             │
 │ └─ Logger / Types.hpp (统一日志设施与数据结构规范)                     │
 └───────────────────────────────────┬────────────────────────────────────┘
                                     ▲
@@ -67,65 +69,88 @@
 ## 📁 目录结构说明 (Directory Structure)
 
 ```text
-src/
-├── core/                    # 【核心基础层】(服务进程、通信、词典引擎、划词监听、调度中枢与配置)
-│   ├── Types.hpp            # 统一数据结构 (LanguageCode, ServerStatusInfo, TranslationTask 等)
-│   ├── Logger.hpp / .cpp    # 轻量化带时间戳与等级的日志系统
-│   ├── Config.hpp / .cpp    # 基于 wxFileConfig 的配置管理器 (ConfigManager)
-│   ├── ClipboardHelper.hpp/.cpp # Win32 剪贴板保护读写辅助工具
-│   ├── ScreenTextExtractor.hpp/.cpp # 屏幕划词多通道文本提取器
-│   ├── SelectionService.hpp/.cpp # Win32 全局划词捕获监听服务
-│   ├── WinUIAutomationHelper.hpp/.cpp # Windows UI Automation 选区提取
-│   ├── WinMediaOcrHelper.hpp/.cpp     # Windows 原生 OCR 提取辅助
-│   ├── WinTtsHelper.hpp/.cpp          # Windows SAPI / WinRT 离线语音合成朗读
-│   ├── dict/                # StarDict 词典核心引擎
-│   │   ├── DictEngine.hpp/.cpp   # 词典解压、索引建立与多词典聚合检索
-│   │   └── DictFormatter.hpp/.cpp# Pango/MediaWiki/Kingsoft 等字典标记富文本解析
-│   ├── llama/               # 嵌入式 llama_server 与 SSE 客户端
-│   │   ├── LlamaServer.hpp/.cpp  # 后台服务进程守护、健康探针与自动端口分配
-│   │   └── LlamaClient.hpp/.cpp  # 标准 HTTP SSE 流式打字机通信客户端
-│   ├── ModelManager.hpp/.cpp# ★ 统一模型管理中枢 (生命周期管理、按需模型加载与推理调度)
-│   └── Downloader.hpp/.cpp  # 异步 HTTP 模型断点续传下载器
+LinguaAlpaca/
+├── CMakeLists.txt           # 根 CMake 构建配置文件 (定义统一工程版本与编译目标)
+├── resources/               # 应用图标、Plist 模板与 Windows 资源文件
+│   ├── app_icon.icns        # macOS 高清多尺寸应用图标
+│   ├── app_icon.ico         # Windows 高清多分辨率应用图标
+│   ├── app_icon.png         # 通用应用图标 PNG 资源
+│   ├── logo.png             # 灵驼品牌 Logo
+│   ├── Info.plist.in        # macOS App Bundle 元信息与权限配置模板
+│   └── app.rc               # Windows 原生 PE 资源描述文件
 │
-├── engine/                  # 【原生引擎层】(保留 100% 原生 C API 离线实现，供深入学习参考)
-│   ├── IEngine.hpp          # 引擎纯虚接口 (ITranslationEngine, IOcrEngine)
-│   ├── LlamaCppTranslationEngine.hpp/.cpp # 原生 C API 文本翻译引擎
-│   └── LlamaCppOcrEngine.hpp/.cpp         # 原生多模态 C API 视觉 OCR (mtmd) 引擎
+├── patches/                 # llama.cpp 第三方库本地自动补丁
+├── scripts/                 # 跨平台构建与打包脚本 (含 macOS .dmg 自动化流水线)
+├── tests/                   # Catch2 自动化单元测试套件
 │
-├── ui/                      # 【界面展现层】(wxWidgets 现代化视图与控件体系)
-│   ├── AsyncTrackable.hpp   # 跨线程 UI 回调 RAII 安全机制 (BindUi 辅助器)
-│   ├── theme/               # 主题调色板、DPI 语法糖与 SVG 矢量图标库
-│   │   ├── Theme.hpp        # 调色板代币规范与主题管理器 (ThemeManager)
-│   │   ├── Dpi.hpp          # Modern C++ DPI 缩放语法糖 (_dip / dip)
-│   │   ├── AppIcons.hpp     # 统一 SVG 矢量图标常量规范
-│   │   └── IconManager.hpp/.cpp # SVG 矢量图标高质量抗锯齿渲染器
-│   ├── widgets/             # 自定义复用组件库
-│   │   ├── SplashScreen.hpp/.cpp        # ★ 现代自适应启动页
-│   │   ├── WelcomeModelDialog.hpp/.cpp  # 首次使用模型配置引导对话框
-│   │   ├── AboutDialog.hpp/.cpp         # 官方关于与主页介绍对话框
-│   │   ├── FloatingIconFrame.hpp/.cpp   # 分层抗锯齿悬浮划词图标
-│   │   ├── TranslationBubbleFrame.hpp/.cpp # 多显示器智能贴边悬浮翻译气泡 (含折叠/TTS/缩放)
-│   │   ├── CustomButton.hpp/.cpp        # 自绘制圆角胶囊按钮
-│   │   ├── CustomChoice.hpp/.cpp        # 自绘制圆角下拉选择框
-│   │   ├── CustomInputBox.hpp/.cpp      # 自绘制文本输入框
-│   │   ├── TextCtrl.hpp/.cpp            # 现代化多行富文本编辑器 (内置平滑细滚动条)
-│   │   ├── CardPanel.hpp/.cpp           # 现代化卡片容器组件
-│   │   ├── StatusBadge.hpp/.cpp         # 实时服务状态彩色徽标
-│   │   ├── SidebarNav.hpp/.cpp          # 侧边导航栏 (文本, OCR, 词典, 日志, 设置)
-│   │   ├── LanguageBar.hpp/.cpp         # 语言选择器与一键互换条
-│   │   ├── ScrollBar.hpp/.cpp           # 现代化细条圆角滑动条
-│   │   ├── SplitterWindow.hpp/.cpp      # 弹性分割窗口容器
-│   │   ├── SuggestListBox.hpp/.cpp      # 词典前缀补全下拉列表
-│   │   └── ImagePreviewDialog.hpp/.cpp  # 图片大图平移缩放预览对话框
-│   ├── TextView.hpp/.cpp    # 文本流式翻译视图 (打字机效果、实时状态 Badge)
-│   ├── OcrView.hpp/.cpp     # 图片 OCR 视觉识别视图 (拖拽/剪贴板粘贴上传、多任务切换)
-│   ├── DictView.hpp/.cpp    # StarDict 离线词典检索与管理视图
-│   ├── LogView.hpp/.cpp     # 系统运行与服务诊断实时日志视图
-│   ├── SettingsView.hpp/.cpp# 模型配置、硬件加速、划词、词典与主题设置视图
-│   ├── PlaceholderView.hpp  # 通用占位视图
-│   └── MainFrame.hpp/.cpp   # 主窗口框架 (路由切换与按需模型加载驱动)
-│
-└── main.cpp                 # 应用程序主入口 (DPI 感知配置、启动页与生命周期装配)
+└── src/                     # 源代码主目录
+    ├── core/                # 【核心基础层】(服务进程、通信、词典引擎、划词监听、调度中枢与配置)
+    │   ├── Types.hpp        # 统一数据结构 (LanguageCode, ServerStatusInfo, TranslationTask 等)
+    │   ├── Logger.hpp/.cpp  # 轻量化带时间戳与等级的日志系统
+    │   ├── Config.hpp/.cpp  # 基于 wxFileConfig 的轻量化配置管理器 (ConfigManager)
+    │   ├── AppVersion.hpp/.cpp # 跨平台统一应用发布版本获取 (Info.plist / CMake 宏)
+    │   ├── ClipboardHelper.hpp/.cpp # 跨平台剪贴板安全读写与文本保护工具
+    │   ├── ScreenTextExtractor.hpp/.cpp # 屏幕划词多通道文本提取器
+    │   ├── SelectionContext.hpp # 划词事件上下文与几何坐标数据结构
+    │   ├── SelectionService.hpp/.cpp # 全局划词捕获监听服务 (Win32 Hook / macOS Monitor)
+    │   ├── WinUIAutomationHelper.hpp/.cpp # Windows UI Automation 原生选区提取
+    │   ├── WinMediaOcrHelper.hpp/.cpp     # Windows 原生 OCR 提取辅助
+    │   ├── WinTtsHelper.hpp/.cpp          # 离线语音合成朗读 (Windows SAPI/WinRT & macOS AVFoundation)
+    │   ├── ModelManager.hpp/.cpp# ★ 统一模型管理中枢 (生命周期管理、按需模型加载与推理调度)
+    │   ├── Downloader.hpp/.cpp  # 异步 HTTP 模型断点续传下载器
+    │   ├── dict/            # StarDict 词典核心引擎
+    │   │   ├── DictEngine.hpp/.cpp   # 词典解压、索引建立与多词典聚合检索
+    │   │   └── DictFormatter.hpp/.cpp# Pango/MediaWiki/Kingsoft 等字典标记富文本解析
+    │   ├── llama/           # 嵌入式 llama_server 与 SSE 客户端
+    │   │   ├── LlamaServer.hpp/.cpp  # 后台服务进程守护、健康探针与自动端口分配
+    │   │   └── LlamaClient.hpp/.cpp  # 标准 HTTP SSE 流式打字机通信客户端
+    │   ├── table/           # 表格结构分析与转换模块
+    │   │   └── TableParser.hpp/.cpp  # Markdown 表格解析、语音描述生成与 Excel 格式化
+    │   └── markdown/        # 富文本轻量解析渲染模块
+    │       └── MarkdownFormatter.hpp/.cpp # 文本格式化与排版清洗
+    │
+    ├── engine/              # 【原生引擎层】(保留 100% 原生 C API 离线实现，供深入学习参考)
+    │   ├── IEngine.hpp      # 引擎纯虚接口 (ITranslationEngine, IOcrEngine)
+    │   ├── LlamaCppTranslationEngine.hpp/.cpp # 原生 C API 文本翻译引擎
+    │   └── LlamaCppOcrEngine.hpp/.cpp         # 原生多模态 C API 视觉 OCR (mtmd) 引擎
+    │
+    ├── ui/                  # 【界面展现层】(wxWidgets 现代化视图与自研控件体系)
+    │   ├── AsyncTrackable.hpp # 跨线程 UI 回调 RAII 安全机制 (BindUi 辅助器)
+    │   ├── MainFrame.hpp/.cpp # 主窗口框架 (路由切换、无边框窗体控制与按需模型加载驱动)
+    │   ├── TextView.hpp/.cpp  # 文本流式翻译视图 (打字机效果、实时状态 Badge、快捷朗读)
+    │   ├── OcrView.hpp/.cpp   # 图片 OCR 视觉识别视图 (拖拽/剪贴板粘贴上传、6大模式、一键联动翻译)
+    │   ├── DictView.hpp/.cpp  # StarDict 离线词典检索与管理视图 (实时前缀推荐补全)
+    │   ├── LogView.hpp/.cpp   # 系统运行与服务诊断实时日志视图 (等级过滤、导出清空)
+    │   ├── SettingsView.hpp/.cpp # 模型配置、硬件加速、划词、词典与主题偏好设置
+    │   ├── theme/           # 主题调色板、DPI 语法糖与 SVG 矢量图标库
+    │   │   ├── Theme.hpp    # 调色板代币规范与主题管理器 (ThemeManager)
+    │   │   ├── ThemeFont.hpp# 跨平台全局排版字体规范与角色分级 (ThemeFont)
+    │   │   ├── Dpi.hpp      # Modern C++ DPI 缩放语法糖 (_dip / dip)
+    │   │   ├── AppIcons.hpp # 统一 SVG 矢量图标常量库
+    │   │   ├── IconManager.hpp/.cpp # SVG 矢量图标高质量抗锯齿渲染器
+    │   │   └── PlatformThemeHelper.hpp/.cpp # 原生系统主题与深色窗口外观辅助器
+    │   └── widgets/         # 自定义复用组件库
+    │       ├── SplashScreen.hpp/.cpp        # ★ 现代自适应渐变启动页
+    │       ├── AppTaskBarIcon.hpp/.cpp      # 系统托盘与状态栏菜单控制器
+    │       ├── FloatingIconFrame.hpp/.cpp   # 分层抗锯齿悬浮划词图标
+    │       ├── TranslationBubbleFrame.hpp/.cpp # 智能多屏贴边悬浮翻译气泡 (折叠/TTS/缩放)
+    │       ├── CardPanel.hpp/.cpp           # 现代化卡片容器组件 (支持多视图切换)
+    │       ├── CustomButton.hpp/.cpp        # 自绘制圆角胶囊按钮 (支持多种风格与矢量图标)
+    │       ├── CustomChoice.hpp/.cpp        # 自绘制圆角下拉选择框
+    │       ├── CustomInputBox.hpp/.cpp      # 自绘制文本输入框 (前缀图标与清除按钮)
+    │       ├── CustomTableView.hpp/.cpp     # 自绘制轻量表格数据视图 (支持 Excel 复制)
+    │       ├── TextCtrl.hpp/.cpp            # 现代化多行富文本编辑器 (内置平滑细滚动条)
+    │       ├── ScrollBar.hpp/.cpp           # 现代化自绘制细条圆角滑动条
+    │       ├── SidebarNav.hpp/.cpp          # 侧边导航栏 (文本, OCR, 词典, 日志, 设置)
+    │       ├── StatusBadge.hpp/.cpp         # 实时服务状态彩色徽标
+    │       ├── LanguageBar.hpp/.cpp         # 语言选择器与一键互换工具条
+    │       ├── SuggestListBox.hpp/.cpp      # 词典前缀补全下拉浮动推荐列表
+    │       ├── SplitterWindow.hpp/.cpp      # 弹性分割窗口容器
+    │       ├── ImagePreviewDialog.hpp/.cpp  # 图片大图平移滚轮缩放预览对话框
+    │       ├── WelcomeModelDialog.hpp/.cpp  # 首次使用模型配置引导对话框
+    │       └── AboutDialog.hpp/.cpp         # 官方关于与版本信息对话框
+    │
+    └── main.cpp             # 应用程序主入口 (DPI 感知配置、启动页初始化与应用生命周期装配)
 ```
 
 ---
@@ -142,7 +167,7 @@ git submodule update --init --recursive --force
 
 ---
 
-### 🪟 Windows 构建与运行指南
+### Windows 构建与运行指南
 
 #### 1. 环境准备
 - **操作系统**：Windows 10 / 11 (x64)
@@ -176,7 +201,7 @@ cmake --build build --config Release --target unit_tests
 
 ---
 
-### 🍎 macOS 构建与运行指南
+### macOS 构建与运行指南
 
 #### 1. 环境准备
 - **操作系统**：macOS 12.0+ (Monterey / Ventura / Sonoma / Sequoia)，原生支持 Apple Silicon (M 系列芯片) 及 Intel x86_64
@@ -231,13 +256,13 @@ cmake --build build --config Release --target package_mac
 ./scripts/package_mac.sh build
 ```
 
-**📦 输出交付物（位于 `build/dist/`）**：
+**输出交付物（位于 `build/dist/`）**：
 - **`LinguaAlpaca.app`**：完全独立、开箱即用的 macOS 原生应用包（约 89 MB）。
-- **`LinguaAlpaca-1.0.2-macOS.dmg`**：体积高度优化的标准分发安装镜像（约 30 MB），可直接对外分发给任何 Mac 用户。
+- **`LinguaAlpaca-1.0.3-macOS.dmg`**：体积高度优化的标准分发安装镜像（约 30 MB），可直接对外分发给任何 Mac 用户。
 
 ---
 
-## 📦 核心依赖与致谢
+## 核心依赖与致谢
 
 - **[wxWidgets 3.3.4](https://www.wxwidgets.org/)**：现代化跨平台 GUI 原生组件框架、Direct2D/GDI+ 渲染与 High-DPI 缩放支持。
 - **[llama.cpp](https://github.com/ggerganov/llama.cpp)**：提供超高吞吐量的嵌入式 `llama_server`、CPU/Vulkan GPU 后端推理引擎与多模态 mtmd 视觉架构。

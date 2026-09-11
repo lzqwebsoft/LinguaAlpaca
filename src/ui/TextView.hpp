@@ -19,6 +19,8 @@ public:
 
     void UpdateTheme();
     void UpdateStatusBadge();
+    void SetSourceText(const wxString& text);
+    void SetSourceTextAndTranslate(const wxString& text);
 
 private:
     void InitUI();

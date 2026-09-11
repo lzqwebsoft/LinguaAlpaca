@@ -39,6 +39,9 @@ public:
     void UpdateTheme();
     void UpdateStatusBadge();
     void OnImageFileDropped(const wxString& filePath);
+    void SetTranslateCallback(std::function<void(const wxString&)> callback) {
+        m_onTranslateCallback = std::move(callback);
+    }
 
 private:
     void InitUI();
@@ -53,6 +56,8 @@ private:
     void OnDropzoneLeftDown(wxMouseEvent& event);
     void OnRecognizeClicked(wxCommandEvent& event);
     void OnStopClicked(wxCommandEvent& event);
+    void OnTranslateClicked(wxCommandEvent& event);
+    void UpdateTranslateButtonVisibility();
 
     void SetState(OcrTaskState state);
     void LoadImageFile(const wxString& filePath);
@@ -97,6 +102,9 @@ private:
     // Bottom Action Bar Buttons
     CustomButton* m_recognizeBtn{nullptr};
     CustomButton* m_stopBtn{nullptr};
+    CustomButton* m_translateBtn{nullptr};
+
+    std::function<void(const wxString&)> m_onTranslateCallback;
 };
 
 class OcrFileDropTarget : public wxFileDropTarget {

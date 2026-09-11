@@ -1,11 +1,13 @@
 #include "AboutDialog.hpp"
 #include "CustomButton.hpp"
+#include "core/AppVersion.hpp"
 #include "../theme/IconManager.hpp"
 
 namespace LinguaAlpaca::UI {
 
-    AboutDialog::AboutDialog(wxWindow* parent)
-        : wxDialog(parent, wxID_ANY, L"关于 LinguaAlpaca", wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE) {
+    AboutDialog::AboutDialog(wxWindow* parent, const wxString& version)
+        : wxDialog(parent, wxID_ANY, L"关于 LinguaAlpaca", wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE),
+          m_version(version.IsEmpty() ? wxString::FromUTF8(GetAppVersion()) : version) {
         InitUI();
         Fit();
         CentreOnParent();
@@ -32,7 +34,7 @@ namespace LinguaAlpaca::UI {
         nameText->SetFont(ThemeFont::GetFont(FontRole::SectionTitle));
         nameText->SetForegroundColour(palette.textPrimary);
 
-        wxStaticText* versionBadge = new wxStaticText(this, wxID_ANY, L"v1.0.0");
+        wxStaticText* versionBadge = new wxStaticText(this, wxID_ANY, L"v" + m_version);
         versionBadge->SetFont(ThemeFont::GetFont(FontRole::Badge));
         versionBadge->SetForegroundColour(palette.accentPrimary);
 

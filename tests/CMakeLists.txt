@@ -10,6 +10,7 @@ add_executable(unit_tests
     TableParserTest.cpp
     ${CMAKE_SOURCE_DIR}/src/core/Logger.cpp
     ${CMAKE_SOURCE_DIR}/src/core/Config.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/AppVersion.cpp
     ${CMAKE_SOURCE_DIR}/src/core/ClipboardHelper.cpp
     ${CMAKE_SOURCE_DIR}/src/core/WinUIAutomationHelper.cpp
     ${CMAKE_SOURCE_DIR}/src/core/WinMediaOcrHelper.cpp
@@ -68,6 +69,7 @@ elseif(APPLE)
         ${CMAKE_SOURCE_DIR}/src/core/SelectionService.cpp
         ${CMAKE_SOURCE_DIR}/src/core/ClipboardHelper.cpp
         ${CMAKE_SOURCE_DIR}/src/core/WinUIAutomationHelper.cpp
+        ${CMAKE_SOURCE_DIR}/src/core/AppVersion.cpp
         PROPERTIES COMPILE_FLAGS "-x objective-c++"
     )
     set_source_files_properties(

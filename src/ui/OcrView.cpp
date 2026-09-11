@@ -3,6 +3,7 @@
 #include "core/WinTtsHelper.hpp"
 #include "theme/IconManager.hpp"
 #include "theme/Theme.hpp"
+#include "MainFrame.hpp"
 #include <base64.hpp>
 #include <wx/clipbrd.h>
 #include <wx/dataobj.h>
@@ -300,13 +301,14 @@ namespace LinguaAlpaca::UI {
 				return;
 			WinTtsHelper::GetInstance().Stop();
 			m_resultCard->Clear();
+			UpdateTranslateButtonVisibility();
 			});
 
 		contentSizer->Add(m_resultCard, 55, wxEXPAND);
 
 		mainSizer->Add(contentSizer, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 20_dip);
 
-		// 3. Bottom Action Bar: Recognize / Stop Buttons
+		// 3. Bottom Action Bar: Recognize / Stop / Translate Buttons
 		wxBoxSizer* bottomSizer = new wxBoxSizer(wxHORIZONTAL);
 
 		m_recognizeBtn = new CustomButton(this, wxID_ANY, L"识别", ButtonStyle::Primary, wxDefaultPosition, dip(145, 42));
@@ -316,9 +318,14 @@ namespace LinguaAlpaca::UI {
 		m_stopBtn->SetIcon(SVG::STOP, dip(16, 16), *wxWHITE);
 		m_stopBtn->Hide();
 
+		m_translateBtn = new CustomButton(this, wxID_ANY, L"一键翻译", ButtonStyle::Primary, wxDefaultPosition, dip(145, 42));
+		m_translateBtn->SetIcon(SVG::TRANSLATE, dip(16, 16), *wxWHITE);
+		m_translateBtn->Hide();
+
 		bottomSizer->Add(m_recognizeBtn, 0);
 		bottomSizer->Add(m_stopBtn, 0);
 		bottomSizer->AddStretchSpacer(1);
+		bottomSizer->Add(m_translateBtn, 0);
 
 		mainSizer->Add(bottomSizer, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 20_dip);
 
@@ -362,12 +369,14 @@ namespace LinguaAlpaca::UI {
 
 		m_recognizeBtn->Bind(wxEVT_BUTTON, &OcrView::OnRecognizeClicked, this);
 		m_stopBtn->Bind(wxEVT_BUTTON, &OcrView::OnStopClicked, this);
+		m_translateBtn->Bind(wxEVT_BUTTON, &OcrView::OnTranslateClicked, this);
 
 		if (m_resultCard && m_resultCard->GetTextCtrl()) {
 			m_resultCard->GetTextCtrl()->Bind(wxEVT_TEXT, [this](wxCommandEvent&) {
 				if (m_resultCard && m_resultCard->GetTextCtrl()) {
 					wxString text = m_resultCard->GetTextCtrl()->GetValue();
 					m_resultCard->SetCharacterCount(text.Length());
+					UpdateTranslateButtonVisibility();
 				}
 				});
 		}
@@ -434,6 +443,8 @@ namespace LinguaAlpaca::UI {
 			m_recognizeBtn->Refresh();
 		if (m_stopBtn)
 			m_stopBtn->Refresh();
+		if (m_translateBtn)
+			m_translateBtn->Refresh();
 
 		if (m_dropzonePanel) {
 			m_dropzonePanel->SetBackgroundColour(palette.cardBg);
@@ -673,10 +684,14 @@ namespace LinguaAlpaca::UI {
 		if (state == OcrTaskState::Recognizing) {
 			m_recognizeBtn->Hide();
 			m_stopBtn->Show();
+			if (m_translateBtn) {
+				m_translateBtn->Hide();
+			}
 		}
 		else {
 			m_recognizeBtn->Show();
 			m_stopBtn->Hide();
+			UpdateTranslateButtonVisibility();
 		}
 		if (m_dropzonePanel) {
 			m_dropzonePanel->Refresh();
@@ -825,6 +840,7 @@ namespace LinguaAlpaca::UI {
 
 				if (success) {
 					m_resultCard->SetContent(fullText);
+					UpdateTranslateButtonVisibility();
 				}
 				else if (!error.empty()) {
 					if (error == "已取消") {
@@ -848,6 +864,55 @@ namespace LinguaAlpaca::UI {
 		}
 		WinTtsHelper::GetInstance().Stop();
 		SetState(OcrTaskState::Idle);
+	}
+
+	void OcrView::UpdateTranslateButtonVisibility() {
+		if (!m_translateBtn) return;
+		bool hasContent = false;
+		if (m_resultCard && m_resultCard->GetTextCtrl()) {
+			wxString text = m_resultCard->GetTextCtrl()->GetValue().Trim(true).Trim(false);
+			if (m_currentState == OcrTaskState::Idle && !text.IsEmpty() &&
+				!text.StartsWith(L"正在") && !text.StartsWith(L"错误:") && !text.StartsWith(L"识别出现提示/错误:")) {
+				hasContent = true;
+			}
+		}
+		if (hasContent) {
+			if (!m_translateBtn->IsShown()) {
+				m_translateBtn->Show();
+				if (GetSizer()) GetSizer()->Layout();
+			}
+		} else {
+			if (m_translateBtn->IsShown()) {
+				m_translateBtn->Hide();
+				if (GetSizer()) GetSizer()->Layout();
+			}
+		}
+	}
+
+	void OcrView::OnTranslateClicked(wxCommandEvent& WXUNUSED(event)) {
+		if (m_currentState != OcrTaskState::Idle)
+			return;
+
+		wxString text;
+		if (m_resultCard && m_resultCard->GetTextCtrl()) {
+			text = m_resultCard->GetTextCtrl()->GetValue().Trim(true).Trim(false);
+		}
+
+		if (text.IsEmpty() || text.StartsWith(L"正在") || text.StartsWith(L"错误:")) {
+			return;
+		}
+
+		WinTtsHelper::GetInstance().Stop();
+
+		if (m_onTranslateCallback) {
+			m_onTranslateCallback(text);
+		} else {
+			wxWindow* topWin = wxGetTopLevelParent(this);
+			MainFrame* mainFrame = dynamic_cast<MainFrame*>(topWin);
+			if (mainFrame) {
+				mainFrame->NavigateToTextView(text, true);
+			}
+		}
 	}
 
 

@@ -8,12 +8,14 @@ namespace LinguaAlpaca::UI {
 
 class AboutDialog : public wxDialog {
 public:
-    explicit AboutDialog(wxWindow* parent);
+    explicit AboutDialog(wxWindow* parent, const wxString& version = wxEmptyString);
     ~AboutDialog() override = default;
 
 private:
     void InitUI();
     void OnVisitGithub(wxCommandEvent& event);
+
+    wxString m_version;
 };
 
 } // namespace LinguaAlpaca::UI

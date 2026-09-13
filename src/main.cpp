@@ -1,4 +1,7 @@
 #include <wx/wx.h>
+#include <wx/snglinst.h>
+#include <wx/stdpaths.h>
+#include <wx/filename.h>
 #include <memory>
 
 #ifdef _WIN32
@@ -9,6 +12,7 @@
 #include "core/Config.hpp"
 #include "core/ModelManager.hpp"
 #include "core/SelectionService.hpp"
+#include "core/PlatformHelper.hpp"
 #include "ui/widgets/SplashScreen.hpp"
 #include "ui/widgets/FloatingIconFrame.hpp"
 #include "ui/widgets/TranslationBubbleFrame.hpp"
@@ -19,6 +23,7 @@ using namespace LinguaAlpaca;
 
 class LinguaAlpacaApp : public wxApp {
 private:
+    std::unique_ptr<wxSingleInstanceChecker> m_singleInstanceChecker;
     std::shared_ptr<ModelManager> m_modelManager;
     std::unique_ptr<SelectionService> m_selectionService;
     wxWeakRef<UI::SplashScreen> m_splashScreen;
@@ -50,6 +55,24 @@ public:
             freopen_s(&fp, "CONOUT$", "w", stderr);
         }
 #endif
+
+        // 1. 跨平台单实例检查 (Windows & macOS): 阻止多开并唤醒已有运行实例
+        SetAppName("LinguaAlpaca");
+        wxString instanceName = wxString::Format("LinguaAlpacaSingleInstance-%s", wxGetUserId());
+
+        // 在 macOS/Unix 平台，将 lock 文件存放在用户数据目录中，避免污染用户 Home 根目录
+        wxString lockDir = wxStandardPaths::Get().GetUserDataDir();
+        if (!wxDirExists(lockDir)) {
+            wxFileName::Mkdir(lockDir, 0777, wxPATH_MKDIR_FULL);
+        }
+
+        m_singleInstanceChecker = std::make_unique<wxSingleInstanceChecker>(instanceName, lockDir);
+        if (m_singleInstanceChecker->IsAnotherRunning()) {
+            LOG_WARN("App", "Another instance of LinguaAlpaca is already running. Activating existing instance and exiting.");
+            PlatformHelper::ActivateExistingInstance();
+            return false;
+        }
+
         wxInitAllImageHandlers();
         UI::IconManager::SetupApplicationIcon();
 

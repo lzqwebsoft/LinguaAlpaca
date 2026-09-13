@@ -4,6 +4,7 @@
 #include "theme/PlatformThemeHelper.hpp"
 #include "widgets/WelcomeModelDialog.hpp"
 #include "widgets/AppTaskBarIcon.hpp"
+#include "core/PlatformHelper.hpp"
 #include <wx/dcbuffer.h>
 #include <wx/graphics.h>
 #include <wx/display.h>
@@ -28,6 +29,9 @@ namespace LinguaAlpaca::UI {
 #elif defined(__WXMSW__)
         HWND hwnd = (HWND)GetHWND();
         if (hwnd) {
+            // 允许跨权限级别的单例唤醒消息穿透 Windows UIPI 隔离
+            ::ChangeWindowMessageFilterEx(hwnd, PlatformHelper::GetSingleInstanceActivateMsg(), MSGFLT_ALLOW, nullptr);
+
             // 1. 设置 WS_EX_APPWINDOW 样式，确保无边框窗体在 Windows 任务栏正常常驻与显示
             LONG_PTR exStyle = ::GetWindowLongPtr(hwnd, GWL_EXSTYLE);
             ::SetWindowLongPtr(hwnd, GWL_EXSTYLE, (exStyle | WS_EX_APPWINDOW) & ~WS_EX_TOOLWINDOW);
@@ -611,6 +615,13 @@ namespace LinguaAlpaca::UI {
 
 #ifdef __WXMSW__
     WXLRESULT MainFrame::MSWWindowProc(WXUINT nMsg, WXWPARAM wParam, WXLPARAM lParam) {
+        if (nMsg == PlatformHelper::GetSingleInstanceActivateMsg()) {
+            CallAfter([this]() {
+                RestoreAndFocus();
+            });
+            return 0;
+        }
+
         WXLRESULT rc = wxFrame::MSWWindowProc(nMsg, wParam, lParam);
         if (nMsg == WM_GETMINMAXINFO) {
             MINMAXINFO* mmi = reinterpret_cast<MINMAXINFO*>(lParam);

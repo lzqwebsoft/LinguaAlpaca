@@ -110,6 +110,8 @@ set(CORE_SOURCES
     src/core/markdown/MarkdownFormatter.cpp
     src/core/table/TableParser.hpp
     src/core/table/TableParser.cpp
+    src/core/PlatformHelper.hpp
+    src/core/PlatformHelper.cpp
 )
 
 set(ENGINE_SOURCES
@@ -265,6 +267,7 @@ elseif(APPLE)
     )
     set_source_files_properties(
         src/core/WinTtsHelper.cpp
+        src/core/PlatformHelper.cpp
         PROPERTIES COMPILE_FLAGS "-x objective-c++ -fobjc-arc"
     )
     target_link_libraries(${PROJECT_NAME} PRIVATE

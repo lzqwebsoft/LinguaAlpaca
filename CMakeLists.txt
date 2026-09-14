@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(LinguaAlpaca VERSION 1.0.3 LANGUAGES CXX)
+project(LinguaAlpaca VERSION 1.0.4 LANGUAGES CXX)
 
 add_compile_definitions(APP_VERSION="${PROJECT_VERSION}")
 

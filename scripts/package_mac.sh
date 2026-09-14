@@ -23,10 +23,19 @@ if [ -z "${VERSION}" ] && [ -f "${PROJECT_ROOT}/CMakeLists.txt" ]; then
     VERSION=$(grep -E '^[[:space:]]*project\([^)]*VERSION[[:space:]]+' "${PROJECT_ROOT}/CMakeLists.txt" | head -n1 | sed -E 's/.*VERSION[[:space:]]+([0-9.]+).*/\1/' || true)
 fi
 if [ -z "${VERSION}" ]; then
-    VERSION="1.0.3"
+    VERSION="1.0.4"
 fi
 
-DMG_NAME="${APP_NAME}-${VERSION}-macOS.dmg"
+# 优先从已编译的二进制中读取实际架构 (arm64 / x86_64)，回退使用 uname -m
+ARCH="${3:-}"
+if [ -z "${ARCH}" ] && [ -f "${SRC_APP}/Contents/MacOS/LinguaAlpaca" ]; then
+    ARCH=$(lipo -archs "${SRC_APP}/Contents/MacOS/LinguaAlpaca" 2>/dev/null | awk '{print $1}' || true)
+fi
+if [ -z "${ARCH}" ]; then
+    ARCH=$(uname -m 2>/dev/null || echo "arm64")
+fi
+
+DMG_NAME="${APP_NAME}-${VERSION}-macOS-${ARCH}.dmg"
 DMG_PATH="${DIST_DIR}/${DMG_NAME}"
 
 echo "================================================================================"

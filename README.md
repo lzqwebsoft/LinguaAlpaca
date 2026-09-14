@@ -258,7 +258,7 @@ cmake --build build --config Release --target package_mac
 
 **输出交付物（位于 `build/dist/`）**：
 - **`LinguaAlpaca.app`**：完全独立、开箱即用的 macOS 原生应用包（约 89 MB）。
-- **`LinguaAlpaca-1.0.3-macOS.dmg`**：体积高度优化的标准分发安装镜像（约 30 MB），可直接对外分发给任何 Mac 用户。
+- **`LinguaAlpaca-1.0.4-macOS-arm64.dmg`**：体积高度优化的标准分发安装镜像（约 30 MB），可直接对外分发给 Apple Silicon Mac 用户。
 
 ---
 

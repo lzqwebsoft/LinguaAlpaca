@@ -112,6 +112,8 @@ set(CORE_SOURCES
     src/core/table/TableParser.cpp
     src/core/PlatformHelper.hpp
     src/core/PlatformHelper.cpp
+    src/core/VersionChecker.hpp
+    src/core/VersionChecker.cpp
 )
 
 set(ENGINE_SOURCES

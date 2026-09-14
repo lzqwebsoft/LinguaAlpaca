@@ -69,7 +69,10 @@ void PlatformHelper::ActivateExistingInstance() {
 
         if (targetApp) {
             // 1. 激活已运行的应用进程并展示所有窗口
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
             [targetApp activateWithOptions:(NSApplicationActivateAllWindows | NSApplicationActivateIgnoringOtherApps)];
+#pragma clang diagnostic pop
 
             // 2. 发送原生 kAEReopenApplication AppleEvent，促使已运行实例触发 MacReopenApp()
             NSAppleEventDescriptor* targetDesc = [NSAppleEventDescriptor descriptorWithProcessIdentifier:[targetApp processIdentifier]];
@@ -79,7 +82,7 @@ void PlatformHelper::ActivateExistingInstance() {
                         targetDescriptor:targetDesc
                                 returnID:kAutoGenerateReturnID
                            transactionID:kAnyTransactionID];
-            [appleEvent sendEventWithOptions:kAENoReply timeoutInImmediateEvent:0 error:nil];
+            [appleEvent sendEventWithOptions:NSAppleEventSendNoReply timeout:0.0 error:nil];
         }
     }
 #endif

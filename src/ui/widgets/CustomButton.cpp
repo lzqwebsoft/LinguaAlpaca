@@ -63,28 +63,34 @@ void CustomButton::OnPaint(wxPaintEvent &WXUNUSED(event)) {
   wxColour textColour;
   wxColour borderColour = wxNullColour;
 
-  switch (m_buttonStyle) {
-  case ButtonStyle::Primary:
-    bgColour = m_isHovered ? palette.accentHover : palette.accentPrimary;
-    textColour = *wxWHITE;
-    break;
-  case ButtonStyle::Green:
-    bgColour = m_isHovered ? wxColour(22, 163, 74) : palette.accentGreen;
-    textColour = *wxWHITE;
-    break;
-  case ButtonStyle::Danger:
-    bgColour = m_isHovered ? wxColour(220, 38, 38)
-                           : wxColour(239, 68, 68); // 鲜艳警示红
-    textColour = *wxWHITE;
-    break;
-  case ButtonStyle::Secondary:
-    bgColour = m_isHovered
-                   ? (palette.sidebarBg == *wxWHITE ? wxColour(241, 245, 249)
-                                                    : wxColour(51, 65, 85))
-                   : palette.cardBg;
-    textColour = palette.textPrimary;
+  if (!IsEnabled()) {
+    bgColour = palette.cardBg;
+    textColour = palette.textSecondary;
     borderColour = palette.cardBorder;
-    break;
+  } else {
+    switch (m_buttonStyle) {
+    case ButtonStyle::Primary:
+      bgColour = m_isHovered ? palette.accentHover : palette.accentPrimary;
+      textColour = *wxWHITE;
+      break;
+    case ButtonStyle::Green:
+      bgColour = m_isHovered ? wxColour(22, 163, 74) : palette.accentGreen;
+      textColour = *wxWHITE;
+      break;
+    case ButtonStyle::Danger:
+      bgColour = m_isHovered ? wxColour(220, 38, 38)
+                             : wxColour(239, 68, 68); // 鲜艳警示红
+      textColour = *wxWHITE;
+      break;
+    case ButtonStyle::Secondary:
+      bgColour = m_isHovered
+                     ? (palette.sidebarBg == *wxWHITE ? wxColour(241, 245, 249)
+                                                      : wxColour(51, 65, 85))
+                     : palette.cardBg;
+      textColour = palette.textPrimary;
+      borderColour = palette.cardBorder;
+      break;
+    }
   }
 
   // 圆角矩形绘制
@@ -139,6 +145,10 @@ void CustomButton::OnPaint(wxPaintEvent &WXUNUSED(event)) {
 }
 
 void CustomButton::OnMouseEnter(wxMouseEvent &WXUNUSED(event)) {
+  if (!IsEnabled()) {
+    SetCursor(wxCursor(wxCURSOR_ARROW));
+    return;
+  }
   m_isHovered = true;
   SetCursor(wxCursor(wxCURSOR_HAND));
   Refresh();
@@ -152,11 +162,16 @@ void CustomButton::OnMouseLeave(wxMouseEvent &WXUNUSED(event)) {
 }
 
 void CustomButton::OnLeftDown(wxMouseEvent &WXUNUSED(event)) {
+  if (!IsEnabled()) return;
   m_isPressed = true;
   Refresh();
 }
 
 void CustomButton::OnLeftUp(wxMouseEvent &event) {
+  if (!IsEnabled()) {
+    m_isPressed = false;
+    return;
+  }
   if (m_isPressed) {
     m_isPressed = false;
     Refresh();

@@ -2,6 +2,7 @@
 #include "CustomButton.hpp"
 #include "core/AppVersion.hpp"
 #include "../theme/IconManager.hpp"
+#include "../theme/AppIcons.hpp"
 
 namespace LinguaAlpaca::UI {
 
@@ -11,6 +12,7 @@ namespace LinguaAlpaca::UI {
         InitUI();
         Fit();
         CentreOnParent();
+        StartVersionCheck();
     }
 
     void AboutDialog::InitUI() {
@@ -29,6 +31,7 @@ namespace LinguaAlpaca::UI {
 
         wxBoxSizer* titleCol = new wxBoxSizer(wxVERTICAL);
 
+        // 第一行：应用名称与版本徽标
         wxBoxSizer* nameRow = new wxBoxSizer(wxHORIZONTAL);
         wxStaticText* nameText = new wxStaticText(this, wxID_ANY, L"LinguaAlpaca 灵驼译");
         nameText->SetFont(ThemeFont::GetFont(FontRole::SectionTitle));
@@ -41,7 +44,7 @@ namespace LinguaAlpaca::UI {
         nameRow->Add(nameText, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8_dip);
         nameRow->Add(versionBadge, 0, wxALIGN_CENTER_VERTICAL);
 
-        // 口号
+        // 第二行：口号
         wxStaticText* sloganText = new wxStaticText(this, wxID_ANY, L"端侧多模态全能离线翻译助手");
         sloganText->SetFont(ThemeFont::GetFont(FontRole::Control));
         sloganText->SetForegroundColour(palette.accentPrimary);
@@ -49,11 +52,57 @@ namespace LinguaAlpaca::UI {
         titleCol->Add(nameRow, 0, wxBOTTOM, 3_dip);
         titleCol->Add(sloganText, 0);
 
+        // 右侧：版本更新状态与手动检查按钮 (与左侧标题口号平齐，节省垂直高度)
+        wxBoxSizer* updateRow = new wxBoxSizer(wxHORIZONTAL);
+        m_updateStatusText = new wxStaticText(this, wxID_ANY, L"正在检查新版本...");
+        m_updateStatusText->SetFont(ThemeFont::GetFont(FontRole::Caption));
+        m_updateStatusText->SetForegroundColour(palette.textSecondary);
+
+        m_checkBtn = new CustomButton(this, wxID_ANY, L"检查更新", ButtonStyle::Secondary, wxDefaultPosition, dip(74, 24));
+        m_checkBtn->SetFont(ThemeFont::GetFont(FontRole::Caption));
+
+        updateRow->Add(m_updateStatusText, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8_dip);
+        updateRow->Add(m_checkBtn, 0, wxALIGN_CENTER_VERTICAL);
+
         headerSizer->Add(logoBitmap, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 14_dip);
-        headerSizer->Add(titleCol, 1, wxALIGN_CENTER_VERTICAL);
+        headerSizer->Add(titleCol, 0, wxALIGN_CENTER_VERTICAL);
+        headerSizer->AddStretchSpacer(1);
+        headerSizer->Add(updateRow, 0, wxALIGN_CENTER_VERTICAL);
 
         mainSizer->Add(headerSizer, 0, wxEXPAND | wxLEFT | wxRIGHT, 20_dip);
         mainSizer->AddSpacer(12_dip);
+
+        // 1.5 新版本提示 Card (发现新版本时展示)
+        m_updateCard = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE);
+        m_updateCard->SetBackgroundColour(palette.bannerBg);
+
+        wxBoxSizer* updateCardSizer = new wxBoxSizer(wxVERTICAL);
+
+        wxBoxSizer* updateCardTopRow = new wxBoxSizer(wxHORIZONTAL);
+        m_updateCardTitle = new wxStaticText(m_updateCard, wxID_ANY, L"发现新版本！");
+        m_updateCardTitle->SetFont(ThemeFont::GetFont(FontRole::Control, true));
+        m_updateCardTitle->SetForegroundColour(palette.bannerText);
+
+        m_updateActionBtn = new CustomButton(m_updateCard, wxID_ANY, L"前往下载更新", ButtonStyle::Green, wxDefaultPosition, dip(120, 26));
+        m_updateActionBtn->SetFont(ThemeFont::GetFont(FontRole::Caption));
+        m_updateActionBtn->SetIcon(SVG::DOWNLOAD, dip(14, 14), *wxWHITE);
+
+        updateCardTopRow->Add(m_updateCardTitle, 1, wxALIGN_CENTER_VERTICAL);
+        updateCardTopRow->Add(m_updateActionBtn, 0, wxALIGN_CENTER_VERTICAL);
+
+        updateCardSizer->Add(updateCardTopRow, 0, wxEXPAND | wxALL, 10_dip);
+
+        m_updateCardNotes = new wxStaticText(m_updateCard, wxID_ANY, wxEmptyString);
+        m_updateCardNotes->SetFont(ThemeFont::GetFont(FontRole::Caption));
+        m_updateCardNotes->SetForegroundColour(palette.bannerText);
+        updateCardSizer->Add(m_updateCardNotes, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 10_dip);
+
+        m_updateCard->SetSizer(updateCardSizer);
+
+        wxBoxSizer* updateWrapper = new wxBoxSizer(wxVERTICAL);
+        updateWrapper->Add(m_updateCard, 0, wxEXPAND | wxBOTTOM, 12_dip);
+        mainSizer->Add(updateWrapper, 0, wxEXPAND | wxLEFT | wxRIGHT, 20_dip);
+        m_updateCard->Hide();
 
         // 2. 核心特性与目标初衷 Card
         wxPanel* infoCard = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE);
@@ -102,11 +151,89 @@ namespace LinguaAlpaca::UI {
 
         SetSizer(mainSizer);
 
+        m_checkBtn->Bind(wxEVT_BUTTON, &AboutDialog::OnCheckUpdate, this);
+        m_updateActionBtn->Bind(wxEVT_BUTTON, &AboutDialog::OnOpenReleases, this);
         githubBtn->Bind(wxEVT_BUTTON, &AboutDialog::OnVisitGithub, this);
+    }
+
+    void AboutDialog::StartVersionCheck() {
+        if (!m_checkBtn || !m_updateStatusText) return;
+
+        auto palette = ThemeColors::GetCurrentPalette();
+        m_updateStatusText->SetLabel(L"正在检查新版本...");
+        m_updateStatusText->SetForegroundColour(palette.textSecondary);
+        m_checkBtn->SetLabel(L"检查中...");
+        m_checkBtn->Enable(false);
+        Layout();
+
+        VersionChecker::CheckLatestVersionAsync(
+            m_version.ToStdString(),
+            BindUi([this](const VersionCheckResult& result) {
+                auto pal = ThemeColors::GetCurrentPalette();
+                m_checkBtn->Enable(true);
+
+                if (!result.success) {
+                    m_updateStatusText->SetLabel(L"检查更新失败");
+                    m_updateStatusText->SetForegroundColour(pal.textSecondary);
+                    m_checkBtn->SetLabel(L"重试");
+                    m_updateCard->Hide();
+                    Fit();
+                    Layout();
+                    return;
+                }
+
+                if (!result.hasUpdate) {
+                    m_updateStatusText->SetLabel(L"✓ 当前已是最新版本");
+                    m_updateStatusText->SetForegroundColour(pal.accentGreen);
+                    m_checkBtn->SetLabel(L"重新检查");
+                    m_updateCard->Hide();
+                    Fit();
+                    Layout();
+                    return;
+                }
+
+                // 发现新版本
+                m_latestVersion = wxString::FromUTF8(result.latestVersion);
+                if (!result.releaseUrl.empty()) {
+                    m_releaseUrl = wxString::FromUTF8(result.releaseUrl);
+                } else {
+                    m_releaseUrl = "https://github.com/lzqwebsoft/LinguaAlpaca/releases";
+                }
+
+                m_updateStatusText->SetLabel(L"✨ 发现新版本: v" + m_latestVersion);
+                m_updateStatusText->SetForegroundColour(pal.accentPrimary);
+                m_checkBtn->SetLabel(L"重新检查");
+
+                // 更新 Banner 卡片内容
+                m_updateCardTitle->SetLabel(L"🎉 发现新版本 v" + m_latestVersion + L" 可供下载！");
+
+                wxString notes = wxString::FromUTF8(result.releaseNotes);
+                notes.Trim(true).Trim(false);
+                if (notes.IsEmpty()) {
+                    notes = L"点击右侧按钮前往 GitHub Releases 页面获取最新安装包。";
+                } else if (notes.Length() > 240) {
+                    notes = notes.Left(237) + L"...";
+                }
+                m_updateCardNotes->SetLabel(notes);
+
+                m_updateCard->Show();
+                Fit();
+                Layout();
+            })
+        );
+    }
+
+    void AboutDialog::OnCheckUpdate(wxCommandEvent& WXUNUSED(event)) {
+        StartVersionCheck();
     }
 
     void AboutDialog::OnVisitGithub(wxCommandEvent& WXUNUSED(event)) {
         wxLaunchDefaultBrowser("https://github.com/lzqwebsoft/LinguaAlpaca");
+    }
+
+    void AboutDialog::OnOpenReleases(wxCommandEvent& WXUNUSED(event)) {
+        wxString url = m_releaseUrl.IsEmpty() ? wxString("https://github.com/lzqwebsoft/LinguaAlpaca/releases") : m_releaseUrl;
+        wxLaunchDefaultBrowser(url);
     }
 
 } // namespace LinguaAlpaca::UI

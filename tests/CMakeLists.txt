@@ -8,6 +8,7 @@ add_executable(unit_tests
     DictFormatterTest.cpp
     MarkdownFormatterTest.cpp
     TableParserTest.cpp
+    VersionCheckerTest.cpp
     ${CMAKE_SOURCE_DIR}/src/core/Logger.cpp
     ${CMAKE_SOURCE_DIR}/src/core/Config.cpp
     ${CMAKE_SOURCE_DIR}/src/core/AppVersion.cpp
@@ -25,6 +26,7 @@ add_executable(unit_tests
     ${CMAKE_SOURCE_DIR}/src/core/dict/DictEngine.cpp
     ${CMAKE_SOURCE_DIR}/src/core/markdown/MarkdownFormatter.cpp
     ${CMAKE_SOURCE_DIR}/src/core/table/TableParser.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/VersionChecker.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/LlamaCppTranslationEngine.cpp
 )
 

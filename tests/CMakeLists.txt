@@ -44,6 +44,7 @@ target_include_directories(unit_tests PRIVATE
 target_link_libraries(unit_tests PRIVATE
     wx::core
     wx::base
+    wx::net
     llama
     llama-common
     cpp-httplib

@@ -220,6 +220,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     wx::core
     wx::base
     wx::adv
+    wx::net
     llama
     llama-common
     cpp-httplib

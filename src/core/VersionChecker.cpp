@@ -6,7 +6,7 @@
 #include <thread>
 #include <vector>
 #include <nlohmann/json.hpp>
-#include <http.h>
+#include <wx/webrequest.h>
 
 namespace LinguaAlpaca {
 
@@ -87,35 +87,39 @@ VersionCheckResult VersionChecker::CheckLatestVersion(
     LOG_INFO("VersionChecker", "Checking latest release from: " + apiUrl);
 
     try {
-        auto [cli, parts] = common_http_client(apiUrl);
-        cli.set_connection_timeout(5, 0);
-        cli.set_read_timeout(8, 0);
-
-#ifdef CPPHTTPLIB_OPENSSL_SUPPORT
-        cli.enable_server_certificate_verification(false);
-#endif
-
-        httplib::Headers headers = {
-            {"User-Agent", "LinguaAlpaca/" + (currentVersion.empty() ? "1.0.0" : currentVersion)},
-            {"Accept", "application/vnd.github.v3+json"}
-        };
-
-        auto res = cli.Get(parts.path, headers);
-        if (!res) {
+        wxWebRequestSync request = wxWebSessionSync::GetDefault().CreateRequest(wxString::FromUTF8(apiUrl));
+        if (!request.IsOk()) {
             result.success = false;
-            result.errorMessage = "网络请求失败: " + httplib::to_string(res.error());
+            result.errorMessage = "创建网络请求失败";
             LOG_WARN("VersionChecker", result.errorMessage);
             return result;
         }
 
-        if (res->status != 200) {
+        std::string ua = "LinguaAlpaca/" + (currentVersion.empty() ? "1.0.0" : currentVersion);
+        request.SetHeader("User-Agent", wxString::FromUTF8(ua));
+        request.SetHeader("Accept", "application/vnd.github.v3+json");
+        request.SetTimeouts(5000, 8000);
+
+        auto reqResult = request.Execute();
+        if (reqResult.state != wxWebRequest::State_Completed) {
             result.success = false;
-            result.errorMessage = "GitHub API 返回错误状态码: " + std::to_string(res->status);
+            std::string errStr = reqResult.error.ToStdString();
+            result.errorMessage = "网络请求失败: " + (errStr.empty() ? "请求未能正常完成" : errStr);
             LOG_WARN("VersionChecker", result.errorMessage);
             return result;
         }
 
-        auto j = nlohmann::json::parse(res->body);
+        wxWebResponse response = request.GetResponse();
+        int statusCode = response.GetStatus();
+        if (statusCode != 200) {
+            result.success = false;
+            result.errorMessage = "GitHub API 返回错误状态码: " + std::to_string(statusCode);
+            LOG_WARN("VersionChecker", result.errorMessage);
+            return result;
+        }
+
+        std::string responseBody = response.AsString().ToUTF8().data();
+        auto j = nlohmann::json::parse(responseBody);
         std::string tagName = j.value("tag_name", "");
         std::string htmlUrl = j.value("html_url", "");
         std::string bodyText = j.value("body", "");

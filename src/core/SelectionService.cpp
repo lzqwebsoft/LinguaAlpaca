@@ -8,9 +8,11 @@
 
 #include <wx/app.h>
 #include <wx/toplevel.h>
+#include <wx/window.h>
 #include <iostream>
 #include <thread>
 #include <cmath>
+#include <algorithm>
 
 #ifndef WM_LBUTTONDOWN
 #define WM_LBUTTONDOWN 0x0201
@@ -24,6 +26,7 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <windows.h>
+#include <richedit.h>
 #elif defined(__APPLE__)
 #import <Cocoa/Cocoa.h>
 #import <ApplicationServices/ApplicationServices.h>
@@ -33,9 +36,12 @@
 
 namespace LinguaAlpaca {
 
-#ifdef _WIN32
 namespace {
 SelectionService* g_activeService = nullptr;
+}
+
+#ifdef _WIN32
+namespace {
 HHOOK g_mouseHook = nullptr;
 
 LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
@@ -50,9 +56,133 @@ LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
 } // namespace
 #endif
 
+SelectionService* SelectionService::GetActiveService() {
+    return g_activeService;
+}
+
+void SelectionService::RegisterAllowedWindow(wxWindow* window) {
+    if (!window)
+        return;
+    std::lock_guard<std::mutex> lock(m_allowedWindowsMutex);
+    for (auto* w : m_allowedWindows) {
+        if (w == window)
+            return;
+    }
+    m_allowedWindows.push_back(window);
+}
+
+void SelectionService::UnregisterAllowedWindow(wxWindow* window) {
+    if (!window)
+        return;
+    std::lock_guard<std::mutex> lock(m_allowedWindowsMutex);
+    auto it = std::remove(m_allowedWindows.begin(), m_allowedWindows.end(), window);
+    if (it != m_allowedWindows.end()) {
+        m_allowedWindows.erase(it, m_allowedWindows.end());
+    }
+}
+
+bool SelectionService::IsInsideAllowedWindow(void* nativeHwnd, int screenX, int screenY) const {
+    std::lock_guard<std::mutex> lock(m_allowedWindowsMutex);
+    for (wxWindow* win : m_allowedWindows) {
+        if (!win)
+            continue;
+#ifdef _WIN32
+        HWND winHwnd = reinterpret_cast<HWND>(win->GetHWND());
+        if (!winHwnd || !::IsWindow(winHwnd) || !::IsWindowVisible(winHwnd)) {
+            continue;
+        }
+        HWND targetHwnd = reinterpret_cast<HWND>(nativeHwnd);
+        if (targetHwnd && (targetHwnd == winHwnd || ::IsChild(winHwnd, targetHwnd))) {
+            return true;
+        }
+        HWND pointHwnd = WindowFromPoint(POINT{screenX, screenY});
+        if (pointHwnd && (pointHwnd == winHwnd || ::IsChild(winHwnd, pointHwnd))) {
+            return true;
+        }
+        RECT rc;
+        if (::GetWindowRect(winHwnd, &rc)) {
+            POINT pt = {screenX, screenY};
+            if (::PtInRect(&rc, pt)) {
+                return true;
+            }
+        }
+#elif defined(__APPLE__)
+        if (win->IsShown()) {
+            wxRect r = win->GetScreenRect();
+            if (r.Contains(screenX, screenY)) {
+                return true;
+            }
+        }
+#else
+        if (win->IsShown()) {
+            wxRect r = win->GetScreenRect();
+            if (r.Contains(screenX, screenY)) {
+                return true;
+            }
+        }
+#endif
+    }
+    return false;
+}
+
+bool SelectionService::GetAllowedWindowSelection(void* nativeHwnd, int screenX, int screenY, std::string& outText) const {
+    std::lock_guard<std::mutex> lock(m_allowedWindowsMutex);
+    for (wxWindow* win : m_allowedWindows) {
+        if (!win)
+            continue;
+#ifdef _WIN32
+        HWND winHwnd = reinterpret_cast<HWND>(win->GetHWND());
+        if (!winHwnd || !::IsWindow(winHwnd) || !::IsWindowVisible(winHwnd)) {
+            continue;
+        }
+        HWND targetHwnd = reinterpret_cast<HWND>(nativeHwnd);
+        HWND pointHwnd = WindowFromPoint(POINT{screenX, screenY});
+
+        bool isTargetMatched = (targetHwnd && (targetHwnd == winHwnd || ::IsChild(winHwnd, targetHwnd)));
+        bool isPointMatched = (pointHwnd && (pointHwnd == winHwnd || ::IsChild(winHwnd, pointHwnd)));
+
+        if (!isTargetMatched && !isPointMatched) {
+            RECT rc;
+            if (::GetWindowRect(winHwnd, &rc)) {
+                POINT pt = {screenX, screenY};
+                if (!::PtInRect(&rc, pt)) {
+                    continue;
+                }
+            } else {
+                continue;
+            }
+        }
+
+        // 优先在释放点所在子窗口或目标子窗口上查询 RichEdit/Edit 选区
+        HWND candidateHwnds[] = {pointHwnd, targetHwnd, winHwnd};
+        for (HWND h : candidateHwnds) {
+            if (!h || !::IsWindow(h))
+                continue;
+            DWORD selStart = 0, selEnd = 0;
+            ::SendMessageW(h, EM_GETSEL, reinterpret_cast<WPARAM>(&selStart), reinterpret_cast<LPARAM>(&selEnd));
+            if (selEnd > selStart && (selEnd - selStart) <= 8000) {
+                DWORD len = selEnd - selStart;
+                std::vector<wchar_t> wbuf(len + 2, 0);
+                LRESULT copied = ::SendMessageW(h, EM_GETSELTEXT, 0, reinterpret_cast<LPARAM>(wbuf.data()));
+                if (copied > 0 && wbuf[0] != L'\0') {
+                    int utf8Len = WideCharToMultiByte(CP_UTF8, 0, wbuf.data(), static_cast<int>(copied), nullptr, 0, nullptr, nullptr);
+                    if (utf8Len > 0) {
+                        outText.resize(utf8Len);
+                        WideCharToMultiByte(CP_UTF8, 0, wbuf.data(), static_cast<int>(copied), &outText[0], utf8Len, nullptr, nullptr);
+                        return true;
+                    }
+                }
+            }
+        }
+#endif
+    }
+    return false;
+}
+
 SelectionService::SelectionService(std::shared_ptr<ConfigManager> configManager)
     : m_configManager(std::move(configManager))
     , m_aliveToken(std::make_shared<std::atomic<bool>>(true)) {
+    g_activeService = this;
     if (m_configManager) {
         ApplyConfig(m_configManager->GetConfig());
     }
@@ -60,6 +190,9 @@ SelectionService::SelectionService(std::shared_ptr<ConfigManager> configManager)
 
 SelectionService::~SelectionService() {
     Stop();
+    if (g_activeService == this) {
+        g_activeService = nullptr;
+    }
 }
 
 bool SelectionService::Start() {
@@ -142,9 +275,6 @@ void SelectionService::Stop() {
         g_mouseHook = nullptr;
         m_hookHandle = nullptr;
     }
-    if (g_activeService == this) {
-        g_activeService = nullptr;
-    }
     LOG_INFO("SelectionService", "Global mouse hook stopped.");
 #elif defined(__APPLE__)
     if (m_hookHandle) {
@@ -155,6 +285,9 @@ void SelectionService::Stop() {
     }
     LOG_INFO("SelectionService", "macOS global mouse monitor stopped.");
 #endif
+    if (g_activeService == this) {
+        g_activeService = nullptr;
+    }
 }
 
 void SelectionService::SetCallback(SelectionDetectedCallback callback) {
@@ -341,27 +474,12 @@ bool SelectionService::ShouldIgnoreMouseEvent(int startX, int startY, int endX, 
 #ifdef _WIN32
     DWORD currentPid = GetCurrentProcessId();
 
-    // 1. 检查鼠标释放点所在的窗体
     POINT ptUp = {endX, endY};
     HWND hwndUp = WindowFromPoint(ptUp);
-    if (IsIgnoredOrScreenshotWindow(hwndUp, currentPid)) {
-        return true;
-    }
 
-    // 2. 检查鼠标按起点所在的窗体
     POINT ptDown = {startX, startY};
     HWND hwndDown = WindowFromPoint(ptDown);
-    if (IsIgnoredOrScreenshotWindow(hwndDown, currentPid)) {
-        return true;
-    }
 
-    // 3. 检查当前前景激活窗体
-    HWND hwndForeground = GetForegroundWindow();
-    if (IsIgnoredOrScreenshotWindow(hwndForeground, currentPid)) {
-        return true;
-    }
-
-    // 4. 检查非客户区操作（如拖拽标题栏移动窗体、滑动滚动条、拖拉边框调整大小等与文本选中无关的操作）
     auto checkNcHit = [](HWND hwnd, int px, int py) -> bool {
         if (!hwnd)
             return false;
@@ -394,42 +512,75 @@ bool SelectionService::ShouldIgnoreMouseEvent(int startX, int startY, int endX, 
         return false;
     };
 
+    // 优先检查是否在允许划词的自身白名单窗口内部（例如 DictView 释义卡片）
+    bool isAllowedSelf = IsInsideAllowedWindow(reinterpret_cast<void*>(hwndUp), endX, endY) &&
+                         IsInsideAllowedWindow(reinterpret_cast<void*>(hwndDown), startX, startY);
+
+    if (isAllowedSelf) {
+        // 自选区域在白名单控件内，跳过进程 ID 拦截与前台窗口拦截，仅检查是否误触非客户区（如滚动条）
+        if (checkNcHit(hwndDown, startX, startY) || checkNcHit(hwndUp, endX, endY)) {
+            return true;
+        }
+        return false;
+    }
+
+    // 1. 检查鼠标释放点所在的窗体
+    if (IsIgnoredOrScreenshotWindow(hwndUp, currentPid)) {
+        return true;
+    }
+
+    // 2. 检查鼠标按起点所在的窗体
+    if (IsIgnoredOrScreenshotWindow(hwndDown, currentPid)) {
+        return true;
+    }
+
+    // 3. 检查当前前景激活窗体
+    HWND hwndForeground = GetForegroundWindow();
+    if (IsIgnoredOrScreenshotWindow(hwndForeground, currentPid)) {
+        return true;
+    }
+
+    // 4. 检查非客户区操作（如拖拽标题栏移动窗体、滑动滚动条、拖拉边框调整大小等与文本选中无关的操作）
     if (checkNcHit(hwndDown, startX, startY) || checkNcHit(hwndUp, endX, endY)) {
         return true;
     }
 
     return false;
 #elif defined(__APPLE__)
-    // 1. 检查是否在 LinguaAlpaca 自身的主窗口、悬浮图标或气泡等顶层窗口内
-    wxWindowList& windows = wxTopLevelWindows;
-    for (wxWindowList::compatibility_iterator node = windows.GetFirst(); node; node = node->GetNext()) {
-        wxWindow* win = node->GetData();
-        if (win && win->IsShown()) {
-            wxRect r = win->GetScreenRect();
-            if (r.Contains(startX, startY) || r.Contains(endX, endY)) {
-                return true;
-            }
-        }
-    }
-
-    // 2. 检查当前前台激活的应用是否属于本项目进程或屏幕截图/录屏工具
-    @autoreleasepool {
-        NSRunningApplication* frontApp = [[NSWorkspace sharedWorkspace] frontmostApplication];
-        if (frontApp) {
-            if (frontApp.processIdentifier == getpid()) {
-                return true;
-            }
-            NSString* bundleId = [frontApp bundleIdentifier];
-            if (bundleId) {
-                if ([bundleId containsString:@"screencapture"] || [bundleId containsString:@"Snipaste"] || [bundleId containsString:@"CleanShot"] || [bundleId containsString:@"Shottr"] ||
-                    [bundleId containsString:@"Flameshot"] || [bundleId containsString:@"Kap"]) {
+    bool isAllowedSelf = IsInsideAllowedWindow(nullptr, endX, endY) &&
+                         IsInsideAllowedWindow(nullptr, startX, startY);
+    if (!isAllowedSelf) {
+        // 1. 检查是否在 LinguaAlpaca 自身的主窗口、悬浮图标或气泡等顶层窗口内
+        wxWindowList& windows = wxTopLevelWindows;
+        for (wxWindowList::compatibility_iterator node = windows.GetFirst(); node; node = node->GetNext()) {
+            wxWindow* win = node->GetData();
+            if (win && win->IsShown()) {
+                wxRect r = win->GetScreenRect();
+                if (r.Contains(startX, startY) || r.Contains(endX, endY)) {
                     return true;
                 }
             }
-            NSString* appName = [frontApp localizedName];
-            if (appName) {
-                if ([appName containsString:@"截图"] || [appName containsString:@"截屏"]) {
+        }
+
+        // 2. 检查当前前台激活的应用是否属于本项目进程或屏幕截图/录屏工具
+        @autoreleasepool {
+            NSRunningApplication* frontApp = [[NSWorkspace sharedWorkspace] frontmostApplication];
+            if (frontApp) {
+                if (frontApp.processIdentifier == getpid()) {
                     return true;
+                }
+                NSString* bundleId = [frontApp bundleIdentifier];
+                if (bundleId) {
+                    if ([bundleId containsString:@"screencapture"] || [bundleId containsString:@"Snipaste"] || [bundleId containsString:@"CleanShot"] || [bundleId containsString:@"Shottr"] ||
+                        [bundleId containsString:@"Flameshot"] || [bundleId containsString:@"Kap"]) {
+                        return true;
+                    }
+                }
+                NSString* appName = [frontApp localizedName];
+                if (appName) {
+                    if ([appName containsString:@"截图"] || [appName containsString:@"截屏"]) {
+                        return true;
+                    }
                 }
             }
         }
@@ -495,12 +646,25 @@ void SelectionService::CheckAndNotifyIfTextSelectedAsync(const SelectionContext&
             detected = ScreenTextExtractor::ExtractViaUIAutomation(ctx.endX, ctx.endY, text, anchorX, anchorY);
         }
 
-        // 2. 纯非侵入式手势放行（针对 Chrome/Safari/Edge等浏览器、VS Code/Cursor等自绘编辑器、各类终端与办公软件）
+        // 1.1 若 UIA 未命中，检查是否属于自身白名单窗口，尝试直接从 Win32/RichEdit 控件直接提取选区
+        if (!detected || text.empty()) {
+            if (GetAllowedWindowSelection(ctx.targetHwnd, ctx.endX, ctx.endY, text)) {
+                if (!text.empty()) {
+                    detected = true;
+                    LOG_INFO("SelectionService", "Extracted text directly from allowed window: \"" + text + "\"");
+                }
+            }
+        }
+
+        // 2. 纯非侵入式手势放行（针对 Chrome/Safari/Edge等浏览器、VS Code/Cursor等自绘编辑器、各类终端与办公软件、以及自身白名单窗口）
         //    绝不发送任何复制快捷键，绝不触碰或污染剪贴板！
         //    当目标应用属于已知受限应用，或者用户做出了明确的强意图选词手势（双击选词 clickCount >= 2，或拖拽划词）时，
         //    信任用户的手势意图，在光标旁静默弹出悬浮图标。真正的复制提取严格延后到用户“主动点击悬浮图标”时才按需触发。
         if (!detected || text.empty()) {
             bool isNonAxTarget = false;
+            if (IsInsideAllowedWindow(ctx.targetHwnd, ctx.endX, ctx.endY)) {
+                isNonAxTarget = true;
+            }
 #if defined(__APPLE__)
             @autoreleasepool {
                 const char* prog = getprogname();
@@ -545,17 +709,19 @@ void SelectionService::CheckAndNotifyIfTextSelectedAsync(const SelectionContext&
                 }
             }
 #elif defined(_WIN32)
-            if (ctx.targetHwnd && ClipboardHelper::IsNonAxTargetWindow(ctx.targetHwnd)) {
-                isNonAxTarget = true;
-            } else {
-                POINT ptEnd = { ctx.endX, ctx.endY };
-                HWND hwndUnderMouse = WindowFromPoint(ptEnd);
-                if (hwndUnderMouse && ClipboardHelper::IsNonAxTargetWindow(hwndUnderMouse)) {
+            if (!isNonAxTarget) {
+                if (ctx.targetHwnd && ClipboardHelper::IsNonAxTargetWindow(ctx.targetHwnd)) {
                     isNonAxTarget = true;
+                } else {
+                    POINT ptEnd = { ctx.endX, ctx.endY };
+                    HWND hwndUnderMouse = WindowFromPoint(ptEnd);
+                    if (hwndUnderMouse && ClipboardHelper::IsNonAxTargetWindow(hwndUnderMouse)) {
+                        isNonAxTarget = true;
+                    }
                 }
             }
 #endif
-            // 对非 AX 目标应用（浏览器、各类自绘编辑器、终端、办公软件等），放行手势意图
+            // 对非 AX 目标应用（浏览器、各类自绘编辑器、终端、办公软件等）或自身白名单控件，放行手势意图
             if (isNonAxTarget) {
                 detected = true;
                 text.clear(); // 纯非侵入：预检阶段绝不发送按键，不触碰剪贴板
@@ -585,7 +751,7 @@ void SelectionService::ExtractSelectionAsync(const SelectionContext& ctx, std::f
 
     auto aliveToken = m_aliveToken;
 
-    // 1. 若预检阶段已通过 UIA/AX 获取到选中文本，直接回调，0ms 秒开，免去再次激活窗口及复制开销
+    // 1. 若预检阶段已通过 UIA/AX 或白名单直读获取到选中文本，直接回调，0ms 秒开，免去再次激活窗口及复制开销
     if (!ctx.preExtractedText.empty()) {
         if (wxTheApp) {
             wxTheApp->CallAfter([aliveToken, text = ctx.preExtractedText, onComplete = std::move(onComplete)]() {
@@ -645,6 +811,27 @@ void SelectionService::ExtractSelectionAsync(const SelectionContext& ctx, std::f
 #endif
 
         if (!aliveToken->load()) {
+            return;
+        }
+
+        std::string directAllowedText;
+        if (GetAllowedWindowSelection(ctx.targetHwnd, ctx.endX, ctx.endY, directAllowedText) && !directAllowedText.empty()) {
+            ExtractedSelection extracted;
+            extracted.text = std::move(directAllowedText);
+            extracted.anchorX = ctx.endX;
+            extracted.anchorY = ctx.endY;
+            extracted.source = "AllowedWindow";
+            LOG_INFO("SelectionService", "Extracted text on button click from allowed window: \"" + extracted.text + "\"");
+            if (wxTheApp && aliveToken->load()) {
+                wxTheApp->CallAfter([aliveToken, text = extracted.text, onComplete]() {
+                    if (!aliveToken->load()) {
+                        return;
+                    }
+                    if (onComplete) {
+                        onComplete(text);
+                    }
+                });
+            }
             return;
         }
 

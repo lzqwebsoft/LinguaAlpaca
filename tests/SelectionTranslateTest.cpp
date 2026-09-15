@@ -192,6 +192,19 @@ TEST_CASE("SelectionService - Lifecycle and Config Management", "[core][selectio
 
         service.Stop();
     }
+
+    SECTION("Allowed window registration and containment check") {
+        auto* activeSvc = SelectionService::GetActiveService();
+        REQUIRE(activeSvc == &service);
+
+        // Without registered windows, IsInsideAllowedWindow returns false
+        REQUIRE(service.IsInsideAllowedWindow(nullptr, 150, 150) == false);
+
+        // Test registering and unregistering nullptr safely
+        service.RegisterAllowedWindow(nullptr);
+        service.UnregisterAllowedWindow(nullptr);
+        REQUIRE(service.IsInsideAllowedWindow(nullptr, 150, 150) == false);
+    }
 }
 
 TEST_CASE("WinTtsHelper - Text to Speech Functionality", "[core][tts]") {

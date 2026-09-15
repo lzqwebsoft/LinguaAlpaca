@@ -7,8 +7,11 @@
 #include <string>
 #include <atomic>
 #include <mutex>
+#include <vector>
 #include "Config.hpp"
 #include "SelectionContext.hpp"
+
+class wxWindow;
 
 namespace LinguaAlpaca {
 
@@ -22,6 +25,15 @@ public:
 
     SelectionService(const SelectionService&) = delete;
     SelectionService& operator=(const SelectionService&) = delete;
+
+    // 静态访问全局活跃服务实例
+    static SelectionService* GetActiveService();
+
+    // 注册 / 注销允许在自身进程内划词的白名单窗口 (例如 DictView 释义卡片)
+    void RegisterAllowedWindow(wxWindow* window);
+    void UnregisterAllowedWindow(wxWindow* window);
+    bool IsInsideAllowedWindow(void* nativeHwnd, int screenX, int screenY) const;
+    bool GetAllowedWindowSelection(void* nativeHwnd, int screenX, int screenY, std::string& outText) const;
 
     // 启动全局鼠标监听
     bool Start();
@@ -79,6 +91,9 @@ private:
 
     std::shared_ptr<std::atomic<bool>> m_aliveToken;
     void* m_hookHandle{nullptr};
+
+    mutable std::mutex m_allowedWindowsMutex;
+    std::vector<wxWindow*> m_allowedWindows;
 };
 
 } // namespace LinguaAlpaca

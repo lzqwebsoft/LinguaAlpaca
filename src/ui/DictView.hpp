@@ -22,7 +22,7 @@ public:
     DictView(wxWindow* parent,
              std::shared_ptr<ModelManager> modelManager,
              wxWindowID id = wxID_ANY);
-    ~DictView() override = default;
+    ~DictView() override;
 
     void UpdateTheme();
     void RefreshDictList();

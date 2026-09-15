@@ -6,6 +6,7 @@
 #include "core/WinTtsHelper.hpp"
 #include "core/ClipboardHelper.hpp"
 #include "core/dict/DictFormatter.hpp"
+#include "core/SelectionService.hpp"
 
 #include <wx/clipbrd.h>
 
@@ -24,6 +25,17 @@ DictView::DictView(wxWindow* parent, std::shared_ptr<ModelManager> modelManager,
 
     InitUI();
     RefreshDictList();
+}
+
+DictView::~DictView() {
+    if (auto* svc = SelectionService::GetActiveService()) {
+        if (m_definitionCtrl) {
+            if (m_definitionCtrl->GetInnerCtrl()) {
+                svc->UnregisterAllowedWindow(m_definitionCtrl->GetInnerCtrl());
+            }
+            svc->UnregisterAllowedWindow(m_definitionCtrl);
+        }
+    }
 }
 
 void DictView::InitUI() {
@@ -212,6 +224,13 @@ void DictView::InitUI() {
     m_definitionCtrl->SetFont(ThemeFont::MakeFont(11));
     m_definitionCtrl->SetBackgroundColour(palette.cardBg);
     m_definitionCtrl->SetForegroundColour(palette.textPrimary);
+
+    if (auto* svc = SelectionService::GetActiveService()) {
+        svc->RegisterAllowedWindow(m_definitionCtrl);
+        if (m_definitionCtrl->GetInnerCtrl()) {
+            svc->RegisterAllowedWindow(m_definitionCtrl->GetInnerCtrl());
+        }
+    }
 
     rightCardSizer->Add(m_wordHeaderBar, 0, wxEXPAND | wxALL, 16_dip);
     rightCardSizer->Add(m_definitionCtrl, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 16_dip);

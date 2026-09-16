@@ -346,6 +346,7 @@ public:
             if (auto state = weakState.lock()) {
                 std::lock_guard<std::mutex> lock(state->mutex);
                 state->lastSpokenText.clear();
+                state->isSpeaking = false;
             }
         };
         m_synthesizer.delegate = m_delegate;
@@ -414,6 +415,7 @@ public:
         {
             std::lock_guard<std::mutex> lock(m_state->mutex);
             m_state->lastSpokenText = utf8Text;
+            m_state->isSpeaking = true;
         }
 
         [m_synthesizer speakUtterance:utterance];
@@ -448,16 +450,18 @@ private:
             [m_synthesizer stopSpeakingAtBoundary:AVSpeechBoundaryImmediate];
         }
         m_state->lastSpokenText.clear();
+        m_state->isSpeaking = false;
     }
 
     bool IsSpeakingInternal() const {
         if (!m_synthesizer) return false;
-        return [m_synthesizer isSpeaking];
+        return m_state->isSpeaking;
     }
 
     struct SharedState {
         std::mutex mutex;
         std::string lastSpokenText;
+        bool isSpeaking{false};
     };
 
     std::shared_ptr<SharedState> m_state;

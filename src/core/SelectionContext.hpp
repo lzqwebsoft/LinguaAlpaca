@@ -29,7 +29,10 @@ struct SelectionContext {
 
 #ifdef _WIN32
     HWND targetHwnd{nullptr};
-#elif defined(__APPLE__)
+#else
+    void* targetHwnd{nullptr};
+#endif
+#if defined(__APPLE__)
     pid_t targetPid{0};
 #endif
 };

@@ -29,6 +29,9 @@ DictView::DictView(wxWindow* parent, std::shared_ptr<ModelManager> modelManager,
 
 DictView::~DictView() {
     if (auto* svc = SelectionService::GetActiveService()) {
+        if (m_rightResultCard) {
+            svc->UnregisterAllowedWindow(m_rightResultCard);
+        }
         if (m_definitionCtrl) {
             if (m_definitionCtrl->GetInnerCtrl()) {
                 svc->UnregisterAllowedWindow(m_definitionCtrl->GetInnerCtrl());
@@ -226,6 +229,7 @@ void DictView::InitUI() {
     m_definitionCtrl->SetForegroundColour(palette.textPrimary);
 
     if (auto* svc = SelectionService::GetActiveService()) {
+        svc->RegisterAllowedWindow(m_rightResultCard);
         svc->RegisterAllowedWindow(m_definitionCtrl);
         if (m_definitionCtrl->GetInnerCtrl()) {
             svc->RegisterAllowedWindow(m_definitionCtrl->GetInnerCtrl());

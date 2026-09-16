@@ -204,6 +204,25 @@ TEST_CASE("SelectionService - Lifecycle and Config Management", "[core][selectio
         service.RegisterAllowedWindow(nullptr);
         service.UnregisterAllowedWindow(nullptr);
         REQUIRE(service.IsInsideAllowedWindow(nullptr, 150, 150) == false);
+
+        // Test with real wxTextCtrl
+        wxFrame* frame = new wxFrame(nullptr, wxID_ANY, "Test Frame", wxPoint(100, 100), wxSize(300, 200));
+        wxTextCtrl* textCtrl = new wxTextCtrl(frame, wxID_ANY, "LinguaAlpaca selection test");
+        frame->Show(true);
+        textCtrl->SetSelection(0, 12); // selects "LinguaAlpaca"
+
+        service.RegisterAllowedWindow(textCtrl);
+        wxRect r = textCtrl->GetScreenRect();
+        REQUIRE(service.IsInsideAllowedWindow(nullptr, r.x + 10, r.y + 10) == true);
+
+        std::string directText;
+        REQUIRE(service.GetAllowedWindowSelection(nullptr, r.x + 10, r.y + 10, directText) == true);
+        REQUIRE(directText == "LinguaAlpaca");
+
+        service.UnregisterAllowedWindow(textCtrl);
+        REQUIRE(service.IsInsideAllowedWindow(nullptr, r.x + 10, r.y + 10) == false);
+
+        frame->Destroy();
     }
 }
 

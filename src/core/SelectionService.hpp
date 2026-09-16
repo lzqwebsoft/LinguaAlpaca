@@ -91,6 +91,14 @@ private:
 
     std::shared_ptr<std::atomic<bool>> m_aliveToken;
     void* m_hookHandle{nullptr};
+#if defined(__APPLE__)
+    void* m_localHookHandle{nullptr};
+    void* m_eventTap{nullptr};
+    void* m_runLoopSource{nullptr};
+public:
+    void* GetEventTap() const { return m_eventTap; }
+private:
+#endif
 
     mutable std::mutex m_allowedWindowsMutex;
     std::vector<wxWindow*> m_allowedWindows;

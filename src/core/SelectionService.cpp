@@ -9,6 +9,7 @@
 #include <wx/app.h>
 #include <wx/toplevel.h>
 #include <wx/window.h>
+#include <wx/textctrl.h>
 #include <iostream>
 #include <thread>
 #include <cmath>
@@ -82,11 +83,11 @@ void SelectionService::UnregisterAllowedWindow(wxWindow* window) {
 }
 
 bool SelectionService::IsInsideAllowedWindow(void* nativeHwnd, int screenX, int screenY) const {
+#ifdef _WIN32
     std::lock_guard<std::mutex> lock(m_allowedWindowsMutex);
     for (wxWindow* win : m_allowedWindows) {
         if (!win)
             continue;
-#ifdef _WIN32
         HWND winHwnd = reinterpret_cast<HWND>(win->GetHWND());
         if (!winHwnd || !::IsWindow(winHwnd) || !::IsWindowVisible(winHwnd)) {
             continue;
@@ -106,31 +107,82 @@ bool SelectionService::IsInsideAllowedWindow(void* nativeHwnd, int screenX, int 
                 return true;
             }
         }
-#elif defined(__APPLE__)
-        if (win->IsShown()) {
-            wxRect r = win->GetScreenRect();
-            if (r.Contains(screenX, screenY)) {
-                return true;
-            }
-        }
-#else
-        if (win->IsShown()) {
-            wxRect r = win->GetScreenRect();
-            if (r.Contains(screenX, screenY)) {
-                return true;
-            }
-        }
-#endif
     }
     return false;
-}
+#elif defined(__APPLE__)
+    (void)nativeHwnd;
+    std::vector<wxWindow*> windowsCopy;
+    {
+        std::lock_guard<std::mutex> lock(m_allowedWindowsMutex);
+        windowsCopy = m_allowedWindows;
+    }
+    if (windowsCopy.empty()) {
+        return false;
+    }
 
-bool SelectionService::GetAllowedWindowSelection(void* nativeHwnd, int screenX, int screenY, std::string& outText) const {
+    bool inside = false;
+    auto checkInside = [&]() {
+        for (wxWindow* win : windowsCopy) {
+            if (!win)
+                continue;
+            if (win->IsShown() || win->IsShownOnScreen()) {
+                wxRect r = win->GetScreenRect();
+                if (r.Inflate(24, 24).Contains(screenX, screenY)) {
+                    inside = true;
+                    return;
+                }
+            }
+        }
+    };
+
+    if ([NSThread isMainThread]) {
+        checkInside();
+    } else {
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            checkInside();
+        });
+    }
+    return inside;
+#else
+    (void)nativeHwnd;
     std::lock_guard<std::mutex> lock(m_allowedWindowsMutex);
     for (wxWindow* win : m_allowedWindows) {
         if (!win)
             continue;
+        if (win->IsShown()) {
+            wxRect r = win->GetScreenRect();
+            if (r.Contains(screenX, screenY)) {
+                return true;
+            }
+        }
+    }
+    return false;
+#endif
+}
+
+#if defined(__APPLE__)
+static wxTextCtrl* FindChildTextCtrl(wxWindow* win) {
+    if (!win)
+        return nullptr;
+    if (auto* tc = dynamic_cast<wxTextCtrl*>(win)) {
+        return tc;
+    }
+    const wxWindowList& children = win->GetChildren();
+    for (wxWindowList::compatibility_iterator node = children.GetFirst(); node; node = node->GetNext()) {
+        if (auto* tc = FindChildTextCtrl(node->GetData())) {
+            return tc;
+        }
+    }
+    return nullptr;
+}
+#endif
+
+bool SelectionService::GetAllowedWindowSelection(void* nativeHwnd, int screenX, int screenY, std::string& outText) const {
 #ifdef _WIN32
+    std::lock_guard<std::mutex> lock(m_allowedWindowsMutex);
+    for (wxWindow* win : m_allowedWindows) {
+        if (!win)
+            continue;
         HWND winHwnd = reinterpret_cast<HWND>(win->GetHWND());
         if (!winHwnd || !::IsWindow(winHwnd) || !::IsWindowVisible(winHwnd)) {
             continue;
@@ -174,9 +226,57 @@ bool SelectionService::GetAllowedWindowSelection(void* nativeHwnd, int screenX, 
                 }
             }
         }
-#endif
     }
     return false;
+#elif defined(__APPLE__)
+    (void)nativeHwnd;
+    std::vector<wxWindow*> windowsCopy;
+    {
+        std::lock_guard<std::mutex> lock(m_allowedWindowsMutex);
+        windowsCopy = m_allowedWindows;
+    }
+    if (windowsCopy.empty()) {
+        return false;
+    }
+
+    bool found = false;
+    auto querySelection = [&]() {
+        for (wxWindow* win : windowsCopy) {
+            if (!win)
+                continue;
+            if (!win->IsShown() && !win->IsShownOnScreen())
+                continue;
+            wxRect r = win->GetScreenRect();
+            if (!r.Inflate(24, 24).Contains(screenX, screenY))
+                continue;
+
+            // 递归查找子控件中的 wxTextCtrl
+            if (auto* textCtrl = FindChildTextCtrl(win)) {
+                wxString sel = textCtrl->GetStringSelection();
+                if (!sel.IsEmpty()) {
+                    outText = sel.ToUTF8().data();
+                    found = true;
+                    return;
+                }
+            }
+        }
+    };
+
+    if ([NSThread isMainThread]) {
+        querySelection();
+    } else {
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            querySelection();
+        });
+    }
+    return found;
+#else
+    (void)nativeHwnd;
+    (void)screenX;
+    (void)screenY;
+    (void)outText;
+    return false;
+#endif
 }
 
 SelectionService::SelectionService(std::shared_ptr<ConfigManager> configManager)
@@ -194,6 +294,39 @@ SelectionService::~SelectionService() {
         g_activeService = nullptr;
     }
 }
+
+#if defined(__APPLE__)
+static CGEventRef SelectionCGEventTapCallback(CGEventTapProxy proxy, CGEventType type, CGEventRef event, void* refcon) {
+    (void)proxy;
+    auto* svc = static_cast<SelectionService*>(refcon);
+    if (!svc) {
+        return event;
+    }
+
+    if (type == kCGEventTapDisabledByTimeout || type == kCGEventTapDisabledByUserInput) {
+        if (svc->GetEventTap()) {
+            CGEventTapEnable(static_cast<CFMachPortRef>(svc->GetEventTap()), true);
+        }
+        return event;
+    }
+
+    if (!svc->IsRunning()) {
+        return event;
+    }
+
+    CGPoint pt = CGEventGetLocation(event);
+    int x = static_cast<int>(std::round(pt.x));
+    int y = static_cast<int>(std::round(pt.y));
+
+    if (type == kCGEventLeftMouseDown) {
+        svc->OnLowLevelMouseEvent(WM_LBUTTONDOWN, x, y);
+    } else if (type == kCGEventLeftMouseUp) {
+        svc->OnLowLevelMouseEvent(WM_LBUTTONUP, x, y);
+    }
+
+    return event;
+}
+#endif
 
 bool SelectionService::Start() {
     if (m_isRunning.load()) {
@@ -227,13 +360,48 @@ bool SelectionService::Start() {
             LOG_WARN("SelectionService", "macOS Accessibility permission not granted yet; prompted user via system dialog.");
         }
 
+        // 1. 优先使用系统底层 CGEventTap (在 WindowServer 级别监听鼠标事件)
+        //    彻底解决 NSTextView / wxTextCtrl 内部 modal drag tracking loop 吞噬 LeftMouseUp 导致划词失效的问题
+        CGEventMask tapMask = (CGEventMaskBit(kCGEventLeftMouseDown) | CGEventMaskBit(kCGEventLeftMouseUp));
+        CFMachPortRef eventTap = CGEventTapCreate(
+            kCGSessionEventTap,
+            kCGHeadInsertEventTap,
+            kCGEventTapOptionListenOnly,
+            tapMask,
+            SelectionCGEventTapCallback,
+            this
+        );
+
+        if (eventTap) {
+            CFRunLoopSourceRef runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, eventTap, 0);
+            if (runLoopSource) {
+                CFRunLoopAddSource(CFRunLoopGetMain(), runLoopSource, kCFRunLoopCommonModes);
+                CGEventTapEnable(eventTap, true);
+                m_eventTap = static_cast<void*>(eventTap);
+                m_runLoopSource = static_cast<void*>(runLoopSource);
+                m_isRunning.store(true);
+                LOG_INFO("SelectionService", "macOS CGEventTap mouse monitor started successfully.");
+                return true;
+            }
+            CFRelease(eventTap);
+        }
+
+        LOG_WARN("SelectionService", "CGEventTapCreate unavailable, falling back to NSEvent global & local monitors.");
+
+        // 2. 备用兜底：若 CGEventTap 创建失败，回退到 NSEvent 监听器
         NSEventMask mask = NSEventMaskLeftMouseDown | NSEventMaskLeftMouseUp;
         id monitor = [NSEvent addGlobalMonitorForEventsMatchingMask:mask
                                                             handler:^(NSEvent* event) {
                                                                 if (!m_isRunning.load()) {
                                                                     return;
                                                                 }
-                                                                CGPoint pt = CGEventGetLocation([event CGEvent]);
+                                                                CGPoint pt = [event CGEvent] ? CGEventGetLocation([event CGEvent]) : CGPointZero;
+                                                                if (CGPointEqualToPoint(pt, CGPointZero)) {
+                                                                    NSPoint loc = [NSEvent mouseLocation];
+                                                                    NSScreen* primary = [NSScreen screens].firstObject;
+                                                                    CGFloat screenH = primary ? primary.frame.size.height : 0;
+                                                                    pt = CGPointMake(loc.x, screenH - loc.y);
+                                                                }
                                                                 int x = static_cast<int>(std::round(pt.x));
                                                                 int y = static_cast<int>(std::round(pt.y));
 
@@ -245,14 +413,43 @@ bool SelectionService::Start() {
                                                                 }
                                                             }];
 
-        if (!monitor) {
-            LOG_ERROR("SelectionService", "Failed to install macOS global mouse monitor.");
+        id localMonitor = [NSEvent addLocalMonitorForEventsMatchingMask:mask
+                                                                handler:^NSEvent*(NSEvent* event) {
+                                                                    if (!m_isRunning.load()) {
+                                                                        return event;
+                                                                    }
+                                                                    CGPoint pt = [event CGEvent] ? CGEventGetLocation([event CGEvent]) : CGPointZero;
+                                                                    if (CGPointEqualToPoint(pt, CGPointZero)) {
+                                                                        NSPoint loc = [NSEvent mouseLocation];
+                                                                        NSScreen* primary = [NSScreen screens].firstObject;
+                                                                        CGFloat screenH = primary ? primary.frame.size.height : 0;
+                                                                        pt = CGPointMake(loc.x, screenH - loc.y);
+                                                                    }
+                                                                    int x = static_cast<int>(std::round(pt.x));
+                                                                    int y = static_cast<int>(std::round(pt.y));
+
+                                                                    NSEventType type = [event type];
+                                                                    if (type == NSEventTypeLeftMouseDown) {
+                                                                        OnLowLevelMouseEvent(WM_LBUTTONDOWN, x, y);
+                                                                    } else if (type == NSEventTypeLeftMouseUp) {
+                                                                        OnLowLevelMouseEvent(WM_LBUTTONUP, x, y);
+                                                                    }
+                                                                    return event;
+                                                                }];
+
+        if (!monitor && !localMonitor) {
+            LOG_ERROR("SelectionService", "Failed to install macOS mouse monitors.");
             return false;
         }
 
-        m_hookHandle = (void*)[monitor retain];
+        if (monitor) {
+            m_hookHandle = (void*)[monitor retain];
+        }
+        if (localMonitor) {
+            m_localHookHandle = (void*)[localMonitor retain];
+        }
         m_isRunning.store(true);
-        LOG_INFO("SelectionService", "macOS global mouse monitor started successfully.");
+        LOG_INFO("SelectionService", "macOS global & local mouse monitors started successfully.");
         return true;
     }
 #else
@@ -277,13 +474,32 @@ void SelectionService::Stop() {
     }
     LOG_INFO("SelectionService", "Global mouse hook stopped.");
 #elif defined(__APPLE__)
+    if (m_eventTap) {
+        auto tap = static_cast<CFMachPortRef>(m_eventTap);
+        CGEventTapEnable(tap, false);
+        if (m_runLoopSource) {
+            auto src = static_cast<CFRunLoopSourceRef>(m_runLoopSource);
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), src, kCFRunLoopCommonModes);
+            CFRelease(src);
+            m_runLoopSource = nullptr;
+        }
+        CFRelease(tap);
+        m_eventTap = nullptr;
+        LOG_INFO("SelectionService", "macOS CGEventTap stopped.");
+    }
     if (m_hookHandle) {
         id monitor = (id)m_hookHandle;
         [NSEvent removeMonitor:monitor];
         [monitor release];
         m_hookHandle = nullptr;
     }
-    LOG_INFO("SelectionService", "macOS global mouse monitor stopped.");
+    if (m_localHookHandle) {
+        id localMon = (id)m_localHookHandle;
+        [NSEvent removeMonitor:localMon];
+        [localMon release];
+        m_localHookHandle = nullptr;
+    }
+    LOG_INFO("SelectionService", "macOS global & local mouse monitors stopped.");
 #endif
     if (g_activeService == this) {
         g_activeService = nullptr;
@@ -333,19 +549,26 @@ void SelectionService::OnLowLevelMouseEvent(int message, int x, int y) {
         m_lastClickTime = now;
         m_lastClickX = x;
         m_lastClickY = y;
+        LOG_INFO("SelectionService", "LBUTTONDOWN at (" + std::to_string(x) + ", " + std::to_string(y) + "), clickCount=" + std::to_string(m_clickCount));
         return;
     }
 
     if (message == WM_LBUTTONUP) {
-        // 综合过滤检测：如果操作发生在本项目自身窗口、或属于拖动标题栏/滑动滑条/调整窗口大小等非文本选中操作，则忽略
-        if (ShouldIgnoreMouseEvent(m_ptDownX, m_ptDownY, x, y)) {
-            return;
-        }
-
+        bool ignored = ShouldIgnoreMouseEvent(m_ptDownX, m_ptDownY, x, y);
         int dx = x - m_ptDownX;
         int dy = y - m_ptDownY;
         int distSq = dx * dx + dy * dy;
         auto durationMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_timeDown).count();
+
+        LOG_INFO("SelectionService", "LBUTTONUP at (" + std::to_string(x) + ", " + std::to_string(y) +
+                 "), down=(" + std::to_string(m_ptDownX) + ", " + std::to_string(m_ptDownY) +
+                 "), distSq=" + std::to_string(distSq) + ", durationMs=" + std::to_string(durationMs) +
+                 ", clickCount=" + std::to_string(m_clickCount) + ", ignored=" + std::to_string(ignored));
+
+        // 综合过滤检测：如果操作发生在本项目自身窗口、或属于拖动标题栏/滑动滑条/调整窗口大小等非文本选中操作，则忽略
+        if (ignored) {
+            return;
+        }
 
         int mode = m_triggerMode.load();
         bool shouldTrigger = false;
@@ -547,7 +770,7 @@ bool SelectionService::ShouldIgnoreMouseEvent(int startX, int startY, int endX, 
 
     return false;
 #elif defined(__APPLE__)
-    bool isAllowedSelf = IsInsideAllowedWindow(nullptr, endX, endY) &&
+    bool isAllowedSelf = IsInsideAllowedWindow(nullptr, endX, endY) ||
                          IsInsideAllowedWindow(nullptr, startX, startY);
     if (!isAllowedSelf) {
         // 1. 检查是否在 LinguaAlpaca 自身的主窗口、悬浮图标或气泡等顶层窗口内
@@ -557,6 +780,7 @@ bool SelectionService::ShouldIgnoreMouseEvent(int startX, int startY, int endX, 
             if (win && win->IsShown()) {
                 wxRect r = win->GetScreenRect();
                 if (r.Contains(startX, startY) || r.Contains(endX, endY)) {
+                    LOG_INFO("SelectionService", "ShouldIgnoreMouseEvent: ignored because inside own TLW rect and not in allowed window");
                     return true;
                 }
             }
@@ -567,23 +791,28 @@ bool SelectionService::ShouldIgnoreMouseEvent(int startX, int startY, int endX, 
             NSRunningApplication* frontApp = [[NSWorkspace sharedWorkspace] frontmostApplication];
             if (frontApp) {
                 if (frontApp.processIdentifier == getpid()) {
+                    LOG_INFO("SelectionService", "ShouldIgnoreMouseEvent: ignored because frontmost application is self and not in allowed window");
                     return true;
                 }
                 NSString* bundleId = [frontApp bundleIdentifier];
                 if (bundleId) {
                     if ([bundleId containsString:@"screencapture"] || [bundleId containsString:@"Snipaste"] || [bundleId containsString:@"CleanShot"] || [bundleId containsString:@"Shottr"] ||
                         [bundleId containsString:@"Flameshot"] || [bundleId containsString:@"Kap"]) {
+                        LOG_INFO("SelectionService", "ShouldIgnoreMouseEvent: ignored because screenshot tool active");
                         return true;
                     }
                 }
                 NSString* appName = [frontApp localizedName];
                 if (appName) {
                     if ([appName containsString:@"截图"] || [appName containsString:@"截屏"]) {
+                        LOG_INFO("SelectionService", "ShouldIgnoreMouseEvent: ignored because screenshot tool active");
                         return true;
                     }
                 }
             }
         }
+    } else {
+        LOG_INFO("SelectionService", "ShouldIgnoreMouseEvent: permitted inside allowed self window!");
     }
 
     return false;

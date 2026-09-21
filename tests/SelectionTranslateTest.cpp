@@ -41,6 +41,23 @@ TEST_CASE("ClipboardHelper - UTF-8 Text Setting and Retrieval", "[core][clipboar
     }
 }
 
+TEST_CASE("ClipboardHelper - Image Handling and Verification", "[core][clipboard]") {
+    SECTION("HasImage and GetClipboardImage calls do not crash") {
+        bool hasImg = ClipboardHelper::HasImage();
+        (void)hasImg;
+
+        wxImage img;
+        wxString fileName;
+        wxString filePath;
+        bool ok = ClipboardHelper::GetClipboardImage(img, &fileName, &filePath);
+        if (ok) {
+            REQUIRE(img.IsOk());
+            REQUIRE(!fileName.IsEmpty());
+            REQUIRE(!filePath.IsEmpty());
+        }
+    }
+}
+
 TEST_CASE("Logger - Real-time notification and memory history", "[core][logger]") {
     SECTION("Log and receive via listener") {
         Logger& logger = Logger::GetInstance();

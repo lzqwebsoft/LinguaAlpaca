@@ -11,6 +11,11 @@
 #include <thread>
 #include <vector>
 #include <windows.h>
+#include <wx/clipbrd.h>
+#include <wx/dataobj.h>
+#include <wx/filename.h>
+#include <wx/image.h>
+#include <wx/mstream.h>
 
 
 namespace LinguaAlpaca {
@@ -495,12 +500,102 @@ ClipboardHelper::GetSelectedTextViaSendInput(bool preserveClipboard) {
   return selectedText;
 }
 
+bool ClipboardHelper::GetClipboardImage(wxImage& outImage, wxString* outFileName, wxString* outFilePath) {
+  if (!wxTheClipboard || !wxTheClipboard->Open()) {
+    return false;
+  }
+
+  bool handled = false;
+  wxInitAllImageHandlers();
+
+  // 1. 优先检查剪贴板中是否有位图图像 (如系统截图、聊天工具截图、剪切板位图)
+  if (wxTheClipboard->IsSupported(wxDF_BITMAP)) {
+    wxBitmapDataObject bmpData;
+    if (wxTheClipboard->GetData(bmpData)) {
+      wxBitmap bmp = bmpData.GetBitmap();
+      if (bmp.IsOk()) {
+        wxImage img = bmp.ConvertToImage();
+        if (img.IsOk()) {
+          outImage = img;
+          if (outFileName) *outFileName = L"剪贴板截图.png";
+          if (outFilePath) *outFilePath = L"[剪贴板截图]";
+          handled = true;
+        }
+      }
+    }
+  }
+
+  // 2. 检查剪贴板中是否复制了文件 (如在文件资源管理器中复制了图片文件)
+  if (!handled && wxTheClipboard->IsSupported(wxDF_FILENAME)) {
+    wxFileDataObject fileData;
+    if (wxTheClipboard->GetData(fileData)) {
+      const wxArrayString& files = fileData.GetFilenames();
+      for (const auto& file : files) {
+        wxString ext = wxFileName(file).GetExt().Lower();
+        if (ext == "png" || ext == "jpg" || ext == "jpeg" || ext == "bmp" || 
+            ext == "webp" || ext == "tif" || ext == "tiff" || ext == "gif") {
+          wxImage img;
+          if (img.LoadFile(file) && img.IsOk()) {
+            outImage = img;
+            if (outFileName) *outFileName = wxFileName(file).GetFullName();
+            if (outFilePath) *outFilePath = file;
+            handled = true;
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  wxTheClipboard->Close();
+
+  // 3. 智能回退：若剪贴板文本包含有效的本地图片文件路径
+  if (!handled && HasText()) {
+    std::string text = GetClipboardText();
+    size_t first = text.find_first_not_of(" \t\r\n");
+    size_t last = text.find_last_not_of(" \t\r\n");
+    if (first != std::string::npos && last != std::string::npos) {
+      std::string trimmed = text.substr(first, last - first + 1);
+      if (trimmed.length() < 1024 && trimmed.find('\n') == std::string::npos) {
+        wxString wxPath = wxString::FromUTF8(trimmed);
+        if (wxFileExists(wxPath)) {
+          wxString ext = wxFileName(wxPath).GetExt().Lower();
+          if (ext == "png" || ext == "jpg" || ext == "jpeg" || ext == "bmp" || 
+              ext == "webp" || ext == "tif" || ext == "tiff" || ext == "gif") {
+            wxImage img;
+            if (img.LoadFile(wxPath) && img.IsOk()) {
+              outImage = img;
+              if (outFileName) *outFileName = wxFileName(wxPath).GetFullName();
+              if (outFilePath) *outFilePath = wxPath;
+              handled = true;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return handled;
+}
+
+bool ClipboardHelper::HasImage() {
+  if (!wxTheClipboard || !wxTheClipboard->Open()) {
+    return false;
+  }
+  bool has = wxTheClipboard->IsSupported(wxDF_BITMAP) || wxTheClipboard->IsSupported(wxDF_FILENAME);
+  wxTheClipboard->Close();
+  return has;
+}
+
 } // namespace LinguaAlpaca
 
 #else // Non-Windows fallback using wxTheClipboard and macOS native pasteboard / CGEvent
 
 #include <wx/clipbrd.h>
 #include <wx/dataobj.h>
+#include <wx/filename.h>
+#include <wx/image.h>
+#include <wx/mstream.h>
 
 #include "Logger.hpp"
 
@@ -695,10 +790,258 @@ std::string ClipboardHelper::GetSelectedTextViaSendInput(bool preserveClipboard)
     }
 }
 
+bool ClipboardHelper::GetClipboardImage(wxImage& outImage, wxString* outFileName, wxString* outFilePath) {
+    @autoreleasepool {
+        NSPasteboard *pb = [NSPasteboard generalPasteboard];
+        if (!pb) return false;
+
+        wxInitAllImageHandlers();
+
+        // 1. 优先检测剪贴板中的文件 URL (例如在访达 Finder 中按 Cmd+C 复制的图片文件)
+        NSDictionary *urlOptions = @{ NSPasteboardURLReadingFileURLsOnlyKey : @YES };
+        NSArray *urls = [pb readObjectsForClasses:@[[NSURL class]] options:urlOptions];
+        if (urls && urls.count > 0) {
+            for (NSURL *url in urls) {
+                if ([url isFileURL]) {
+                    NSString *path = [url path];
+                    if (path && path.length > 0) {
+                        wxString wxPath = wxString::FromUTF8([path UTF8String]);
+                        if (wxFileExists(wxPath)) {
+                            wxString ext = wxFileName(wxPath).GetExt().Lower();
+                            if (ext == "png" || ext == "jpg" || ext == "jpeg" || ext == "bmp" || 
+                                ext == "webp" || ext == "tif" || ext == "tiff" || ext == "gif" || ext == "heic") {
+                                wxImage img;
+                                if (img.LoadFile(wxPath) && img.IsOk()) {
+                                    outImage = img;
+                                    if (outFileName) *outFileName = wxFileName(wxPath).GetFullName();
+                                    if (outFilePath) *outFilePath = wxPath;
+                                    LOG_INFO("ClipboardHelper", "GetClipboardImage: loaded image file from Finder URL: " + std::string([path UTF8String]));
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 兼容旧版剪贴板文件列表 (NSFilenamesPboardType)
+        NSArray *legacyFiles = [pb propertyListForType:(NSPasteboardType)@"NSFilenamesPboardType"];
+        if (legacyFiles && [legacyFiles isKindOfClass:[NSArray class]]) {
+            for (id item in legacyFiles) {
+                if ([item isKindOfClass:[NSString class]]) {
+                    NSString *path = (NSString*)item;
+                    wxString wxPath = wxString::FromUTF8([path UTF8String]);
+                    if (wxFileExists(wxPath)) {
+                        wxString ext = wxFileName(wxPath).GetExt().Lower();
+                        if (ext == "png" || ext == "jpg" || ext == "jpeg" || ext == "bmp" || 
+                            ext == "webp" || ext == "tif" || ext == "tiff" || ext == "gif" || ext == "heic") {
+                            wxImage img;
+                            if (img.LoadFile(wxPath) && img.IsOk()) {
+                                outImage = img;
+                                if (outFileName) *outFileName = wxFileName(wxPath).GetFullName();
+                                if (outFilePath) *outFilePath = wxPath;
+                                LOG_INFO("ClipboardHelper", "GetClipboardImage: loaded image file from legacy filenames: " + std::string([path UTF8String]));
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. 检查剪贴板中直接存放的图像原始字节流 (如 macOS 原生截图、Snipaste/CleanShot/微信等截图工具、浏览器右键复制图片)
+        // 优先读取 PNG / TIFF 等高保真无损格式，确保 100% 原始物理分辨率 (避免 wxBitmap 二次降采样)
+        NSArray *imageTypes = @[
+            NSPasteboardTypePNG,
+            @"public.png",
+            NSPasteboardTypeTIFF,
+            @"public.tiff",
+            @"public.jpeg",
+            @"public.jpg",
+            @"org.webmproject.webp",
+            @"com.compuserve.gif"
+        ];
+
+        for (NSString *type in imageTypes) {
+            NSData *data = [pb dataForType:type];
+            if (data && data.length > 0) {
+                wxMemoryInputStream memStream(data.bytes, data.length);
+                wxImage img;
+                if (img.LoadFile(memStream, wxBITMAP_TYPE_ANY) && img.IsOk()) {
+                    outImage = img;
+                    if (outFileName) *outFileName = L"剪贴板截图.png";
+                    if (outFilePath) *outFilePath = L"[剪贴板截图]";
+                    LOG_INFO("ClipboardHelper", "GetClipboardImage: loaded raw image data type: " + std::string([type UTF8String]) + ", size=" + std::to_string(data.length));
+                    return true;
+                }
+            }
+        }
+
+        // 3. 原生 NSImage 兜底解析 (处理自定义 Representation、系统剪切板特殊对象或 PDF 矢量转渲染)
+        if ([NSImage canInitWithPasteboard:pb]) {
+            NSImage *nsImg = [[NSImage alloc] initWithPasteboard:pb];
+            if (nsImg) {
+                NSData *tiffData = [nsImg TIFFRepresentation];
+                if (tiffData && tiffData.length > 0) {
+                    wxMemoryInputStream memStream(tiffData.bytes, tiffData.length);
+                    wxImage img;
+                    if (img.LoadFile(memStream, wxBITMAP_TYPE_ANY) && img.IsOk()) {
+                        outImage = img;
+                        if (outFileName) *outFileName = L"剪贴板截图.png";
+                        if (outFilePath) *outFilePath = L"[剪贴板截图]";
+                        [nsImg release];
+                        LOG_INFO("ClipboardHelper", "GetClipboardImage: loaded via NSImage TIFFRepresentation");
+                        return true;
+                    }
+                }
+                [nsImg release];
+            }
+        }
+
+        // 4. 文本图片路径智能检测 (用户复制了单个现存图片的绝对文件路径纯文本)
+        if (HasText()) {
+            std::string text = GetClipboardText();
+            size_t first = text.find_first_not_of(" \t\r\n");
+            size_t last = text.find_last_not_of(" \t\r\n");
+            if (first != std::string::npos && last != std::string::npos) {
+                std::string trimmed = text.substr(first, last - first + 1);
+                if (trimmed.length() < 1024 && trimmed.find('\n') == std::string::npos) {
+                    wxString wxPath = wxString::FromUTF8(trimmed);
+                    if (wxFileExists(wxPath)) {
+                        wxString ext = wxFileName(wxPath).GetExt().Lower();
+                        if (ext == "png" || ext == "jpg" || ext == "jpeg" || ext == "bmp" || 
+                            ext == "webp" || ext == "tif" || ext == "tiff" || ext == "gif" || ext == "heic") {
+                            wxImage img;
+                            if (img.LoadFile(wxPath) && img.IsOk()) {
+                                outImage = img;
+                                if (outFileName) *outFileName = wxFileName(wxPath).GetFullName();
+                                if (outFilePath) *outFilePath = wxPath;
+                                LOG_INFO("ClipboardHelper", "GetClipboardImage: loaded image from path text: " + trimmed);
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+}
+
+bool ClipboardHelper::HasImage() {
+    @autoreleasepool {
+        NSPasteboard *pb = [NSPasteboard generalPasteboard];
+        if (!pb) return false;
+
+        // 1. 检查直接图像数据类型
+        NSArray *types = [pb types];
+        for (NSString *t in types) {
+            if ([t isEqualToString:NSPasteboardTypePNG] ||
+                [t isEqualToString:@"public.png"] ||
+                [t isEqualToString:NSPasteboardTypeTIFF] ||
+                [t isEqualToString:@"public.tiff"] ||
+                [t isEqualToString:@"public.jpeg"] ||
+                [t isEqualToString:@"public.jpg"] ||
+                [t isEqualToString:@"org.webmproject.webp"] ||
+                [t isEqualToString:@"com.compuserve.gif"]) {
+                return true;
+            }
+        }
+
+        // 2. 检查文件 URL
+        NSDictionary *urlOptions = @{ NSPasteboardURLReadingFileURLsOnlyKey : @YES };
+        NSArray *urls = [pb readObjectsForClasses:@[[NSURL class]] options:urlOptions];
+        if (urls && urls.count > 0) {
+            for (NSURL *url in urls) {
+                if ([url isFileURL]) {
+                    NSString *path = [url path];
+                    if (path && path.length > 0) {
+                        wxString wxPath = wxString::FromUTF8([path UTF8String]);
+                        if (wxFileExists(wxPath)) {
+                            wxString ext = wxFileName(wxPath).GetExt().Lower();
+                            if (ext == "png" || ext == "jpg" || ext == "jpeg" || ext == "bmp" || 
+                                ext == "webp" || ext == "tif" || ext == "tiff" || ext == "gif" || ext == "heic") {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. NSImage 兼容性检查
+        if ([NSImage canInitWithPasteboard:pb]) {
+            return true;
+        }
+
+        return false;
+    }
+}
+
 #else
 
 std::string ClipboardHelper::GetSelectedTextViaSendInput(bool) { return ""; }
 bool ClipboardHelper::SendCtrlC() { return false; }
+
+bool ClipboardHelper::GetClipboardImage(wxImage& outImage, wxString* outFileName, wxString* outFilePath) {
+    if (!wxTheClipboard || !wxTheClipboard->Open()) {
+        return false;
+    }
+
+    bool handled = false;
+    wxInitAllImageHandlers();
+
+    if (wxTheClipboard->IsSupported(wxDF_BITMAP)) {
+        wxBitmapDataObject bmpData;
+        if (wxTheClipboard->GetData(bmpData)) {
+            wxBitmap bmp = bmpData.GetBitmap();
+            if (bmp.IsOk()) {
+                wxImage img = bmp.ConvertToImage();
+                if (img.IsOk()) {
+                    outImage = img;
+                    if (outFileName) *outFileName = L"剪贴板截图.png";
+                    if (outFilePath) *outFilePath = L"[剪贴板截图]";
+                    handled = true;
+                }
+            }
+        }
+    }
+
+    if (!handled && wxTheClipboard->IsSupported(wxDF_FILENAME)) {
+        wxFileDataObject fileData;
+        if (wxTheClipboard->GetData(fileData)) {
+            const wxArrayString& files = fileData.GetFilenames();
+            for (const auto& file : files) {
+                wxString ext = wxFileName(file).GetExt().Lower();
+                if (ext == "png" || ext == "jpg" || ext == "jpeg" || ext == "bmp" || 
+                    ext == "webp" || ext == "tif" || ext == "tiff" || ext == "gif") {
+                    wxImage img;
+                    if (img.LoadFile(file) && img.IsOk()) {
+                        outImage = img;
+                        if (outFileName) *outFileName = wxFileName(file).GetFullName();
+                        if (outFilePath) *outFilePath = file;
+                        handled = true;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    wxTheClipboard->Close();
+    return handled;
+}
+
+bool ClipboardHelper::HasImage() {
+    if (!wxTheClipboard || !wxTheClipboard->Open()) {
+        return false;
+    }
+    bool has = wxTheClipboard->IsSupported(wxDF_BITMAP) || wxTheClipboard->IsSupported(wxDF_FILENAME);
+    wxTheClipboard->Close();
+    return has;
+}
 
 #endif
 

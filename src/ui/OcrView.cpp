@@ -121,7 +121,11 @@ namespace LinguaAlpaca::UI {
 		m_dropTextPrimary->SetFont(ThemeFont::GetFont(FontRole::CardTitle));
 		m_dropTextPrimary->SetForegroundColour(palette.textPrimary);
 
+#ifdef __APPLE__
+		m_dropTextSecondary = new wxStaticText(m_dropzonePanel, wxID_ANY, L"支持 JPG, PNG, BMP, WebP 及剪贴板截图 (⌘V)");
+#else
 		m_dropTextSecondary = new wxStaticText(m_dropzonePanel, wxID_ANY, L"支持 JPG, PNG, BMP, WebP 及剪贴板截图 (Ctrl+V)");
+#endif
 		m_dropTextSecondary->SetFont(ThemeFont::GetFont(FontRole::Control));
 		m_dropTextSecondary->SetForegroundColour(palette.textSecondary);
 
@@ -582,55 +586,30 @@ namespace LinguaAlpaca::UI {
 		if (m_currentState == OcrTaskState::Recognizing)
 			return false;
 
-		if (!wxTheClipboard->Open()) {
-			return false;
+		wxImage img;
+		wxString fileName;
+		wxString filePath;
+
+		if (ClipboardHelper::GetClipboardImage(img, &fileName, &filePath)) {
+			m_loadedImagePath = filePath;
+			m_imageFileName = fileName;
+			m_loadedImage = img;
+			UpdateDropzoneUI();
+			return true;
 		}
 
-		bool handled = false;
-
-		// 1. 优先检查剪贴板中是否有位图图像 (如系统截图、聊天工具截图、剪切板位图)
-		if (wxTheClipboard->IsSupported(wxDF_BITMAP)) {
-			wxBitmapDataObject bmpData;
-			if (wxTheClipboard->GetData(bmpData)) {
-				wxBitmap bmp = bmpData.GetBitmap();
-				if (bmp.IsOk()) {
-					wxImage img = bmp.ConvertToImage();
-					if (img.IsOk()) {
-						m_loadedImagePath = L"[剪贴板截图]";
-						m_imageFileName = L"剪贴板截图.png";
-						m_loadedImage = img;
-						UpdateDropzoneUI();
-						handled = true;
-					}
-				}
-			}
-		}
-
-		// 2. 检查剪贴板中是否复制了文件 (如在文件资源管理器中复制了图片文件)
-		if (!handled && wxTheClipboard->IsSupported(wxDF_FILENAME)) {
-			wxFileDataObject fileData;
-			if (wxTheClipboard->GetData(fileData)) {
-				const wxArrayString& files = fileData.GetFilenames();
-				for (const auto& file : files) {
-					wxString ext = wxFileName(file).GetExt().Lower();
-					if (ext == "png" || ext == "jpg" || ext == "jpeg" || ext == "bmp" || ext == "webp" || ext == "tif" || ext == "tiff") {
-						LoadImageFile(file);
-						handled = true;
-						break;
-					}
-				}
-			}
-		}
-
-		wxTheClipboard->Close();
-		return handled;
+		return false;
 	}
 
 	void OcrView::ShowDropzoneContextMenu(const wxPoint& pos) {
 		if (m_currentState == OcrTaskState::Recognizing) return;
 
 		wxMenu menu;
+#ifdef __APPLE__
+		menu.Append(1001, L"粘贴图片 (⌘V)");
+#else
 		menu.Append(1001, L"粘贴图片 (Ctrl+V)");
+#endif
 		menu.Append(1002, L"选择本地图片...");
 		if (m_loadedImage.IsOk()) {
 			menu.AppendSeparator();
@@ -642,8 +621,13 @@ namespace LinguaAlpaca::UI {
 			switch (e.GetId()) {
 			case 1001:
 				if (!PasteImageFromClipboard()) {
-					wxMessageBox(L"剪贴板中未找到图像数据或图片文件！\n\n提示：您可以使用系统截图快捷键 (如 Win+Shift+S 或 Alt+A) 截图后直接按 Ctrl+V 粘贴。",
+#ifdef __APPLE__
+					wxMessageBox(L"剪贴板中未找到图像数据或图片文件！\n\n提示：您可以使用系统截图快捷键 (Cmd+Shift+Control+4 或第三方截图工具) 截图后直接按 ⌘V 粘贴，也可以在访达 (Finder) 中复制图片文件后按 ⌘V 粘贴。",
 						L"提示", wxOK | wxICON_INFORMATION, this);
+#else
+					wxMessageBox(L"剪贴板中未找到图像数据或图片文件！\n\n提示：您可以使用系统截图快捷键 (如 Win+Shift+S 或 Alt+A) 截图后直接按 Ctrl+V 粘贴，也可以在文件资源管理器中复制图片文件后按 Ctrl+V 粘贴。",
+						L"提示", wxOK | wxICON_INFORMATION, this);
+#endif
 				}
 				break;
 			case 1002:

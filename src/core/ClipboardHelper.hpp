@@ -2,6 +2,8 @@
 #pragma execution_character_set("utf-8")
 
 #include <string>
+#include <wx/image.h>
+#include <wx/string.h>
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -26,6 +28,13 @@ public:
 
     // 检查剪贴板是否包含有效文本
     static bool HasText();
+
+    // 从系统剪贴板中获取图像 (支持系统截图、聊天工具截图、浏览器复制图片、访达/资源管理器复制的图片文件)
+    // 成功返回 true，并将结果写入 outImage, 可选返回文件名 outFileName 和文件路径/来源标识 outFilePath
+    static bool GetClipboardImage(wxImage& outImage, wxString* outFileName = nullptr, wxString* outFilePath = nullptr);
+
+    // 检查剪贴板是否包含图像数据或图片文件
+    static bool HasImage();
 
 #ifdef _WIN32
     // 检查指定窗口是否属于 PDF 阅读器 (如 Adobe Acrobat/Reader, Foxit, SumatraPDF 等)

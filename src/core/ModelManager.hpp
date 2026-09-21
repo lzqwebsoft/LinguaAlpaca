@@ -97,6 +97,13 @@ private:
 
     mutable std::mutex m_historyMutex;
     std::vector<HistoryRecord> m_history;
+
+    struct HealthCacheEntry {
+        ServerStatusInfo info;
+        std::chrono::steady_clock::time_point timestamp{};
+    };
+    mutable std::mutex m_healthCacheMutex;
+    mutable std::unordered_map<int, HealthCacheEntry> m_healthCache;
 };
 
 } // namespace LinguaAlpaca

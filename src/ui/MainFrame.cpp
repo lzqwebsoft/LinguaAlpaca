@@ -227,7 +227,13 @@ namespace LinguaAlpaca::UI {
         m_maxBtn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
             ToggleMaximize();
         });
-        m_closeBtn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { Close(true); });
+        m_closeBtn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+#ifdef __APPLE__
+            Hide();
+#else
+            Close(true);
+#endif
+        });
 
         // 绑定自定义 Titlebar 的拖动与双击最大化事件
         m_topHeaderPanel->Bind(wxEVT_LEFT_DOWN, &MainFrame::OnHeaderLeftDown, this);
@@ -301,6 +307,11 @@ namespace LinguaAlpaca::UI {
 
 #if defined(__APPLE__)
     void MainFrame::SetupPlatformWindowMac() {
+        // 保证 macOS 作为 Accessory 应用运行（不在 Dock 栏显示图标，仅保留托盘图标与窗口）
+        if ([NSApp activationPolicy] != NSApplicationActivationPolicyAccessory) {
+            [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
+        }
+
         NSView* view = (NSView*)GetHandle();
         if (view) {
             NSWindow* win = [view window];
@@ -342,6 +353,28 @@ namespace LinguaAlpaca::UI {
         } else {
             Close(true);
         }
+    }
+
+    bool MainFrame::Show(bool show) {
+        bool res = wxFrame::Show(show);
+        if (!show) {
+            if (m_textView) m_textView->Show(false);
+            if (m_ocrView) m_ocrView->Show(false);
+            if (m_dictView) m_dictView->Show(false);
+            if (m_logView) m_logView->Show(false);
+            if (m_settingsView) m_settingsView->Show(false);
+        } else {
+            int currentNav = m_sidebar ? m_sidebar->GetActiveItem() : 0;
+            switch (currentNav) {
+            case 0: if (m_textView) m_textView->Show(true); break;
+            case 1: if (m_ocrView) m_ocrView->Show(true); break;
+            case 2: if (m_dictView) m_dictView->Show(true); break;
+            case 3: if (m_logView) m_logView->Show(true); break;
+            case 4: if (m_settingsView) m_settingsView->Show(true); break;
+            default: if (m_textView) m_textView->Show(true); break;
+            }
+        }
+        return res;
     }
 
     void MainFrame::NavigateToSettings() {

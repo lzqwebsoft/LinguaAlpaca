@@ -72,6 +72,7 @@ This file records project-scoped rules, developer guidelines, and architectural 
   - When `MainFrame` switches navigation tabs (`OnNavChanged`), trigger `m_modelManager->EnsureModelAsync(TargetModelType)` in a background thread. Never execute synchronous model switching on the main UI thread!
 - **Real-Time `/health` UI Badge Synchronization**:
   - Views must use a lightweight `wxTimer` (e.g. 1500ms interval) to query `m_modelManager->GetHealthStatus(TargetModelType)` and update status badge colors and labels dynamically without blocking.
+  - **Mandatory Lifecycle Sleep**: Timers must ONLY run while the view is visible (`IsShown()`). When a view is hidden or the main window is closed to tray, the timer must be immediately paused (see Section 9).
 - **OCR VRAM Offload Strategy**:
   - Multimodal vision models (`PaddleOCR-VL` + `mmproj`) allocate substantial memory for high-resolution image embeddings. On Vulkan devices with $\le 8\text{GB}$ VRAM, full offload (`ngl=99`) causes `vk::OutOfDeviceMemoryError`.
   - Default `ocrGpuLayers` to `0` (CPU processing) in `AppConfig` while setting translation `gpuLayers` to `99`.
@@ -200,4 +201,37 @@ This file records project-scoped rules, developer guidelines, and architectural 
 - **High Cohesion & Encapsulation in Composite Widgets**:
   - Composite controls (widgets made of multiple inner child controls, scrollbars, buttons, or panels) must completely encapsulate child components and their synchronization mechanics.
   - External callers should only interact with a clean, high-level semantic public API (e.g., `SetValue()`, `ScrollToLine()`, `SetTheme()`), without needing to know or manage internal child layouts, native scrollbar suppression, or platform-level observers.
+
+---
+
+## ⚡ 9. Idle CPU, Power Efficiency & RichText Re-Layout Protection Rules
+
+- **Passive / Hidden View Deep Sleep (`Show(bool)` Timer Lifecycle)**:
+  - **Anti-Pattern**: Starting unconditional recurring timers (`m_healthTimer.Start(1500)`) in view constructors that run regardless of visibility. When multiple views are instantiated or hidden in the background, they continuously hammer localhost HTTP/TCP sockets with `/health` queries.
+  - **Universal Rule**: Never run recurring background timers in invisible/hidden views.
+    - Views must override `Show(bool show)`: stop timers when hidden (`m_timer.Stop()`), and only restart them when shown (`m_timer.Start()`).
+    - In `MainFrame::Show(bool show)`: When the top-level window is minimized, closed to tray, or hidden, cascade `Show(false)` to child view panels to ensure all polling timers halt, allowing the entire application process to enter 0.0% CPU deep sleep.
+
+- **Decouple Background Observability from UI Rendering (Dirty Flag / Lazy Reload Pattern)**:
+  - **Anti-Pattern**: Direct UI manipulation in background event listeners (e.g., `Logger::AddListener` calling `AppendText` and `ShowPosition` even when `LogView` is hidden).
+  - **Universal Rule**: When a view is hidden (`!IsShown()`), background data events must **NEVER** touch UI controls or dispatch GUI layout jobs. Mark a dirty flag instead (`m_isDirty = true; return;`).
+  - When the user actively switches to the view (`Show(true)`), check the dirty flag and batch load recent state (`ReloadLogs(500)`) with `Freeze()` / `Thaw()`.
+
+- **CoreText / RichEdit Runaway Buffer Capping (Bounded View Capacity)**:
+  - **Fatal Bottleneck**: Appending text without an upper bound to multiline rich text controls (`NSTextView` / `wxTextCtrl`). When the text buffer exceeds thousands of lines, every single new character/line appended triggers a full CoreText / layout engine paragraph and attachment traversal (`TTypesetter::DoAttachments`), freezing the main UI thread with 100% single-core CPU utilization!
+  - **Universal Rule**: Always enforce a hard line/character threshold on diagnostic, streaming, or log views (e.g., limit to 800 lines; truncate or reload the newest 500 lines when exceeded).
+
+- **Incremental Native Attribute Sanitization & Event Suppression**:
+  - **Anti-Pattern**: Calling full-range attribute clearing (`NSMakeRange(0, tv.textStorage.length)`) on every character append, or letting programmatic text modifications trigger recursive `wxEVT_TEXT` re-sanitization handlers.
+  - **Universal Rule**:
+    1. In `AppendText`, strictly sanitize only the incremental delta range: `NSMakeRange(oldLen, curLen - oldLen)`.
+    2. Guard programmatic modifications (`SetValue`, `AppendText`, `Clear`, `WriteText`, `SetMarkdown`) with an internal suppression flag (`m_suppressTextEvent = true`) to prevent secondary redundant attribute passes in `wxEVT_TEXT`.
+
+- **Network/Health Probe Caching with Micro-TTL**:
+  - **Universal Rule**: In `ModelManager::GetHealthStatus()`, employ a mutex-guarded status cache with a micro-TTL (e.g., 1200ms). When multiple UI components query status within the same interval, return cached status immediately rather than opening redundant TCP sockets and generating server process access logs.
+  - Invalidate or refresh the cache immediately upon state-changing events (e.g., `StopModel`, `EnsureModelAsync` completion).
+
+- **Log Level Discipline for High-Frequency OS Hooks**:
+  - **Universal Rule**: Never emit `LOG_INFO` on high-frequency operating system hooks (e.g., global mouse moves, clicks, key tracking, window hit-testing). Demote all frequent per-event tracing to `LOG_DEBUG` to avoid log disk I/O, IPC queue buildup, and UI subscriber saturation.
+
 

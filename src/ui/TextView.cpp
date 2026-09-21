@@ -13,6 +13,8 @@ TextView::TextView(wxWindow* parent, std::shared_ptr<ModelManager> modelManager,
     InitUI();
 
     m_healthTimer.Bind(wxEVT_TIMER, [this](wxTimerEvent&) { UpdateStatusBadge(); });
+    // 初始启动时进行一次探针并启动定时器
+    UpdateStatusBadge();
     m_healthTimer.Start(1500);
 }
 
@@ -21,6 +23,21 @@ TextView::~TextView() {
         m_healthTimer.Stop();
     }
     WinTtsHelper::GetInstance().Stop();
+}
+
+bool TextView::Show(bool show) {
+    bool res = wxPanel::Show(show);
+    if (show) {
+        UpdateStatusBadge();
+        if (!m_healthTimer.IsRunning()) {
+            m_healthTimer.Start(1500);
+        }
+    } else {
+        if (m_healthTimer.IsRunning()) {
+            m_healthTimer.Stop();
+        }
+    }
+    return res;
 }
 
 void TextView::InitUI() {

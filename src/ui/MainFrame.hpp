@@ -24,6 +24,7 @@ public:
     void CheckAndShowWelcomeDialog();
     void RestoreAndFocus();
     void QuitApplication();
+    bool Show(bool show = true) override;
 
 private:
     void InitUI();

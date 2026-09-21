@@ -42,6 +42,7 @@ public:
     void SetTranslateCallback(std::function<void(const wxString&)> callback) {
         m_onTranslateCallback = std::move(callback);
     }
+    bool Show(bool show = true) override;
 
 private:
     void InitUI();

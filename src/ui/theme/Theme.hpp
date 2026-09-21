@@ -5,6 +5,7 @@
 #include <wx/settings.h>
 #include "Dpi.hpp"
 #include "ThemeFont.hpp"
+#include "core/Logger.hpp"
 #include <functional>
 #include <vector>
 #include <string>
@@ -45,6 +46,22 @@ struct ThemePalette {
     wxColour bannerText;
     wxColour badgeBg;
     wxColour badgeText;
+
+    // 日志与诊断状态色
+    wxColour logDebug;
+    wxColour logInfo;
+    wxColour logWarn;
+    wxColour logError;
+
+    wxColour GetLogLevelColour(LogLevel level) const {
+        switch (level) {
+        case LogLevel::Debug:   return logDebug;
+        case LogLevel::Info:    return logInfo;
+        case LogLevel::Warning: return logWarn;
+        case LogLevel::Error:   return logError;
+        default:                return textPrimary;
+        }
+    }
 };
 
 using ThemeChangedCallback = std::function<void(ThemeMode)>;
@@ -153,6 +170,10 @@ public:
             p.bannerText       = wxColour(30, 64, 175);   // #1E40AF
             p.badgeBg          = wxColour(240, 253, 244); // #F0FDF4
             p.badgeText        = wxColour(22, 101, 52);   // #166534
+            p.logDebug         = wxColour(100, 116, 139); // #64748B
+            p.logInfo          = wxColour(30, 41, 59);    // #1E293B
+            p.logWarn          = wxColour(217, 119, 6);   // #D97706
+            p.logError         = wxColour(220, 38, 38);   // #DC2626
         } else {
             p.windowBg         = wxColour(15, 23, 42);    // #0F172A
             p.sidebarBg        = wxColour(30, 41, 59);    // #1E293B
@@ -169,12 +190,20 @@ public:
             p.bannerText       = wxColour(219, 234, 254); // #DBEAFE
             p.badgeBg          = wxColour(20, 83, 45);    // #14532D
             p.badgeText        = wxColour(187, 247, 208); // #BBF7D0
+            p.logDebug         = wxColour(148, 163, 184); // #94A3B8
+            p.logInfo          = wxColour(248, 250, 252); // #F8FAFC
+            p.logWarn          = wxColour(245, 158, 11);  // #F59E0B
+            p.logError         = wxColour(239, 68, 68);   // #EF4444
         }
         return p;
     }
 
     static ThemePalette GetCurrentPalette() {
         return GetPalette(GetInstance().GetCurrentTheme());
+    }
+
+    static wxColour GetLogLevelColour(LogLevel level) {
+        return GetCurrentPalette().GetLogLevelColour(level);
     }
 
 private:

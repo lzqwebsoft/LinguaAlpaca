@@ -20,6 +20,7 @@ public:
     void UpdateTheme();
     void AppendLogMessage(const LogMessage& msg, bool scrollToBottom = true);
     void ReloadLogs();
+    bool Show(bool show = true) override;
 
 private:
     void InitUI();
@@ -33,6 +34,7 @@ private:
     size_t m_listenerId{0};
     int m_filterLevel{-1}; // -1: 全部, 0: Debug, 1: Info, 2: Warning, 3: Error
     bool m_autoScroll{true};
+    bool m_isDirty{true};
 
     // UI Elements
     wxPanel* m_headerPanel{nullptr};

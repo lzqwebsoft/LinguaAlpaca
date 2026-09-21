@@ -24,13 +24,28 @@ SettingsView::SettingsView(wxWindow* parent, std::shared_ptr<ModelManager> model
         UpdateTranslationStatus();
         UpdateOcrStatus();
     });
-    m_statusTimer.Start(1500);
 }
 
 SettingsView::~SettingsView() {
     if (m_statusTimer.IsRunning()) {
         m_statusTimer.Stop();
     }
+}
+
+bool SettingsView::Show(bool show) {
+    bool res = wxPanel::Show(show);
+    if (show) {
+        UpdateTranslationStatus();
+        UpdateOcrStatus();
+        if (!m_statusTimer.IsRunning()) {
+            m_statusTimer.Start(1500);
+        }
+    } else {
+        if (m_statusTimer.IsRunning()) {
+            m_statusTimer.Stop();
+        }
+    }
+    return res;
 }
 
 void SettingsView::InitUI() {

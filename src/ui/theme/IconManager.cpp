@@ -406,29 +406,14 @@ static void SetupMacDockIcon() {
             }
         }
 
-        // 4. 将图标注入 macOS Cocoa 运行态中枢并立即刷新 Dock 坞标识
+        // 4. 将应用设置为 Accessory 策略（不在 Dock 栏显示图标，仅保留托盘图标与窗口）
+        NSApplication* app = [NSApplication sharedApplication];
+        if ([app activationPolicy] != NSApplicationActivationPolicyAccessory) {
+            [app setActivationPolicy:NSApplicationActivationPolicyAccessory];
+        }
+
         if (appIconImage) {
-            NSApplication* app = [NSApplication sharedApplication];
-            if ([app activationPolicy] != NSApplicationActivationPolicyRegular) {
-                [app setActivationPolicy:NSApplicationActivationPolicyRegular];
-            }
             [app setApplicationIconImage:appIconImage];
-            [[app dockTile] display];
-
-            // 5. 确保 Bundle 目录上没有遗留过时的自定义 Icon\r 掩码与扩展属性，
-            // 使得 macOS 原生、动态根据 Info.plist 中的 CFBundleIconFile (app_icon.icns) 展示常驻 Dock 坞图标
-            wxString exePath = wxStandardPaths::Get().GetExecutablePath();
-            if (!exePath.IsEmpty() && wxFileExists(exePath)) {
-                NSString* nsExePath = [NSString stringWithUTF8String:exePath.ToUTF8().data()];
-                if ([nsExePath containsString:@".app/Contents/MacOS"]) {
-                    NSString* appBundlePath = [nsExePath componentsSeparatedByString:@"/Contents/MacOS"][0];
-                    // 传递 nil 以清除自定义图标，让系统完全遵循 Bundle 内部 resources/app_icon.icns 原生展现
-                    [[NSWorkspace sharedWorkspace] setIcon:nil forFile:appBundlePath options:0];
-                } else {
-                    [[NSWorkspace sharedWorkspace] setIcon:appIconImage forFile:nsExePath options:0];
-                }
-            }
-
 #if !__has_feature(objc_arc)
             [appIconImage release];
 #endif

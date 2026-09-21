@@ -116,9 +116,11 @@ void TextCtrl::InitUI(const wxString& value, long style) {
     });
 
     m_textCtrl->Bind(wxEVT_TEXT, [this](wxCommandEvent& event) {
-        SanitizeNativeTextAttributes();
+        if (!m_suppressTextEvent) {
+            SanitizeNativeTextAttributes();
+            UpdateScrollInfo();
+        }
         event.Skip();
-        UpdateScrollInfo();
     });
 
     m_textCtrl->Bind(wxEVT_KEY_UP, [this](wxKeyEvent& event) {
@@ -406,11 +408,13 @@ void TextCtrl::SetValue(const wxString& value) {
     m_isMarkdownMode = false;
     m_rawMarkdown.clear();
     if (m_textCtrl) {
+        m_suppressTextEvent = true;
         wxTextAttr emptyAttr;
         m_textCtrl->SetDefaultStyle(emptyAttr);
         wxTextAttr defaultAttr(m_textCtrl->GetForegroundColour(), wxNullColour, m_textCtrl->GetFont());
         m_textCtrl->SetDefaultStyle(defaultAttr);
         m_textCtrl->SetValue(value);
+        m_suppressTextEvent = false;
         SanitizeNativeTextAttributes(true);
         UpdateScrollInfo();
     }
@@ -422,9 +426,26 @@ wxString TextCtrl::GetValue() const {
 
 void TextCtrl::AppendText(const wxString& text) {
     if (m_textCtrl) {
+#ifdef __APPLE__
+        NSScrollView* sv = GetMacScrollView(m_textCtrl);
+        NSTextView* tv = sv ? (NSTextView*)[sv documentView] : nil;
+        NSUInteger oldLen = (tv && [tv isKindOfClass:[NSTextView class]] && tv.textStorage) ? tv.textStorage.length : 0;
+#endif
+        m_suppressTextEvent = true;
         m_textCtrl->AppendText(text);
-        SanitizeNativeTextAttributes(true);
-        UpdateScrollInfo();
+        m_suppressTextEvent = false;
+
+#ifdef __APPLE__
+        if (tv && [tv isKindOfClass:[NSTextView class]] && tv.textStorage) {
+            NSUInteger curLen = tv.textStorage.length;
+            if (curLen > oldLen) {
+                [tv.textStorage removeAttribute:NSBackgroundColorAttributeName range:NSMakeRange(oldLen, curLen - oldLen)];
+            }
+        }
+#endif
+        if (!IsFrozen()) {
+            UpdateScrollInfo();
+        }
     }
 }
 
@@ -432,11 +453,13 @@ void TextCtrl::Clear() {
     m_isMarkdownMode = false;
     m_rawMarkdown.clear();
     if (m_textCtrl) {
+        m_suppressTextEvent = true;
         wxTextAttr emptyAttr;
         m_textCtrl->SetDefaultStyle(emptyAttr);
         wxTextAttr defaultAttr(m_textCtrl->GetForegroundColour(), wxNullColour, m_textCtrl->GetFont());
         m_textCtrl->SetDefaultStyle(defaultAttr);
         m_textCtrl->Clear();
+        m_suppressTextEvent = false;
         SanitizeNativeTextAttributes(true);
         UpdateScrollInfo();
     }
@@ -444,7 +467,9 @@ void TextCtrl::Clear() {
 
 void TextCtrl::WriteText(const wxString& text) {
     if (m_textCtrl) {
+        m_suppressTextEvent = true;
         m_textCtrl->WriteText(text);
+        m_suppressTextEvent = false;
         SanitizeNativeTextAttributes();
         UpdateScrollInfo();
     }
@@ -458,9 +483,7 @@ void TextCtrl::SetHint(const wxString& hint) {
 
 bool TextCtrl::SetDefaultStyle(const wxTextAttr& style) {
     if (m_textCtrl) {
-        bool res = m_textCtrl->SetDefaultStyle(style);
-        SanitizeNativeTextAttributes();
-        return res;
+        return m_textCtrl->SetDefaultStyle(style);
     }
     return false;
 }
@@ -468,12 +491,35 @@ bool TextCtrl::SetDefaultStyle(const wxTextAttr& style) {
 void TextCtrl::ShowPosition(long pos) {
     if (m_textCtrl) {
         m_textCtrl->ShowPosition(pos);
-        UpdateScrollInfo();
+        if (!IsFrozen()) {
+            UpdateScrollInfo();
+        }
     }
 }
 
 long TextCtrl::GetLastPosition() const {
     return m_textCtrl ? m_textCtrl->GetLastPosition() : 0;
+}
+
+void TextCtrl::Freeze() {
+    wxPanel::Freeze();
+    if (m_textCtrl) {
+        m_textCtrl->Freeze();
+    }
+}
+
+void TextCtrl::Thaw() {
+    if (m_textCtrl) {
+        m_textCtrl->Thaw();
+    }
+    wxPanel::Thaw();
+    if (!IsFrozen()) {
+        UpdateScrollInfo();
+    }
+}
+
+bool TextCtrl::IsFrozen() const {
+    return wxPanel::IsFrozen() || (m_textCtrl && m_textCtrl->IsFrozen());
 }
 
 void TextCtrl::SetMarkdown(const std::string& markdownText) {
@@ -483,6 +529,7 @@ void TextCtrl::SetMarkdown(const std::string& markdownText) {
     if (!m_textCtrl)
         return;
 
+    m_suppressTextEvent = true;
     m_textCtrl->Freeze();
     wxTextAttr emptyAttr;
     m_textCtrl->SetDefaultStyle(emptyAttr);
@@ -491,6 +538,7 @@ void TextCtrl::SetMarkdown(const std::string& markdownText) {
 
     if (markdownText.empty()) {
         m_textCtrl->Thaw();
+        m_suppressTextEvent = false;
         SanitizeNativeTextAttributes(false);
         UpdateScrollInfo();
         return;
@@ -616,6 +664,7 @@ void TextCtrl::SetMarkdown(const std::string& markdownText) {
     m_textCtrl->SetDefaultStyle(emptyAttr);
 
     m_textCtrl->Thaw();
+    m_suppressTextEvent = false;
     SanitizeNativeTextAttributes(false);
     ScrollToLine(0);
     UpdateScrollInfo();

@@ -42,6 +42,15 @@ namespace LinguaAlpaca {
 	}
 
 	void ModelManager::StopModel(TargetModelType type) {
+		{
+			std::lock_guard<std::mutex> lock(m_healthCacheMutex);
+			if (type == TargetModelType::None) {
+				m_healthCache.clear();
+			} else {
+				m_healthCache.erase(static_cast<int>(type));
+			}
+		}
+
 		if (type == TargetModelType::Translation || type == TargetModelType::None) {
 			++m_transSessionId;
 			std::lock_guard<std::mutex> lock(m_transSwitchMutex);
@@ -142,7 +151,7 @@ namespace LinguaAlpaca {
 					onProgress("正在启动并装载翻译模型...");
 				}
 
-				auto shouldAbort = [this, aliveToken, sessionId]() {
+				std::function<bool()> shouldAbort = [this, aliveToken, sessionId]() -> bool {
 					return !aliveToken->load() || sessionId != m_transSessionId.load(std::memory_order_acquire);
 				};
 
@@ -234,7 +243,7 @@ namespace LinguaAlpaca {
 					onProgress("正在启动并装载 OCR 视觉识别引擎...");
 				}
 
-				auto shouldAbort = [this, aliveToken, sessionId]() {
+				std::function<bool()> shouldAbort = [this, aliveToken, sessionId]() -> bool {
 					return !aliveToken->load() || sessionId != m_ocrSessionId.load(std::memory_order_acquire);
 				};
 
@@ -284,6 +293,18 @@ namespace LinguaAlpaca {
 		ServerStatusInfo info;
 		info.activeType = targetType;
 
+		auto now = std::chrono::steady_clock::now();
+		{
+			std::lock_guard<std::mutex> lock(m_healthCacheMutex);
+			auto it = m_healthCache.find(static_cast<int>(targetType));
+			if (it != m_healthCache.end()) {
+				auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - it->second.timestamp).count();
+				if (elapsedMs < 1200) {
+					return it->second.info;
+				}
+			}
+		}
+
 		auto appConfig = m_configManager ? m_configManager->GetConfig() : AppConfig{};
 
 		if (targetType == TargetModelType::Translation) {
@@ -291,23 +312,16 @@ namespace LinguaAlpaca {
 			if (appConfig.modelPath.empty() || !FileExists(appConfig.modelPath)) {
 				info.state = ServerHealthState::Unconfigured;
 				info.message = "翻译模型未配置";
-				return info;
-			}
-
-			if (m_isTransSwitching.load(std::memory_order_acquire)) {
+			} else if (m_isTransSwitching.load(std::memory_order_acquire)) {
 				info.state = ServerHealthState::Loading;
 				info.message = "正在启动加载翻译模型中...";
-				return info;
-			}
-
-			if (m_transServer) {
+			} else if (m_transServer) {
 				m_transServer->QueryHealth(info);
 				info.activeType = targetType;
 				info.currentModel = appConfig.modelPath;
 				info.port = m_transServer->GetPort();
 				info.baseUrl = m_transServer->GetBaseUrl();
 			}
-			return info;
 		}
 		else if (targetType == TargetModelType::Ocr) {
 			info.currentModel = appConfig.ocrModelPath;
@@ -315,27 +329,27 @@ namespace LinguaAlpaca {
 				appConfig.ocrMmprojPath.empty() || !FileExists(appConfig.ocrMmprojPath)) {
 				info.state = ServerHealthState::Unconfigured;
 				info.message = "OCR 视觉模型或 mmproj 未配置";
-				return info;
-			}
-
-			if (m_isOcrSwitching.load(std::memory_order_acquire)) {
+			} else if (m_isOcrSwitching.load(std::memory_order_acquire)) {
 				info.state = ServerHealthState::Loading;
 				info.message = "正在启动加载 OCR 视觉模型中...";
-				return info;
-			}
-
-			if (m_ocrServer) {
+			} else if (m_ocrServer) {
 				m_ocrServer->QueryHealth(info);
 				info.activeType = targetType;
 				info.currentModel = appConfig.ocrModelPath;
 				info.port = m_ocrServer->GetPort();
 				info.baseUrl = m_ocrServer->GetBaseUrl();
 			}
-			return info;
+		}
+		else {
+			info.state = ServerHealthState::Offline;
+			info.message = "未指定模型类型";
 		}
 
-		info.state = ServerHealthState::Offline;
-		info.message = "未指定模型类型";
+		{
+			std::lock_guard<std::mutex> lock(m_healthCacheMutex);
+			m_healthCache[static_cast<int>(targetType)] = { info, now };
+		}
+
 		return info;
 	}
 

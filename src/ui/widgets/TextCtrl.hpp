@@ -33,6 +33,10 @@ public:
     bool SetDefaultStyle(const wxTextAttr& style);
     void ShowPosition(long pos);
     long GetLastPosition() const;
+    int GetNumberOfLines() const { return m_textCtrl ? m_textCtrl->GetNumberOfLines() : 0; }
+    void Freeze();
+    void Thaw();
+    bool IsFrozen() const;
 
     // Markdown 富文本渲染
     void SetMarkdown(const std::string& markdownText);
@@ -101,6 +105,7 @@ private:
 
     // macOS 专用滚动通知观察者
     void* m_macScrollObserver{nullptr};
+    bool m_suppressTextEvent{false};
 };
 
 } // namespace LinguaAlpaca::UI

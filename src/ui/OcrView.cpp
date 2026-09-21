@@ -26,7 +26,6 @@ namespace LinguaAlpaca::UI {
 
 		m_healthTimer.Bind(wxEVT_TIMER,
 			[this](wxTimerEvent&) { UpdateStatusBadge(); });
-		m_healthTimer.Start(1500);
 	}
 
 	OcrView::~OcrView() {
@@ -34,6 +33,21 @@ namespace LinguaAlpaca::UI {
 			m_healthTimer.Stop();
 		}
 		WinTtsHelper::GetInstance().Stop();
+	}
+
+	bool OcrView::Show(bool show) {
+		bool res = wxPanel::Show(show);
+		if (show) {
+			UpdateStatusBadge();
+			if (!m_healthTimer.IsRunning()) {
+				m_healthTimer.Start(1500);
+			}
+		} else {
+			if (m_healthTimer.IsRunning()) {
+				m_healthTimer.Stop();
+			}
+		}
+		return res;
 	}
 
 	void OcrView::InitUI() {

@@ -21,6 +21,7 @@ public:
     void UpdateStatusBadge();
     void SetSourceText(const wxString& text);
     void SetSourceTextAndTranslate(const wxString& text);
+    bool Show(bool show = true) override;
 
 private:
     void InitUI();

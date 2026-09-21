@@ -27,6 +27,7 @@ public:
     void UpdateTheme();
     void SetModelPath(const wxString& path);
     void SetOcrModelPath(const wxString& mainPath, const wxString& mmprojPath);
+    bool Show(bool show = true) override;
 
 private:
     void InitUI();

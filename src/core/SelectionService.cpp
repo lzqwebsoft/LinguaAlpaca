@@ -549,7 +549,7 @@ void SelectionService::OnLowLevelMouseEvent(int message, int x, int y) {
         m_lastClickTime = now;
         m_lastClickX = x;
         m_lastClickY = y;
-        LOG_INFO("SelectionService", "LBUTTONDOWN at (" + std::to_string(x) + ", " + std::to_string(y) + "), clickCount=" + std::to_string(m_clickCount));
+        LOG_DEBUG("SelectionService", "LBUTTONDOWN at (" + std::to_string(x) + ", " + std::to_string(y) + "), clickCount=" + std::to_string(m_clickCount));
         return;
     }
 
@@ -560,10 +560,10 @@ void SelectionService::OnLowLevelMouseEvent(int message, int x, int y) {
         int distSq = dx * dx + dy * dy;
         auto durationMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_timeDown).count();
 
-        LOG_INFO("SelectionService", "LBUTTONUP at (" + std::to_string(x) + ", " + std::to_string(y) +
-                 "), down=(" + std::to_string(m_ptDownX) + ", " + std::to_string(m_ptDownY) +
-                 "), distSq=" + std::to_string(distSq) + ", durationMs=" + std::to_string(durationMs) +
-                 ", clickCount=" + std::to_string(m_clickCount) + ", ignored=" + std::to_string(ignored));
+        LOG_DEBUG("SelectionService", "LBUTTONUP at (" + std::to_string(x) + ", " + std::to_string(y) +
+                  "), down=(" + std::to_string(m_ptDownX) + ", " + std::to_string(m_ptDownY) +
+                  "), distSq=" + std::to_string(distSq) + ", durationMs=" + std::to_string(durationMs) +
+                  ", clickCount=" + std::to_string(m_clickCount) + ", ignored=" + std::to_string(ignored));
 
         // 综合过滤检测：如果操作发生在本项目自身窗口、或属于拖动标题栏/滑动滑条/调整窗口大小等非文本选中操作，则忽略
         if (ignored) {
@@ -780,7 +780,7 @@ bool SelectionService::ShouldIgnoreMouseEvent(int startX, int startY, int endX, 
             if (win && win->IsShown()) {
                 wxRect r = win->GetScreenRect();
                 if (r.Contains(startX, startY) || r.Contains(endX, endY)) {
-                    LOG_INFO("SelectionService", "ShouldIgnoreMouseEvent: ignored because inside own TLW rect and not in allowed window");
+                    LOG_DEBUG("SelectionService", "ShouldIgnoreMouseEvent: ignored because inside own TLW rect and not in allowed window");
                     return true;
                 }
             }
@@ -791,28 +791,28 @@ bool SelectionService::ShouldIgnoreMouseEvent(int startX, int startY, int endX, 
             NSRunningApplication* frontApp = [[NSWorkspace sharedWorkspace] frontmostApplication];
             if (frontApp) {
                 if (frontApp.processIdentifier == getpid()) {
-                    LOG_INFO("SelectionService", "ShouldIgnoreMouseEvent: ignored because frontmost application is self and not in allowed window");
+                    LOG_DEBUG("SelectionService", "ShouldIgnoreMouseEvent: ignored because frontmost application is self and not in allowed window");
                     return true;
                 }
                 NSString* bundleId = [frontApp bundleIdentifier];
                 if (bundleId) {
                     if ([bundleId containsString:@"screencapture"] || [bundleId containsString:@"Snipaste"] || [bundleId containsString:@"CleanShot"] || [bundleId containsString:@"Shottr"] ||
                         [bundleId containsString:@"Flameshot"] || [bundleId containsString:@"Kap"]) {
-                        LOG_INFO("SelectionService", "ShouldIgnoreMouseEvent: ignored because screenshot tool active");
+                        LOG_DEBUG("SelectionService", "ShouldIgnoreMouseEvent: ignored because screenshot tool active");
                         return true;
                     }
                 }
                 NSString* appName = [frontApp localizedName];
                 if (appName) {
                     if ([appName containsString:@"截图"] || [appName containsString:@"截屏"]) {
-                        LOG_INFO("SelectionService", "ShouldIgnoreMouseEvent: ignored because screenshot tool active");
+                        LOG_DEBUG("SelectionService", "ShouldIgnoreMouseEvent: ignored because screenshot tool active");
                         return true;
                     }
                 }
             }
         }
     } else {
-        LOG_INFO("SelectionService", "ShouldIgnoreMouseEvent: permitted inside allowed self window!");
+        LOG_DEBUG("SelectionService", "ShouldIgnoreMouseEvent: permitted inside allowed self window!");
     }
 
     return false;

@@ -24,8 +24,8 @@ LogView::LogView(wxWindow* parent, std::shared_ptr<ConfigManager> configManager,
         AppendLogMessage(msg);
     }));
 
-    // 加载当前内存中已有的历史日志
-    ReloadLogs();
+    // 初始状态标记为脏，延迟到首次切换到该面板 Show() 时才拉取日志，杜绝启动和后台高开销排版
+    m_isDirty = true;
 }
 
 LogView::~LogView() {
@@ -33,6 +33,14 @@ LogView::~LogView() {
         Logger::GetInstance().RemoveListener(m_listenerId);
         m_listenerId = 0;
     }
+}
+
+bool LogView::Show(bool show) {
+    bool result = wxPanel::Show(show);
+    if (show && m_isDirty) {
+        ReloadLogs();
+    }
+    return result;
 }
 
 void LogView::InitUI() {
@@ -157,6 +165,12 @@ void LogView::InitUI() {
 }
 
 void LogView::AppendLogMessage(const LogMessage& msg, bool scrollToBottom) {
+    // 隐藏状态下不碰 UI 控件，避免后台无意义的排版与事件循环阻塞
+    if (!IsShown()) {
+        m_isDirty = true;
+        return;
+    }
+
     if (!m_logTextCtrl)
         return;
 
@@ -167,22 +181,14 @@ void LogView::AppendLogMessage(const LogMessage& msg, bool scrollToBottom) {
         }
     }
 
-    auto palette = ThemeColors::GetCurrentPalette();
-    wxColour levelCol = palette.textPrimary;
-    switch (msg.level) {
-    case LogLevel::Debug:
-        levelCol = wxColour(130, 130, 130);
-        break;
-    case LogLevel::Info:
-        levelCol = palette.textPrimary;
-        break;
-    case LogLevel::Warning:
-        levelCol = wxColour(220, 140, 20);
-        break;
-    case LogLevel::Error:
-        levelCol = wxColour(230, 60, 60);
-        break;
+    // 限制最大行数（防止 CoreText 无界增长造成排版卡顿，限制为 800 行）
+    if (m_logTextCtrl->GetNumberOfLines() > 800) {
+        ReloadLogs();
+        return;
     }
+
+    auto palette = ThemeColors::GetCurrentPalette();
+    wxColour levelCol = palette.GetLogLevelColour(msg.level);
 
     wxTextAttr attr(levelCol, wxNullColour);
     bool isBold = (msg.level == LogLevel::Error || msg.level == LogLevel::Warning);
@@ -201,18 +207,50 @@ void LogView::ReloadLogs() {
     if (!m_logTextCtrl)
         return;
 
+    m_isDirty = false;
+
     // 锁定控件重绘，批量处理完后一次性刷新
     m_logTextCtrl->Freeze();
     m_logTextCtrl->Clear();
 
-    auto history = Logger::GetInstance().GetRecentLogs();
+    auto palette = ThemeColors::GetCurrentPalette();
+    auto history = Logger::GetInstance().GetRecentLogs(250);
+
+    // 将连续相同等级的日志合并为批次追加，将数百次 Cocoa 文本排版调用降低为极少数批次
+    struct LogBatch {
+        LogLevel level;
+        wxString text;
+    };
+    std::vector<LogBatch> batches;
+    batches.reserve(32);
+
     for (const auto& msg : history) {
-        AppendLogMessage(msg, /*scrollToBottom=*/false);
+        if (m_filterLevel >= 0 && static_cast<int>(msg.level) != m_filterLevel) {
+            continue;
+        }
+
+        wxString line = wxString::FromUTF8(msg.FormattedString() + "\n");
+        if (!batches.empty() && batches.back().level == msg.level) {
+            batches.back().text.Append(line);
+        } else {
+            batches.push_back({msg.level, std::move(line)});
+        }
     }
+
+    for (const auto& b : batches) {
+        wxColour levelCol = palette.GetLogLevelColour(b.level);
+        wxTextAttr attr(levelCol, wxNullColour);
+        bool isBold = (b.level == LogLevel::Error || b.level == LogLevel::Warning);
+        attr.SetFont(isBold ? m_monoBoldFont : m_monoNormalFont);
+        m_logTextCtrl->SetDefaultStyle(attr);
+        m_logTextCtrl->AppendText(b.text);
+    }
+
+    m_logTextCtrl->Thaw();
+
     if (m_autoScroll) {
         m_logTextCtrl->ShowPosition(m_logTextCtrl->GetLastPosition());
     }
-    m_logTextCtrl->Thaw();
 }
 
 void LogView::OnClear(wxCommandEvent& WXUNUSED(event)) {
@@ -294,7 +332,11 @@ void LogView::UpdateTheme() {
         m_logTextCtrl->SetForegroundColour(palette.textPrimary);
     }
 
-    ReloadLogs();
+    if (IsShown()) {
+        ReloadLogs();
+    } else {
+        m_isDirty = true;
+    }
     Refresh();
 }
 

@@ -67,6 +67,90 @@ TEST_CASE("MarkdownFormatter - Inline Elements", "[core][markdown]") {
         }
         REQUIRE(hasLink);
     }
+
+    SECTION("Does NOT parse intra-word underscores (snake_case variables) as italic") {
+        std::string md = "use processor_kwargs={\"text_kwargs\": {\"padding\": True}} together with other options.";
+        auto segments = MarkdownFormatter::Parse(md);
+
+        for (const auto& seg : segments) {
+            REQUIRE(seg.style != MarkdownStyle::Italic);
+            REQUIRE(seg.style != MarkdownStyle::Bold);
+        }
+        std::string stripped = MarkdownFormatter::StripMarkdown(md);
+        REQUIRE(stripped.find("processor_kwargs={\"text_kwargs\": {\"padding\": True}}") != std::string::npos);
+    }
+
+    SECTION("Parses user exact Chinese and English translation sentences without false italics") {
+        std::string zhMd = "对于长度不同的批量数据，应同时使用“processor_kwargs={\"text_kwargs\": {\"padding\": True}}”以及其他处理选项。在调用处理程序之前，需排除那些为空的批量数据。在历史性的fc501源环境中，曾出现“audio=[]”导致IndexError的情况；该现象并非5.17.0版本的新测试结果。";
+        auto zhSegments = MarkdownFormatter::Parse(zhMd);
+
+        for (const auto& seg : zhSegments) {
+            REQUIRE(seg.style != MarkdownStyle::Italic);
+            REQUIRE(seg.style != MarkdownStyle::Bold);
+            REQUIRE(seg.style != MarkdownStyle::LinkText);
+        }
+        std::string zhStripped = MarkdownFormatter::StripMarkdown(zhMd);
+        REQUIRE(zhStripped.find("processor_kwargs={\"text_kwargs\": {\"padding\": True}}") != std::string::npos);
+
+        std::string enMd = "language accepts Chinese, English, and Japanese as ISO codes, full English names, or the checkpoint Chinese names (中文, 英文, 日文). Keep batch inputs and decoded outputs in order; use processor_kwargs={\"text_kwargs\": {\"padding\": True}} together with the other processor options for different-length batches. Reject empty batches before calling the processor. An upstream IndexError for audio=[] was observed in the historical fc501 source environment; that observation is not a new 5.17.0 test result.";
+        auto enSegments = MarkdownFormatter::Parse(enMd);
+
+        for (const auto& seg : enSegments) {
+            REQUIRE(seg.style != MarkdownStyle::Italic);
+            REQUIRE(seg.style != MarkdownStyle::Bold);
+            REQUIRE(seg.style != MarkdownStyle::LinkText);
+        }
+        std::string enStripped = MarkdownFormatter::StripMarkdown(enMd);
+        REQUIRE(enStripped.find("processor_kwargs={\"text_kwargs\": {\"padding\": True}}") != std::string::npos);
+    }
+
+    SECTION("Parses multiple inline code blocks with plain text between them") {
+        std::string md = "使用 `processor_kwargs={\"text_kwargs\": {\"padding\": True}}` 参数。在调用处理器之前需排除空批次。在历史性的fc501源环境中，当 `audio=[]` 时会出现上游的 `IndexError` 错误；该问题并非5.17.0版本的新测试结果。";
+        auto segments = MarkdownFormatter::Parse(md);
+
+        int codeCount = 0;
+        int defaultCount = 0;
+        for (const auto& seg : segments) {
+            if (seg.style == MarkdownStyle::InlineCode) {
+                codeCount++;
+            } else if (seg.style == MarkdownStyle::Default) {
+                defaultCount++;
+            }
+        }
+        // There should be exactly 3 inline code segments: processor_kwargs, audio=[], IndexError
+        REQUIRE(codeCount == 3);
+        REQUIRE(defaultCount >= 3);
+    }
+
+    SECTION("Parses legitimate underscore emphasis and math expressions") {
+        std::string md1 = "This is _italic text_ and __bold text__ with underscores.";
+        auto segs1 = MarkdownFormatter::Parse(md1);
+        bool hasUnderscoreItalic = false;
+        bool hasUnderscoreBold = false;
+        for (const auto& seg : segs1) {
+            if (seg.style == MarkdownStyle::Italic && seg.text == "italic text") hasUnderscoreItalic = true;
+            if (seg.style == MarkdownStyle::Bold && seg.text == "bold text") hasUnderscoreBold = true;
+        }
+        REQUIRE(hasUnderscoreItalic);
+        REQUIRE(hasUnderscoreBold);
+
+        std::string md2 = "Check “_quoted italic_” and (_parens italic_).";
+        auto segs2 = MarkdownFormatter::Parse(md2);
+        bool hasQuotedItalic = false;
+        bool hasParensItalic = false;
+        for (const auto& seg : segs2) {
+            if (seg.style == MarkdownStyle::Italic && seg.text == "quoted italic") hasQuotedItalic = true;
+            if (seg.style == MarkdownStyle::Italic && seg.text == "parens italic") hasParensItalic = true;
+        }
+        REQUIRE(hasQuotedItalic);
+        REQUIRE(hasParensItalic);
+
+        std::string mdMath = "Calculate 5 * 4 * 3 and a + b * c + d * e.";
+        auto mathSegs = MarkdownFormatter::Parse(mdMath);
+        for (const auto& seg : mathSegs) {
+            REQUIRE(seg.style != MarkdownStyle::Italic);
+        }
+    }
 }
 
 TEST_CASE("MarkdownFormatter - Code Blocks", "[core][markdown]") {

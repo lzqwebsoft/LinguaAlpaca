@@ -102,6 +102,128 @@ bool MarkdownFormatter::IsUnorderedList(std::string_view line, std::string_view&
     return false;
 }
 
+namespace {
+
+uint32_t DecodeUtf8(std::string_view s, size_t pos, size_t* outLen = nullptr) {
+    if (pos >= s.size()) {
+        if (outLen) *outLen = 0;
+        return 0;
+    }
+    unsigned char c = static_cast<unsigned char>(s[pos]);
+    if (c < 0x80) {
+        if (outLen) *outLen = 1;
+        return c;
+    }
+    if ((c & 0xE0) == 0xC0 && pos + 1 < s.size()) {
+        if (outLen) *outLen = 2;
+        return ((c & 0x1F) << 6) | (static_cast<unsigned char>(s[pos + 1]) & 0x3F);
+    }
+    if ((c & 0xF0) == 0xE0 && pos + 2 < s.size()) {
+        if (outLen) *outLen = 3;
+        return ((c & 0x0F) << 12) |
+               ((static_cast<unsigned char>(s[pos + 1]) & 0x3F) << 6) |
+               (static_cast<unsigned char>(s[pos + 2]) & 0x3F);
+    }
+    if ((c & 0xF8) == 0xF0 && pos + 3 < s.size()) {
+        if (outLen) *outLen = 4;
+        return ((c & 0x07) << 18) |
+               ((static_cast<unsigned char>(s[pos + 1]) & 0x3F) << 12) |
+               ((static_cast<unsigned char>(s[pos + 2]) & 0x3F) << 6) |
+               (static_cast<unsigned char>(s[pos + 3]) & 0x3F);
+    }
+    if (outLen) *outLen = 1;
+    return c;
+}
+
+uint32_t GetCodePointBefore(std::string_view s, size_t pos) {
+    if (pos == 0 || pos > s.size()) return 0;
+    size_t prev = pos - 1;
+    while (prev > 0 && (static_cast<unsigned char>(s[prev]) & 0xC0) == 0x80) {
+        --prev;
+    }
+    return DecodeUtf8(s, prev);
+}
+
+uint32_t GetCodePointAt(std::string_view s, size_t pos) {
+    if (pos >= s.size()) return 0;
+    return DecodeUtf8(s, pos);
+}
+
+bool IsUnicodeWhitespace(uint32_t cp) {
+    if (cp == 0) return true; // 字符串首尾边界视为空白边界
+    if (cp == ' ' || cp == '\t' || cp == '\r' || cp == '\n' || cp == '\v' || cp == '\f') return true;
+    if (cp == 0x00A0 || cp == 0x1680) return true;
+    if (cp >= 0x2000 && cp <= 0x200A) return true;
+    if (cp == 0x2028 || cp == 0x2029 || cp == 0x202F || cp == 0x205F || cp == 0x3000) return true;
+    return false;
+}
+
+bool IsUnicodePunctuation(uint32_t cp) {
+    // ASCII 标点符号
+    if ((cp >= 0x21 && cp <= 0x2F) ||
+        (cp >= 0x3A && cp <= 0x40) ||
+        (cp >= 0x5B && cp <= 0x60) ||
+        (cp >= 0x7B && cp <= 0x7E)) {
+        return true;
+    }
+    // Unicode 通用标点与引号（如 “ ”, ‘ ’, —, … 等）
+    if (cp >= 0x2010 && cp <= 0x2027) return true;
+    if (cp >= 0x2030 && cp <= 0x205E) return true;
+    // CJK 中日韩标点（如 、 。 〈 〉 《 》 「 」 『 』 【 】 等，0x3000 全角空格已归为空白）
+    if (cp >= 0x3001 && cp <= 0x303F) return true;
+    // CJK 兼容与小符号
+    if (cp >= 0xFE10 && cp <= 0xFE1F) return true;
+    if (cp >= 0xFE30 && cp <= 0xFE6F) return true;
+    // 全角 ASCII 标点变体（如 ！，：；“”‘’（）等）
+    if ((cp >= 0xFF01 && cp <= 0xFF0F) ||
+        (cp >= 0xFF1A && cp <= 0xFF20) ||
+        (cp >= 0xFF3B && cp <= 0xFF40) ||
+        (cp >= 0xFF5B && cp <= 0xFF65) ||
+        (cp >= 0xFFE0 && cp <= 0xFFEE)) {
+        return true;
+    }
+    return false;
+}
+
+void GetFlankingInfo(std::string_view line, size_t delimStart, size_t delimLen,
+                     bool& isLeftFlanking, bool& isRightFlanking) {
+    uint32_t charBefore = GetCodePointBefore(line, delimStart);
+    uint32_t charAfter = GetCodePointAt(line, delimStart + delimLen);
+
+    bool afterIsWhitespace = IsUnicodeWhitespace(charAfter);
+    bool afterIsPunct = IsUnicodePunctuation(charAfter);
+    bool beforeIsWhitespace = IsUnicodeWhitespace(charBefore);
+    bool beforeIsPunct = IsUnicodePunctuation(charBefore);
+
+    // CommonMark 规范 §6.2 侧翼判定
+    isLeftFlanking = !afterIsWhitespace && (!afterIsPunct || (beforeIsWhitespace || beforeIsPunct));
+    isRightFlanking = !beforeIsWhitespace && (!beforeIsPunct || (afterIsWhitespace || afterIsPunct));
+}
+
+bool CanOpenEmphasis(std::string_view line, size_t delimStart, size_t delimLen, char delimChar) {
+    bool isLeft = false, isRight = false;
+    GetFlankingInfo(line, delimStart, delimLen, isLeft, isRight);
+    if (delimChar == '_') {
+        // 下划线强调规则：仅在左侧翼且（非右侧翼或前接标点）时可作为开头，严格杜绝变量名内部强调（如 processor_kwargs）
+        uint32_t charBefore = GetCodePointBefore(line, delimStart);
+        return isLeft && (!isRight || IsUnicodePunctuation(charBefore));
+    }
+    return isLeft;
+}
+
+bool CanCloseEmphasis(std::string_view line, size_t delimStart, size_t delimLen, char delimChar) {
+    bool isLeft = false, isRight = false;
+    GetFlankingInfo(line, delimStart, delimLen, isLeft, isRight);
+    if (delimChar == '_') {
+        // 下划线闭合规则：仅在右侧翼且（非左侧翼或后接标点）时可作为闭合，严格杜绝变量名内部闭合（如 text_kwargs）
+        uint32_t charAfter = GetCodePointAt(line, delimStart + delimLen);
+        return isRight && (!isLeft || IsUnicodePunctuation(charAfter));
+    }
+    return isRight;
+}
+
+} // namespace
+
 void MarkdownFormatter::ParseInlineElements(std::string_view line,
                                            std::vector<MarkdownSegment>& outSegments,
                                            MarkdownStyle baseStyle) {
@@ -133,15 +255,29 @@ void MarkdownFormatter::ParseInlineElements(std::string_view line,
         if (i + 2 < line.size() &&
             ((line[i] == '*' && line[i + 1] == '*' && line[i + 2] == '*') ||
              (line[i] == '_' && line[i + 1] == '_' && line[i + 2] == '_'))) {
-            std::string_view delim = line.substr(i, 3);
-            size_t closePos = line.find(delim, i + 3);
-            if (closePos != std::string_view::npos) {
-                flushPlain(i);
-                std::string content = std::string(line.substr(i + 3, closePos - (i + 3)));
-                outSegments.push_back({ MarkdownStyle::BoldItalic, content });
-                i = closePos + 3;
-                plainStart = i;
-                continue;
+            char delimChar = line[i];
+            if (CanOpenEmphasis(line, i, 3, delimChar)) {
+                std::string_view delim = line.substr(i, 3);
+                size_t searchPos = i + 3;
+                size_t closePos = std::string_view::npos;
+                while (searchPos + 2 < line.size()) {
+                    size_t found = line.find(delim, searchPos);
+                    if (found == std::string_view::npos) break;
+                    if (CanCloseEmphasis(line, found, 3, delimChar) && found > i + 3) {
+                        closePos = found;
+                        break;
+                    }
+                    searchPos = found + 1;
+                }
+
+                if (closePos != std::string_view::npos) {
+                    flushPlain(i);
+                    std::string content = std::string(line.substr(i + 3, closePos - (i + 3)));
+                    outSegments.push_back({ MarkdownStyle::BoldItalic, content });
+                    i = closePos + 3;
+                    plainStart = i;
+                    continue;
+                }
             }
         }
 
@@ -149,43 +285,97 @@ void MarkdownFormatter::ParseInlineElements(std::string_view line,
         if (i + 1 < line.size() &&
             ((line[i] == '*' && line[i + 1] == '*') ||
              (line[i] == '_' && line[i + 1] == '_'))) {
-            std::string_view delim = line.substr(i, 2);
-            size_t closePos = line.find(delim, i + 2);
-            if (closePos != std::string_view::npos) {
-                flushPlain(i);
-                std::string content = std::string(line.substr(i + 2, closePos - (i + 2)));
-                outSegments.push_back({ MarkdownStyle::Bold, content });
-                i = closePos + 2;
-                plainStart = i;
+            char delimChar = line[i];
+            // 避免将 *** 误当成 ** 处理
+            if (i + 2 < line.size() && line[i + 2] == delimChar) {
+                ++i;
                 continue;
+            }
+
+            if (CanOpenEmphasis(line, i, 2, delimChar)) {
+                std::string_view delim = line.substr(i, 2);
+                size_t searchPos = i + 2;
+                size_t closePos = std::string_view::npos;
+                while (searchPos + 1 < line.size()) {
+                    size_t found = line.find(delim, searchPos);
+                    if (found == std::string_view::npos) break;
+                    // 避免将 *** 误当作 ** 闭合
+                    if (found + 2 < line.size() && line[found + 2] == delimChar) {
+                        searchPos = found + 3;
+                        continue;
+                    }
+                    if (CanCloseEmphasis(line, found, 2, delimChar) && found > i + 2) {
+                        closePos = found;
+                        break;
+                    }
+                    searchPos = found + 1;
+                }
+
+                if (closePos != std::string_view::npos) {
+                    flushPlain(i);
+                    std::string content = std::string(line.substr(i + 2, closePos - (i + 2)));
+                    outSegments.push_back({ MarkdownStyle::Bold, content });
+                    i = closePos + 2;
+                    plainStart = i;
+                    continue;
+                }
             }
         }
 
         // 4. 删除线 ~~text~~
         if (i + 1 < line.size() && line[i] == '~' && line[i + 1] == '~') {
             size_t closePos = line.find("~~", i + 2);
-            if (closePos != std::string_view::npos) {
-                flushPlain(i);
+            if (closePos != std::string_view::npos && closePos > i + 2) {
                 std::string content = std::string(line.substr(i + 2, closePos - (i + 2)));
-                outSegments.push_back({ MarkdownStyle::Strikethrough, content });
-                i = closePos + 2;
-                plainStart = i;
-                continue;
+                if (!content.empty() && content.front() != ' ' && content.back() != ' ') {
+                    flushPlain(i);
+                    outSegments.push_back({ MarkdownStyle::Strikethrough, content });
+                    i = closePos + 2;
+                    plainStart = i;
+                    continue;
+                }
             }
         }
 
         // 5. 斜体 *text* 或 _text_
         if ((line[i] == '*' || line[i] == '_')) {
-            char delim = line[i];
-            size_t closePos = line.find(delim, i + 1);
-            // 确保不是空斜体且闭合有效
-            if (closePos != std::string_view::npos && closePos > i + 1) {
-                flushPlain(i);
-                std::string content = std::string(line.substr(i + 1, closePos - (i + 1)));
-                outSegments.push_back({ MarkdownStyle::Italic, content });
-                i = closePos + 1;
-                plainStart = i;
+            char delimChar = line[i];
+            // 若紧随相同符号，表明这是多字符 delimiter run (如 ** 或 __)，跳过
+            if (i + 1 < line.size() && line[i + 1] == delimChar) {
+                ++i;
                 continue;
+            }
+
+            if (CanOpenEmphasis(line, i, 1, delimChar)) {
+                size_t searchPos = i + 1;
+                size_t closePos = std::string_view::npos;
+                while (searchPos < line.size()) {
+                    size_t found = line.find(delimChar, searchPos);
+                    if (found == std::string_view::npos) break;
+                    // 若紧随相同符号，跳过更长 delimiter run (例如 ** 或 ***)
+                    if (found + 1 < line.size() && line[found + 1] == delimChar) {
+                        size_t runLen = 2;
+                        while (found + runLen < line.size() && line[found + runLen] == delimChar) {
+                            ++runLen;
+                        }
+                        searchPos = found + runLen;
+                        continue;
+                    }
+                    if (CanCloseEmphasis(line, found, 1, delimChar) && found > i + 1) {
+                        closePos = found;
+                        break;
+                    }
+                    searchPos = found + 1;
+                }
+
+                if (closePos != std::string_view::npos) {
+                    flushPlain(i);
+                    std::string content = std::string(line.substr(i + 1, closePos - (i + 1)));
+                    outSegments.push_back({ MarkdownStyle::Italic, content });
+                    i = closePos + 1;
+                    plainStart = i;
+                    continue;
+                }
             }
         }
 

@@ -657,10 +657,38 @@ void TextCtrl::SetMarkdown(const std::string& markdownText) {
     };
 
     auto segments = MarkdownFormatter::Parse(markdownText);
+
+    // 1. 构建全量纯文本并记录需要应用富文本样式的片段区间
+    wxString fullText;
+    struct StyledRange {
+        long start;
+        long end;
+        MarkdownStyle style;
+    };
+    std::vector<StyledRange> ranges;
+    ranges.reserve(segments.size());
+
+    long currentPos = 0;
     for (const auto& seg : segments) {
-        m_textCtrl->SetDefaultStyle(getStyleAttr(seg.style));
-        m_textCtrl->AppendText(wxString::FromUTF8(seg.text));
+        wxString wText = wxString::FromUTF8(seg.text);
+        long len = static_cast<long>(wText.Length());
+        if (seg.style != MarkdownStyle::Default && len > 0) {
+            ranges.push_back({ currentPos, currentPos + len, seg.style });
+        }
+        fullText += wText;
+        currentPos += len;
     }
+
+    // 2. 一次性写入全量文本，所有字符初始均继承默认样式且背景透明 (CFE_AUTOBACKCOLOR)
+    // 杜绝 RichEdit 在循环 AppendText 时因前驱字符底色残留而导致行内代码背景向后扩散污染普通文本的缺陷
+    m_textCtrl->SetDefaultStyle(defaultAttr);
+    m_textCtrl->SetValue(fullText);
+
+    // 3. 对非 Default 样式的片段（如标题、粗体、斜体、行内代码块等）精准按区间应用 SetStyle
+    for (const auto& r : ranges) {
+        m_textCtrl->SetStyle(r.start, r.end, getStyleAttr(r.style));
+    }
+
     m_textCtrl->SetDefaultStyle(emptyAttr);
 
     m_textCtrl->Thaw();

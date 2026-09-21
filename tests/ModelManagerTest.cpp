@@ -9,9 +9,20 @@
 
 using namespace LinguaAlpaca;
 
+class TestApp : public wxApp {
+public:
+    bool OnInit() override { return true; }
+};
+wxIMPLEMENT_APP_NO_MAIN(TestApp);
+
 int main(int argc, char* argv[]) {
-    wxInitializer initializer;
+    wxApp::SetInstance(new TestApp());
+    wxEntryStart(argc, argv);
+    if (wxTheApp) {
+        wxTheApp->CallOnInit();
+    }
     int result = Catch::Session().run(argc, argv);
+    wxEntryCleanup();
     return result;
 }
 

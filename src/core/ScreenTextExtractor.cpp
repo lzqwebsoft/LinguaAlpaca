@@ -39,8 +39,8 @@ ExtractedSelection ScreenTextExtractor::ExtractSelection(
     if (ExtractViaUIAutomation(endX, endY, text, uiaAnchorX, uiaAnchorY)) {
         if (!text.empty() && text.size() <= 8000) {
             result.text = text;
-            result.anchorX = uiaAnchorX;
-            result.anchorY = uiaAnchorY;
+            result.anchorX = endX;
+            result.anchorY = endY;
             result.source = "UIAutomation";
             LOG_INFO("ScreenTextExtractor", "Extracted via UIAutomation / AX: \"" + text + "\"");
             return result;
@@ -52,8 +52,8 @@ ExtractedSelection ScreenTextExtractor::ExtractSelection(
     if (ExtractViaUIAutomation(endX, endY, text, uiaAnchorX, uiaAnchorY)) {
         if (!text.empty() && text.size() <= 8000) {
             result.text = text;
-            result.anchorX = uiaAnchorX;
-            result.anchorY = uiaAnchorY;
+            result.anchorX = endX;
+            result.anchorY = endY;
             result.source = "UIAutomation";
             LOG_INFO("ScreenTextExtractor", "Extracted via UIAutomation / AX (retry): \"" + text + "\"");
             return result;

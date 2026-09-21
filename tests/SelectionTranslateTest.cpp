@@ -193,6 +193,38 @@ TEST_CASE("SelectionService - Lifecycle and Config Management", "[core][selectio
         service.Stop();
     }
 
+    SECTION("Preserves exact mouse-up release coordinates in NotifySelectionDetected") {
+        bool started = service.Start();
+        REQUIRE(started == true);
+
+        int receivedX = 0;
+        int receivedY = 0;
+        SelectionContext receivedCtx;
+        service.SetCallback([&](int x, int y, const SelectionContext& ctx) {
+            receivedX = x;
+            receivedY = y;
+            receivedCtx = ctx;
+        });
+
+        SelectionContext testCtx;
+        testCtx.startX = 100;
+        testCtx.startY = 100;
+        testCtx.endX = 650;
+        testCtx.endY = 480;
+        testCtx.clickCount = 1;
+        testCtx.preExtractedText = "Multiline text selection test";
+
+        service.NotifySelectionDetected(testCtx);
+        wxYield();
+
+        REQUIRE(receivedX == 650);
+        REQUIRE(receivedY == 480);
+        REQUIRE(receivedCtx.endX == 650);
+        REQUIRE(receivedCtx.endY == 480);
+
+        service.Stop();
+    }
+
     SECTION("Allowed window registration and containment check") {
         auto* activeSvc = SelectionService::GetActiveService();
         REQUIRE(activeSvc == &service);
@@ -223,6 +255,7 @@ TEST_CASE("SelectionService - Lifecycle and Config Management", "[core][selectio
         REQUIRE(service.IsInsideAllowedWindow(nullptr, r.x + 10, r.y + 10) == false);
 
         frame->Destroy();
+        wxYield();
     }
 }
 

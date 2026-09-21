@@ -223,7 +223,31 @@ bool SelectionService::GetAllowedWindowSelection(void* nativeHwnd, int screenX, 
                         WideCharToMultiByte(CP_UTF8, 0, wbuf.data(), static_cast<int>(copied), &outText[0], utf8Len, nullptr, nullptr);
                         return true;
                     }
+                } else {
+                    // 标准 Edit 控件不支持 EM_GETSELTEXT，使用 WM_GETTEXT 提取选区
+                    int fullLen = ::GetWindowTextLengthW(h);
+                    if (fullLen > 0 && fullLen <= 32768) {
+                        std::vector<wchar_t> fullBuf(fullLen + 1, 0);
+                        if (::GetWindowTextW(h, fullBuf.data(), fullLen + 1) > 0) {
+                            if (selStart < static_cast<DWORD>(fullBuf.size()) && selEnd <= static_cast<DWORD>(fullBuf.size())) {
+                                std::wstring sub(fullBuf.data() + selStart, fullBuf.data() + selEnd);
+                                int utf8Len = WideCharToMultiByte(CP_UTF8, 0, sub.data(), static_cast<int>(sub.size()), nullptr, 0, nullptr, nullptr);
+                                if (utf8Len > 0) {
+                                    outText.resize(utf8Len);
+                                    WideCharToMultiByte(CP_UTF8, 0, sub.data(), static_cast<int>(sub.size()), &outText[0], utf8Len, nullptr, nullptr);
+                                    return true;
+                                }
+                            }
+                        }
+                    }
                 }
+            }
+        }
+        if (auto* tc = dynamic_cast<wxTextCtrl*>(win)) {
+            wxString sel = tc->GetStringSelection();
+            if (!sel.IsEmpty()) {
+                outText = sel.ToUTF8().data();
+                return true;
             }
         }
     }
@@ -877,6 +901,9 @@ void SelectionService::CheckAndNotifyIfTextSelectedAsync(const SelectionContext&
 
         // 1.1 若 UIA 未命中，检查是否属于自身白名单窗口，尝试直接从 Win32/RichEdit 控件直接提取选区
         if (!detected || text.empty()) {
+            if (!aliveToken->load()) {
+                return;
+            }
             if (GetAllowedWindowSelection(ctx.targetHwnd, ctx.endX, ctx.endY, text)) {
                 if (!text.empty()) {
                     detected = true;
@@ -890,6 +917,9 @@ void SelectionService::CheckAndNotifyIfTextSelectedAsync(const SelectionContext&
         //    当目标应用属于已知受限应用，或者用户做出了明确的强意图选词手势（双击选词 clickCount >= 2，或拖拽划词）时，
         //    信任用户的手势意图，在光标旁静默弹出悬浮图标。真正的复制提取严格延后到用户“主动点击悬浮图标”时才按需触发。
         if (!detected || text.empty()) {
+            if (!aliveToken->load()) {
+                return;
+            }
             bool isNonAxTarget = false;
             if (IsInsideAllowedWindow(ctx.targetHwnd, ctx.endX, ctx.endY)) {
                 isNonAxTarget = true;
@@ -965,8 +995,10 @@ void SelectionService::CheckAndNotifyIfTextSelectedAsync(const SelectionContext&
                 return;
             }
             SelectionContext validCtx = ctx;
-            validCtx.endX = anchorX;
-            validCtx.endY = anchorY;
+            // 划词/选词时，悬浮图标弹出位置严格以鼠标最终弹起释放的物理坐标为基准 (ctx.endX, ctx.endY)
+            // 确保浮动图标准确呈现在用户鼠标释放的光标位置，杜绝被任何跨行无障碍外接矩形偏移
+            validCtx.endX = ctx.endX;
+            validCtx.endY = ctx.endY;
             validCtx.preExtractedText = std::move(text);
             NotifySelectionDetected(validCtx);
         }

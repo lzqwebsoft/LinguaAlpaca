@@ -59,8 +59,10 @@ public:
     // 内部钩子处理函数（Win32 静态转接）
     void OnLowLevelMouseEvent(int message, int x, int y);
 
-private:
+    // 划词触发通知分发函数（公开以支持单元测试与显式注入验证）
     void NotifySelectionDetected(const SelectionContext& ctx);
+
+private:
     void CheckAndNotifyIfTextSelectedAsync(const SelectionContext& ctx);
 
     // 检查当前的鼠标操作是否应被忽略（如自身窗口、拖拽窗口标题栏、滑动滚动条、调节窗体尺寸等非文本选中操作）

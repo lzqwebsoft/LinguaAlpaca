@@ -85,12 +85,17 @@ bool TryExtractFromElement(IUIAutomationElement* pElement, std::string& outText,
                                     long uBound = 0;
                                     SafeArrayGetUBound(pRects, 1, &uBound);
                                     if (uBound >= 3) {
-                                        double left = pData[0];
-                                        double top = pData[1];
-                                        double width = pData[2];
-                                        double height = pData[3];
-                                        outAnchorX = static_cast<int>(left + width);
-                                        outAnchorY = static_cast<int>(top + height + 6);
+                                        // 每个矩形有 4 个 double: left, top, width, height
+                                        // 选区的终点位于最后一个有效矩形（即选区的最后一行/段落末尾）
+                                        long lastIdx = ((uBound + 1) / 4 - 1) * 4;
+                                        if (lastIdx >= 0 && lastIdx + 3 <= uBound) {
+                                            double left = pData[lastIdx];
+                                            double top = pData[lastIdx + 1];
+                                            double width = pData[lastIdx + 2];
+                                            double height = pData[lastIdx + 3];
+                                            outAnchorX = static_cast<int>(left + width);
+                                            outAnchorY = static_cast<int>(top + height + 6);
+                                        }
                                     }
                                     SafeArrayUnaccessData(pRects);
                                 }
@@ -131,6 +136,9 @@ bool TryExtractFromElement(IUIAutomationElement* pElement, std::string& outText,
 } // namespace
 
 bool WinUIAutomationHelper::TryExtract(int x, int y, std::string& outText, int& outAnchorX, int& outAnchorY) {
+    outAnchorX = x;
+    outAnchorY = y;
+
     HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
     bool shouldUninit = SUCCEEDED(hr);
 

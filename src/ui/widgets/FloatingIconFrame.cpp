@@ -63,12 +63,19 @@ static void EnsurePanelSwizzled(Class panelClass) {
 
 namespace LinguaAlpaca::UI {
 
+namespace {
+// 浮动图标尺寸：精致适中（32_dip），兼顾点击便利性与避免遮挡正文
+inline int GetFloatingIconSize() {
+    return 32_dip;
+}
+} // namespace
+
 FloatingIconFrame::FloatingIconFrame(wxWindow* parent)
     : wxFrame(parent, wxID_ANY, "", wxDefaultPosition, wxDefaultSize,
               wxFRAME_NO_TASKBAR | wxSTAY_ON_TOP | wxBORDER_NONE | wxFRAME_TOOL_WINDOW)
     , m_autoHideTimer(this) {
     SetBackgroundStyle(wxBG_STYLE_PAINT);
-    int iconSize = 40_dip;
+    int iconSize = GetFloatingIconSize();
     SetSize(iconSize, iconSize);
 
     InitUI();
@@ -141,7 +148,7 @@ void FloatingIconFrame::RenderLayeredWindow(int screenX, int screenY) {
     if (!hwnd)
         return;
 
-    const int iconSize = 38_dip;
+    const int iconSize = GetFloatingIconSize();
     int w = iconSize;
     int h = iconSize;
     if (w <= 0 || h <= 0)
@@ -173,7 +180,7 @@ void FloatingIconFrame::RenderLayeredWindow(int screenX, int screenY) {
 
             ThemePalette palette = ThemeManager::GetCurrentPalette();
 
-            float pad = 1.5f;
+            float pad = 1.0f;
             float diam = (float)w - 2.0f * pad;
             Gdiplus::RectF circleRect(pad, pad, diam, diam);
 
@@ -214,7 +221,7 @@ void FloatingIconFrame::RenderLayeredWindow(int screenX, int screenY) {
                     }
                     srcBmp.UnlockBits(&bmpData);
 
-                    float imgPad = m_isHovered ? 1.5_dip : 2.0_dip;
+                    float imgPad = m_isHovered ? 1.0_dip : 2.0_dip;
                     Gdiplus::RectF imgRect(imgPad, imgPad, (float)w - 2.0f * imgPad, (float)h - 2.0f * imgPad);
                     g.DrawImage(&srcBmp, imgRect);
                 }
@@ -228,10 +235,10 @@ void FloatingIconFrame::RenderLayeredWindow(int screenX, int screenY) {
                 Gdiplus::SolidBrush hoverGlow(Gdiplus::Color(40, accent.Red(), accent.Green(), accent.Blue()));
                 g.FillEllipse(&hoverGlow, circleRect);
 
-                Gdiplus::Pen hoverPen(Gdiplus::Color(255, accent.Red(), accent.Green(), accent.Blue()), 1.8f);
+                Gdiplus::Pen hoverPen(Gdiplus::Color(255, accent.Red(), accent.Green(), accent.Blue()), 1.5f);
                 g.DrawEllipse(&hoverPen, circleRect);
             } else {
-                Gdiplus::Pen borderPen(Gdiplus::Color(180, 200, 220, 245), 1.2f);
+                Gdiplus::Pen borderPen(Gdiplus::Color(180, 200, 220, 245), 1.0f);
                 g.DrawEllipse(&borderPen, circleRect);
             }
         }
@@ -256,9 +263,9 @@ void FloatingIconFrame::ShowAt(int screenX, int screenY, const SelectionContext&
     m_selectionContext = ctx;
     m_isHovered = false;
     m_isDragging = false;
-    const int iconSize = 40_dip;
-    int targetX = screenX + 8_dip;
-    int targetY = screenY + 10_dip;
+    const int iconSize = GetFloatingIconSize();
+    int targetX = screenX + 6_dip;
+    int targetY = screenY + 8_dip;
 
 #ifdef _WIN32
     POINT pt = {targetX, targetY};
@@ -273,11 +280,11 @@ void FloatingIconFrame::ShowAt(int screenX, int screenY, const SelectionContext&
 
             // 如果右侧超出工作区，则翻转至光标左侧
             if (targetX + iconSize > workRight) {
-                targetX = screenX - iconSize - 8_dip;
+                targetX = screenX - iconSize - 6_dip;
             }
             // 如果底部超出工作区，则翻转至光标上方
             if (targetY + iconSize > workBottom) {
-                targetY = screenY - iconSize - 8_dip;
+                targetY = screenY - iconSize - 6_dip;
             }
 
             // 严格钳位在当前屏幕工作区范围内，杜绝任何越界出屏
@@ -305,10 +312,10 @@ void FloatingIconFrame::ShowAt(int screenX, int screenY, const SelectionContext&
         wxDisplay display(displayIdx);
         wxRect geom = display.GetClientArea();
         if (targetX + iconSize > geom.GetRight()) {
-            targetX = screenX - iconSize - 8_dip;
+            targetX = screenX - iconSize - 6_dip;
         }
         if (targetY + iconSize > geom.GetBottom()) {
-            targetY = screenY - iconSize - 8_dip;
+            targetY = screenY - iconSize - 6_dip;
         }
         if (targetX > geom.GetRight() - iconSize - 4_dip)
             targetX = geom.GetRight() - iconSize - 4_dip;
@@ -385,7 +392,7 @@ void FloatingIconFrame::OnPaint(wxPaintEvent& WXUNUSED(event)) {
     CGContextRef cgContext = (CGContextRef)gc->GetNativeContext();
     if (cgContext) {
         CGContextSaveGState(cgContext);
-        CGContextAddEllipseInRect(cgContext, CGRectMake(1.5, 1.5, w - 3.0, h - 3.0));
+        CGContextAddEllipseInRect(cgContext, CGRectMake(1.0, 1.0, w - 2.0, h - 2.0));
         CGContextClip(cgContext);
     }
 #endif
@@ -393,7 +400,7 @@ void FloatingIconFrame::OnPaint(wxPaintEvent& WXUNUSED(event)) {
     // 绘制纯白底色平滑抗锯齿基底卡片
     gc->SetBrush(*wxWHITE_BRUSH);
     gc->SetPen(*wxTRANSPARENT_PEN);
-    gc->DrawEllipse(1.5, 1.5, w - 3.0, h - 3.0);
+    gc->DrawEllipse(1.0, 1.0, w - 2.0, h - 2.0);
 
     // 2. 从原始 500x500 高清图像创建 CoreGraphics 纹理，在 Retina 高分屏下实现原生全像素抗锯齿渲染
     wxImage logoImg = IconManager::GetAppLogoImage();
@@ -402,7 +409,7 @@ void FloatingIconFrame::OnPaint(wxPaintEvent& WXUNUSED(event)) {
     }
     if (logoImg.IsOk()) {
         wxGraphicsBitmap gbmp = gc->CreateBitmapFromImage(logoImg);
-        double pad = 2.0_dip;
+        double pad = m_isHovered ? 1.0_dip : 2.0_dip;
         gc->DrawBitmap(gbmp, pad, pad, w - 2.0 * pad, h - 2.0 * pad);
     }
 
@@ -416,14 +423,14 @@ void FloatingIconFrame::OnPaint(wxPaintEvent& WXUNUSED(event)) {
     ThemePalette palette = ThemeManager::GetCurrentPalette();
     if (m_isHovered) {
         gc->SetBrush(wxBrush(wxColour(palette.accentPrimary.Red(), palette.accentPrimary.Green(), palette.accentPrimary.Blue(), 40)));
-        wxGraphicsPen hoverPen = gc->CreatePen(wxGraphicsPenInfo(palette.accentPrimary).Width(1.8));
+        wxGraphicsPen hoverPen = gc->CreatePen(wxGraphicsPenInfo(palette.accentPrimary).Width(1.5));
         gc->SetPen(hoverPen);
-        gc->DrawEllipse(1.5, 1.5, w - 3.0, h - 3.0);
+        gc->DrawEllipse(1.0, 1.0, w - 2.0, h - 2.0);
     } else {
         gc->SetBrush(*wxTRANSPARENT_BRUSH);
-        wxGraphicsPen borderPen = gc->CreatePen(wxGraphicsPenInfo(wxColour(180, 200, 220, 245)).Width(1.2));
+        wxGraphicsPen borderPen = gc->CreatePen(wxGraphicsPenInfo(wxColour(180, 200, 220, 245)).Width(1.0));
         gc->SetPen(borderPen);
-        gc->DrawEllipse(1.5, 1.5, w - 3.0, h - 3.0);
+        gc->DrawEllipse(1.0, 1.0, w - 2.0, h - 2.0);
     }
 #endif
 }
@@ -483,7 +490,7 @@ void FloatingIconFrame::OnMouseMove(wxMouseEvent& event) {
         if (m_isDragging) {
             int targetX = m_dragStartFramePos.x + dx;
             int targetY = m_dragStartFramePos.y + dy;
-            const int iconSize = 40_dip;
+            const int iconSize = GetFloatingIconSize();
 
 #ifdef _WIN32
             POINT pt = {targetX, targetY};

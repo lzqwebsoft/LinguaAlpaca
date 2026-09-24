@@ -38,13 +38,17 @@ fi
 DMG_NAME="${APP_NAME}-${VERSION}-macOS-${ARCH}.dmg"
 DMG_PATH="${DIST_DIR}/${DMG_NAME}"
 
+# 代码签名身份配置 (支持命令行第4参数或环境变量，默认使用 lzqwebsoft@gmail.com 个人证书)
+SIGN_IDENTITY="${4:-${SIGN_IDENTITY:-lzqwebsoft@gmail.com}}"
+
 echo "================================================================================"
 echo " [LinguaAlpaca] Starting macOS Standalone App Packaging"
 echo "================================================================================"
-echo " Project Root:  ${PROJECT_ROOT}"
-echo " Build Dir:     ${BUILD_DIR}"
-echo " Target Bundle: ${DEST_APP}"
-echo " Output DMG:    ${DMG_PATH}"
+echo " Project Root:   ${PROJECT_ROOT}"
+echo " Build Dir:      ${BUILD_DIR}"
+echo " Target Bundle:  ${DEST_APP}"
+echo " Output DMG:     ${DMG_PATH}"
+echo " Sign Identity:  ${SIGN_IDENTITY}"
 echo "================================================================================"
 
 # 1. 验证编译产物存在
@@ -240,19 +244,24 @@ if [ -d "${PROJECT_ROOT}/resources/en.lproj" ]; then
     cp -R "${PROJECT_ROOT}/resources/en.lproj" "${DEST_APP}/Contents/Resources/"
 fi
 
-# 6. 递归执行 Ad-hoc 代码签名 (Apple Silicon 兼容性保障)
-echo "[5/6] Performing recursive Ad-hoc code signing..."
+# 6. 递归执行代码签名 (优先使用 lzqwebsoft@gmail.com 个人证书签名，保持签名与 TCC 权限的一致性)
+if ! security find-certificate -c "${SIGN_IDENTITY}" >/dev/null 2>&1; then
+    echo "  Notice: Certificate '${SIGN_IDENTITY}' not found in keychain, falling back to Ad-hoc (-)"
+    SIGN_IDENTITY="-"
+fi
+
+echo "[5/6] Performing recursive code signing with identity: '${SIGN_IDENTITY}'..."
 # 先对 Frameworks 目录所有动态库单独签名
 find "${DEST_APP}/Contents/Frameworks" -type f -name "*.dylib" -o -name "*.dylib.*" | while read -r dylib; do
-    codesign --force --sign - --timestamp=none "${dylib}"
+    codesign --force --sign "${SIGN_IDENTITY}" --timestamp=none "${dylib}"
 done
 
 # 对 MacOS 二进制签名
-codesign --force --sign - --timestamp=none "${DEST_APP}/Contents/MacOS/llama-server"
-codesign --force --sign - --timestamp=none "${DEST_APP}/Contents/MacOS/LinguaAlpaca"
+codesign --force --sign "${SIGN_IDENTITY}" --timestamp=none "${DEST_APP}/Contents/MacOS/llama-server"
+codesign --force --sign "${SIGN_IDENTITY}" --timestamp=none "${DEST_APP}/Contents/MacOS/LinguaAlpaca"
 
 # 对整个 App Bundle 签名
-codesign --force --deep --sign - --timestamp=none "${DEST_APP}"
+codesign --force --deep --sign "${SIGN_IDENTITY}" --timestamp=none "${DEST_APP}"
 
 # 验证签名有效性
 echo "  Verifying code signature integrity..."

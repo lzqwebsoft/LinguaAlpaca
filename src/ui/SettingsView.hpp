@@ -12,6 +12,7 @@
 #include "widgets/CustomInputBox.hpp"
 #include "widgets/LeftAlignedRadioBox.hpp"
 #include "widgets/ScrollBar.hpp"
+#include "widgets/SegmentedBar.hpp"
 #include "widgets/StatusBadge.hpp"
 #include "widgets/TextCtrl.hpp"
 
@@ -36,6 +37,13 @@ private:
     void OnSize(wxSizeEvent& event);
     void OnMouseWheel(wxMouseEvent& event);
     void BindMouseWheelRecursively(wxWindow* win);
+    void OnSegmentChanged(int index);
+    void UpdateSegmentFromScroll();
+    void SetupCardStyle(wxPanel* card);
+    void SetupInnerConsoleStyle(wxPanel* panel);
+    void SetupRoundedPanelStyle(wxPanel* panel, float radiusDip, bool isInner = false);
+    void CopyApiUrl(TargetModelType type, const wxString& modelTypeName);
+    static wxString FormatNumberWithCommas(uint32_t num);
 
     // 翻译模型事件
     void OnBrowseModel(wxCommandEvent& event);
@@ -64,11 +72,55 @@ private:
     wxTimer m_statusTimer;
 
     // 视口容器、内容画板与自定义滚动条
+    wxPanel* m_topStickyPanel{nullptr};
+    wxStaticText* m_subTitleText{nullptr};
+    SegmentedBar* m_segmentedBar{nullptr};
+    bool m_isProgrammaticScrolling{false};
+
     wxPanel* m_viewport{nullptr};
     wxPanel* m_contentPanel{nullptr};
     wxBoxSizer* m_mainSizer{nullptr};
     ScrollBar* m_scrollBar{nullptr};
     int m_scrollOffsetY{0};
+
+    // 布局与滚动几何缓存 (消除滚轮滚动时的 Win32 IPC 开销)
+    int m_cachedSelY{0};
+    int m_cachedDictY{0};
+    int m_cachedLogY{0};
+    int m_cachedMaxScroll{0};
+
+    // 状态更新缓存 (消除定时器重复磁盘 I/O 与 Label 重设)
+    ServerHealthState m_lastTransState{ServerHealthState::Unconfigured};
+    int m_lastTransPort{-1};
+    wxString m_lastTransPath;
+    bool m_lastTransFileExists{false};
+
+    ServerHealthState m_lastOcrState{ServerHealthState::Unconfigured};
+    int m_lastOcrPort{-1};
+    wxString m_lastOcrMainPath;
+    wxString m_lastOcrMmprojPath;
+    bool m_lastOcrFileExists{false};
+
+    // 词典渲染缓存 (避免无变化的重复销毁重建)
+    struct RenderedDictKey {
+        std::string bookName;
+        std::string ifoPath;
+        uint32_t wordCount{0};
+    };
+    std::vector<RenderedDictKey> m_renderedDictKeys;
+    ThemeMode m_renderedTheme{ThemeMode::Light};
+
+    // 顶部标题图标与各 Group 卡片标题图标 (支持统一 accentPrimary 配色与动态主题切换)
+    wxStaticBitmap* m_headerTitleIcon{nullptr};
+    wxStaticBitmap* m_modelCardIcon{nullptr};
+    wxStaticBitmap* m_modelInfoIcon{nullptr};
+    wxStaticBitmap* m_ocrTitleIcon{nullptr};
+    wxStaticBitmap* m_ocrInfoIcon{nullptr};
+    wxStaticBitmap* m_selectionTitleIcon{nullptr};
+    wxStaticBitmap* m_dictTitleIcon{nullptr};
+    wxStaticBitmap* m_dictInfoIcon{nullptr};
+    wxStaticBitmap* m_logTitleIcon{nullptr};
+    wxStaticBitmap* m_prefTitleIcon{nullptr};
 
     // UI Elements - 1. 翻译模型 Group
     wxStaticText* m_titleText{nullptr};
@@ -76,6 +128,7 @@ private:
     wxStaticText* m_modelCardTitle{nullptr};
     StatusBadge* m_statusBadge{nullptr};
 
+    wxStaticText* m_modelPathLabel{nullptr};
     CustomInputBox* m_modelPathCtrl{nullptr};
     CustomButton* m_browseBtn{nullptr};
     CustomButton* m_openDirBtn{nullptr};
@@ -168,7 +221,8 @@ private:
     CustomButton* m_dictReloadBtn{nullptr};
     wxStaticText* m_dictStatusText{nullptr};
     wxStaticText* m_dictListTitleText{nullptr};
-    TextCtrl* m_dictListInfoCtrl{nullptr};
+    wxPanel* m_dictListContainer{nullptr};
+    wxBoxSizer* m_dictListSizer{nullptr};
     wxHyperlinkCtrl* m_dictDownloadLink{nullptr};
 
     void OnBrowseDictDir(wxCommandEvent& event);

@@ -142,6 +142,8 @@ set(UI_SOURCES
     src/ui/widgets/StatusBadge.cpp
     src/ui/widgets/SidebarNav.hpp
     src/ui/widgets/SidebarNav.cpp
+    src/ui/widgets/SegmentedBar.hpp
+    src/ui/widgets/SegmentedBar.cpp
     src/ui/widgets/CardPanel.hpp
     src/ui/widgets/CardPanel.cpp
     src/ui/widgets/CustomTableView.hpp

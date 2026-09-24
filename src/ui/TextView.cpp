@@ -1,5 +1,6 @@
 #include "TextView.hpp"
 #include "core/ClipboardHelper.hpp"
+#include "core/SelectionService.hpp"
 #include "core/WinTtsHelper.hpp"
 #include "theme/IconManager.hpp"
 #include "theme/Theme.hpp"
@@ -56,11 +57,45 @@ void TextView::InitUI() {
     m_titleText->SetFont(ThemeFont::GetFont(FontRole::DisplayTitle));
     m_titleText->SetForegroundColour(palette.textPrimary);
 
+    // 权限状态监控区 (针对 macOS 辅助功能与 Ad-hoc 签名动态提示)
+    m_permBadge = new StatusBadge(this);
+    m_permBadge->SetCursor(wxCursor(wxCURSOR_HAND));
+    m_permBadge->Hide();
+
+    m_permBadge->Bind(wxEVT_LEFT_UP, [](wxMouseEvent&) {
+        if (!SelectionService::IsAccessibilityGranted()) {
+            SelectionService::OpenAccessibilitySettings();
+        } else if (auto* svc = SelectionService::GetActiveService(); svc && svc->NeedsRestartForAccessibility()) {
+            SelectionService::RestartApplication();
+        }
+    });
+
+    m_permSettingsBtn = new CustomButton(this, wxID_ANY, L"去授权", ButtonStyle::Secondary, wxDefaultPosition, dip(80, 28));
+    m_permSettingsBtn->SetIcon(SVG::SETTINGS, dip(14, 14));
+    m_permSettingsBtn->SetToolTip(L"打开系统设置以授予辅助功能权限，以开启全局划词翻译与选区取词");
+    m_permSettingsBtn->Hide();
+
+    m_permSettingsBtn->Bind(wxEVT_BUTTON, [](wxCommandEvent&) {
+        SelectionService::OpenAccessibilitySettings();
+    });
+
+    m_permRestartBtn = new CustomButton(this, wxID_ANY, L"重启生效", ButtonStyle::Green, wxDefaultPosition, dip(86, 28));
+    m_permRestartBtn->SetIcon(SVG::REPLACE, dip(14, 14), *wxWHITE);
+    m_permRestartBtn->SetToolTip(L"辅助功能权限已允许！点击立即重启应用以重新加载 Ad-hoc 签名授权凭据并激活划词服务");
+    m_permRestartBtn->Hide();
+
+    m_permRestartBtn->Bind(wxEVT_BUTTON, [](wxCommandEvent&) {
+        SelectionService::RestartApplication();
+    });
+
     m_statusBadge = new StatusBadge(this);
 
     headerSizer->Add(titleIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10_dip);
     headerSizer->Add(m_titleText, 0, wxALIGN_CENTER_VERTICAL);
     headerSizer->AddStretchSpacer(1);
+    headerSizer->Add(m_permBadge, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8_dip);
+    headerSizer->Add(m_permSettingsBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8_dip);
+    headerSizer->Add(m_permRestartBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8_dip);
     headerSizer->Add(m_statusBadge, 0, wxALIGN_CENTER_VERTICAL);
 
     mainSizer->Add(headerSizer, 0, wxEXPAND | wxALL, 20_dip);
@@ -218,6 +253,116 @@ void TextView::UpdateStatusBadge() {
     }
 
     m_statusBadge->SetStatus(info.state, label);
+
+    // 权限监听与 Ad-hoc 授权状态检测更新
+    bool selectionEnabled = true;
+    if (m_modelManager && m_modelManager->GetConfigManager()) {
+        selectionEnabled = m_modelManager->GetConfigManager()->GetConfig().selectionTranslateEnabled;
+    }
+
+    bool layoutNeeded = false;
+#if defined(__APPLE__)
+    if (selectionEnabled) {
+        bool isGranted = SelectionService::IsAccessibilityGranted();
+        auto* selService = SelectionService::GetActiveService();
+        bool needsRestart = selService ? selService->NeedsRestartForAccessibility() : false;
+
+        auto palette = ThemeColors::GetCurrentPalette();
+        bool isDark = (palette.windowBg.Red() < 100);
+
+        if (!isGranted) {
+            // 状态 1：尚未获得辅助功能权限
+            wxColour fg = isDark ? wxColour(251, 146, 60) : wxColour(194, 65, 12);
+            wxColour bg = isDark ? wxColour(124, 45, 18, 180) : wxColour(255, 247, 237);
+            wxColour border = isDark ? wxColour(234, 88, 12, 140) : wxColour(254, 215, 170);
+
+            if (m_permBadge) {
+                m_permBadge->SetStatus(L"●  划词辅助功能未授权", fg, bg, border);
+                if (!m_permBadge->IsShown()) {
+                    m_permBadge->Show(true);
+                    layoutNeeded = true;
+                }
+            }
+            if (m_permSettingsBtn && !m_permSettingsBtn->IsShown()) {
+                m_permSettingsBtn->Show(true);
+                layoutNeeded = true;
+            }
+            if (m_permRestartBtn && m_permRestartBtn->IsShown()) {
+                m_permRestartBtn->Show(false);
+                layoutNeeded = true;
+            }
+        } else if (needsRestart) {
+            // 状态 2：用户已在系统设置中勾选允许，但在本次运行启动时未授权（或 Ad-hoc 签名需重载），需重启生效
+            if (selService) {
+                selService->TryRecoverEventTap();
+            }
+
+            wxColour fg = isDark ? wxColour(96, 165, 250) : wxColour(29, 78, 216);
+            wxColour bg = isDark ? wxColour(30, 58, 138, 180) : wxColour(239, 246, 255);
+            wxColour border = isDark ? wxColour(59, 130, 246, 140) : wxColour(191, 219, 254);
+
+            if (m_permBadge) {
+                m_permBadge->SetStatus(L"●  权限已开 (需重启)", fg, bg, border);
+                if (!m_permBadge->IsShown()) {
+                    m_permBadge->Show(true);
+                    layoutNeeded = true;
+                }
+            }
+            if (m_permSettingsBtn && m_permSettingsBtn->IsShown()) {
+                m_permSettingsBtn->Show(false);
+                layoutNeeded = true;
+            }
+            if (m_permRestartBtn && !m_permRestartBtn->IsShown()) {
+                m_permRestartBtn->Show(true);
+                layoutNeeded = true;
+            }
+        } else {
+            // 状态 3：已授权且正常就绪，隐藏权限警示与引导按钮
+            if (m_permBadge && m_permBadge->IsShown()) {
+                m_permBadge->Show(false);
+                layoutNeeded = true;
+            }
+            if (m_permSettingsBtn && m_permSettingsBtn->IsShown()) {
+                m_permSettingsBtn->Show(false);
+                layoutNeeded = true;
+            }
+            if (m_permRestartBtn && m_permRestartBtn->IsShown()) {
+                m_permRestartBtn->Show(false);
+                layoutNeeded = true;
+            }
+        }
+    } else {
+        if (m_permBadge && m_permBadge->IsShown()) {
+            m_permBadge->Show(false);
+            layoutNeeded = true;
+        }
+        if (m_permSettingsBtn && m_permSettingsBtn->IsShown()) {
+            m_permSettingsBtn->Show(false);
+            layoutNeeded = true;
+        }
+        if (m_permRestartBtn && m_permRestartBtn->IsShown()) {
+            m_permRestartBtn->Show(false);
+            layoutNeeded = true;
+        }
+    }
+#else
+    if (m_permBadge && m_permBadge->IsShown()) {
+        m_permBadge->Show(false);
+        layoutNeeded = true;
+    }
+    if (m_permSettingsBtn && m_permSettingsBtn->IsShown()) {
+        m_permSettingsBtn->Show(false);
+        layoutNeeded = true;
+    }
+    if (m_permRestartBtn && m_permRestartBtn->IsShown()) {
+        m_permRestartBtn->Show(false);
+        layoutNeeded = true;
+    }
+#endif
+
+    if (layoutNeeded) {
+        Layout();
+    }
 }
 
 void TextView::UpdateTheme() {
@@ -236,6 +381,11 @@ void TextView::UpdateTheme() {
         m_sourceCard->UpdateTheme();
     if (m_targetCard)
         m_targetCard->UpdateTheme();
+
+    if (m_permSettingsBtn)
+        m_permSettingsBtn->Refresh();
+    if (m_permRestartBtn)
+        m_permRestartBtn->Refresh();
 
     if (m_translateBtn)
         m_translateBtn->Refresh();

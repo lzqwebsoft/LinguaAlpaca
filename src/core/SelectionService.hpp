@@ -44,6 +44,17 @@ public:
     // 检查当前是否在运行
     bool IsRunning() const { return m_isRunning.load(); }
 
+    // 权限与平台辅助方法
+    static bool IsAccessibilityGranted();
+    static bool OpenAccessibilitySettings();
+    static void RestartApplication();
+
+    // 检查是否需要重启应用以完全应用辅助功能权限 (针对 Ad-hoc 签名与运行时后赋权场景)
+    bool NeedsRestartForAccessibility() const;
+
+    // 尝试在运行时热恢复 CGEventTap (若用户授权后无需重启即可生效)
+    bool TryRecoverEventTap();
+
     // 注册划词手势触发回调 (单纯显示悬浮按钮)
     void SetCallback(SelectionDetectedCallback callback);
 
@@ -70,6 +81,7 @@ private:
 
     std::shared_ptr<ConfigManager> m_configManager;
     std::atomic<bool> m_isRunning{false};
+    std::atomic<bool> m_hadPermissionAtStartup{false};
 
     // 配置缓存（线程安全读取）
     std::atomic<bool> m_enabled{true};

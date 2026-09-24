@@ -42,6 +42,9 @@ private:
     CardPanel* m_targetCard{nullptr};
 
     wxStaticText* m_titleText{nullptr};
+    StatusBadge* m_permBadge{nullptr};
+    CustomButton* m_permSettingsBtn{nullptr};
+    CustomButton* m_permRestartBtn{nullptr};
     StatusBadge* m_statusBadge{nullptr};
 
     wxPanel* m_langPanel{nullptr};

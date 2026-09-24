@@ -33,6 +33,7 @@
 #import <ApplicationServices/ApplicationServices.h>
 #import <Carbon/Carbon.h>
 #include <unistd.h>
+#include <mach-o/dyld.h>
 #endif
 
 namespace LinguaAlpaca {
@@ -378,10 +379,12 @@ bool SelectionService::Start() {
     return true;
 #elif defined(__APPLE__)
     @autoreleasepool {
-        NSDictionary* options = @{(__bridge id)kAXTrustedCheckOptionPrompt: @YES};
-        bool trusted = AXIsProcessTrustedWithOptions((__bridge CFDictionaryRef)options);
+        bool trusted = IsAccessibilityGranted();
+        m_hadPermissionAtStartup.store(trusted);
         if (!trusted) {
             LOG_WARN("SelectionService", "macOS Accessibility permission not granted yet; prompted user via system dialog.");
+            NSDictionary* options = @{(__bridge id)kAXTrustedCheckOptionPrompt: @YES};
+            AXIsProcessTrustedWithOptions((__bridge CFDictionaryRef)options);
         }
 
         // 1. 优先使用系统底层 CGEventTap (在 WindowServer 级别监听鼠标事件)
@@ -1120,4 +1123,128 @@ void SelectionService::ExtractSelectionAsync(const SelectionContext& ctx, std::f
         }
     }).detach();
 }
+
+bool SelectionService::IsAccessibilityGranted() {
+#if defined(__APPLE__)
+    @autoreleasepool {
+        NSDictionary* options = @{(__bridge id)kAXTrustedCheckOptionPrompt: @NO};
+        return AXIsProcessTrustedWithOptions((__bridge CFDictionaryRef)options);
+    }
+#else
+    return true;
+#endif
+}
+
+bool SelectionService::OpenAccessibilitySettings() {
+#if defined(__APPLE__)
+    @autoreleasepool {
+        // 1. 弹出系统权限请求对话框 (若尚未记录)
+        NSDictionary* options = @{(__bridge id)kAXTrustedCheckOptionPrompt: @YES};
+        AXIsProcessTrustedWithOptions((__bridge CFDictionaryRef)options);
+
+        // 2. 打开系统设置对应辅助功能页面
+        NSURL* url = [NSURL URLWithString:@"x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"];
+        if (!url || ![[NSWorkspace sharedWorkspace] openURL:url]) {
+            url = [NSURL URLWithString:@"x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension"];
+            if (url) {
+                [[NSWorkspace sharedWorkspace] openURL:url];
+            }
+        }
+        return true;
+    }
+#else
+    return false;
+#endif
+}
+
+void SelectionService::RestartApplication() {
+    LOG_INFO("SelectionService", "RestartApplication requested, relaunching app...");
+#if defined(__APPLE__)
+    @autoreleasepool {
+        NSString* bundlePath = [[NSBundle mainBundle] bundlePath];
+        if (bundlePath && [bundlePath hasSuffix:@".app"]) {
+            std::string path = [bundlePath UTF8String];
+            std::string cmd = "sh -c 'sleep 0.3; open -n \"" + path + "\"' &";
+            system(cmd.c_str());
+        } else {
+            char exePath[PATH_MAX] = {0};
+            uint32_t size = sizeof(exePath);
+            if (_NSGetExecutablePath(exePath, &size) == 0) {
+                std::string path(exePath);
+                std::string cmd = "sh -c 'sleep 0.3; \"" + path + "\"' &";
+                system(cmd.c_str());
+            }
+        }
+    }
+#elif defined(_WIN32)
+    wchar_t szPath[MAX_PATH];
+    if (GetModuleFileNameW(nullptr, szPath, MAX_PATH)) {
+        std::wstring cmd = L"cmd /c timeout /t 1 /nobreak >nul & start \"\" \"" + std::wstring(szPath) + L"\"";
+        _wsystem(cmd.c_str());
+    }
+#endif
+
+    if (wxTheApp) {
+        wxTheApp->CallAfter([]() {
+            if (wxTheApp->GetTopWindow()) {
+                wxTheApp->GetTopWindow()->Close(true);
+            } else {
+                wxTheApp->ExitMainLoop();
+            }
+        });
+    }
+}
+
+bool SelectionService::NeedsRestartForAccessibility() const {
+#if defined(__APPLE__)
+    if (IsAccessibilityGranted()) {
+        // 如果当前系统已授予辅助功能权限，但本次启动时未被允许（说明是当前运行期间被允许的），
+        // 或者底层 CGEventTap 仍未能建立（Ad-hoc 签名导致 WindowServer 尚未刷新凭证），
+        // 则需要重启应用以使权限完全生效
+        if (!m_hadPermissionAtStartup.load() || m_eventTap == nullptr) {
+            return true;
+        }
+    }
+    return false;
+#else
+    return false;
+#endif
+}
+
+bool SelectionService::TryRecoverEventTap() {
+#if defined(__APPLE__)
+    if (m_eventTap) {
+        return true;
+    }
+    if (!IsAccessibilityGranted()) {
+        return false;
+    }
+    CGEventMask tapMask = (CGEventMaskBit(kCGEventLeftMouseDown) | CGEventMaskBit(kCGEventLeftMouseUp));
+    CFMachPortRef eventTap = CGEventTapCreate(
+        kCGSessionEventTap,
+        kCGHeadInsertEventTap,
+        kCGEventTapOptionListenOnly,
+        tapMask,
+        SelectionCGEventTapCallback,
+        this
+    );
+    if (eventTap) {
+        CFRunLoopSourceRef runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, eventTap, 0);
+        if (runLoopSource) {
+            CFRunLoopAddSource(CFRunLoopGetMain(), runLoopSource, kCFRunLoopCommonModes);
+            CGEventTapEnable(eventTap, true);
+            m_eventTap = static_cast<void*>(eventTap);
+            m_runLoopSource = static_cast<void*>(runLoopSource);
+            m_isRunning.store(true);
+            LOG_INFO("SelectionService", "macOS CGEventTap recovered dynamically on the fly!");
+            return true;
+        }
+        CFRelease(eventTap);
+    }
+    return false;
+#else
+    return true;
+#endif
+}
+
 } // namespace LinguaAlpaca

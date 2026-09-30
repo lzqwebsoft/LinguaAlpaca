@@ -67,6 +67,12 @@ private:
     void OnOcrGpuModeChanged(wxCommandEvent& event);
     void UpdateOcrStatus();
 
+    // 版面分析模型事件
+    void OnBrowseLayoutModel(wxCommandEvent& event);
+    void OnSaveLayoutConfig(wxCommandEvent& event);
+    void OnTestLayoutModel(wxCommandEvent& event);
+    void UpdateLayoutStatus();
+
     std::shared_ptr<ModelManager> m_modelManager;
     std::shared_ptr<ConfigManager> m_configManager;
     wxTimer m_statusTimer;
@@ -101,6 +107,9 @@ private:
     wxString m_lastOcrMmprojPath;
     bool m_lastOcrFileExists{false};
 
+    wxString m_lastLayoutPath;
+    bool m_lastLayoutFileExists{false};
+
     // 词典渲染缓存 (避免无变化的重复销毁重建)
     struct RenderedDictKey {
         std::string bookName;
@@ -116,6 +125,8 @@ private:
     wxStaticBitmap* m_modelInfoIcon{nullptr};
     wxStaticBitmap* m_ocrTitleIcon{nullptr};
     wxStaticBitmap* m_ocrInfoIcon{nullptr};
+    wxStaticBitmap* m_layoutTitleIcon{nullptr};
+    wxStaticBitmap* m_layoutInfoIcon{nullptr};
     wxStaticBitmap* m_selectionTitleIcon{nullptr};
     wxStaticBitmap* m_dictTitleIcon{nullptr};
     wxStaticBitmap* m_dictInfoIcon{nullptr};
@@ -193,6 +204,26 @@ private:
     wxPanel* m_ocrFooterPanel{nullptr};
     wxStaticText* m_ocrFooterText{nullptr};
     wxHyperlinkCtrl* m_ocrModelLink{nullptr};
+
+    // UI Elements - 2.5 文档版面分析模型 Group
+    wxPanel* m_layoutCard{nullptr};
+    wxStaticText* m_layoutTitleText{nullptr};
+    StatusBadge* m_layoutStatusBadge{nullptr};
+
+    wxStaticText* m_layoutPathLabel{nullptr};
+    CustomInputBox* m_layoutPathCtrl{nullptr};
+    CustomButton* m_layoutBrowseBtn{nullptr};
+    CustomButton* m_layoutOpenDirBtn{nullptr};
+
+    wxStaticText* m_layoutProviderLabel{nullptr};
+    CustomChoice* m_layoutProviderChoice{nullptr};
+
+    CustomButton* m_layoutSaveBtn{nullptr};
+    CustomButton* m_layoutTestBtn{nullptr};
+
+    wxPanel* m_layoutFooterPanel{nullptr};
+    wxStaticText* m_layoutFooterText{nullptr};
+    wxHyperlinkCtrl* m_layoutModelLink{nullptr};
 
     // UI Elements - 3. 划词翻译 Group
     wxPanel* m_selectionCard{nullptr};

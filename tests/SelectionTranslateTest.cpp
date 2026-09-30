@@ -1,5 +1,6 @@
 #include <catch2/catch.hpp>
 #include <wx/wx.h>
+#include <wx/clipbrd.h>
 #include "core/Config.hpp"
 #include "core/Logger.hpp"
 #include "core/ClipboardHelper.hpp"
@@ -54,6 +55,28 @@ TEST_CASE("ClipboardHelper - Image Handling and Verification", "[core][clipboard
             REQUIRE(img.IsOk());
             REQUIRE(!fileName.IsEmpty());
             REQUIRE(!filePath.IsEmpty());
+            REQUIRE(wxFileExists(filePath));
+        }
+    }
+
+    SECTION("Bitmap clipboard paste produces real file on disk") {
+        wxInitAllImageHandlers();
+        wxBitmap bmp(32, 32, 24);
+        if (wxTheClipboard && wxTheClipboard->Open()) {
+            wxTheClipboard->SetData(new wxBitmapDataObject(bmp));
+            wxTheClipboard->Flush();
+            wxTheClipboard->Close();
+        }
+
+        wxImage retrievedImg;
+        wxString fileName;
+        wxString filePath;
+        bool ok = ClipboardHelper::GetClipboardImage(retrievedImg, &fileName, &filePath);
+        if (ok) {
+            REQUIRE(retrievedImg.IsOk());
+            REQUIRE(!filePath.IsEmpty());
+            REQUIRE(filePath != L"[剪贴板截图]");
+            REQUIRE(wxFileExists(filePath));
         }
     }
 }

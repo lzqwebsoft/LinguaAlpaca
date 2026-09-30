@@ -11,7 +11,11 @@ using namespace LinguaAlpaca;
 
 class TestApp : public wxApp {
 public:
-    bool OnInit() override { return true; }
+    bool OnInit() override {
+        SetAppName("LinguaAlpaca");
+        wxInitAllImageHandlers();
+        return true;
+    }
 };
 wxIMPLEMENT_APP_NO_MAIN(TestApp);
 

@@ -103,6 +103,16 @@ namespace LinguaAlpaca {
         Save();
     }
 
+    void ConfigManager::SaveLayoutConfig(const std::string& layoutModelPath, int executionProvider, int threads) {
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            m_config.layoutModelPath = layoutModelPath;
+            m_config.layoutExecutionProvider = executionProvider;
+            m_config.layoutThreads = threads;
+        }
+        Save();
+    }
+
     void ConfigManager::SaveThemeMode(const std::string& themeMode) {
         {
             std::lock_guard<std::mutex> lock(m_mutex);
@@ -168,6 +178,9 @@ namespace LinguaAlpaca {
         m_config.modelPath = fileConfig.Read("/Model/Path", "").ToUTF8().data();
         m_config.ocrModelPath = fileConfig.Read("/OCRModel/Path", "models/PaddleOCR-VL-1.6.gguf").ToUTF8().data();
         m_config.ocrMmprojPath = fileConfig.Read("/OCRModel/MmprojPath", "models/PaddleOCR-VL-1.6-mmproj.gguf").ToUTF8().data();
+        m_config.layoutModelPath = fileConfig.Read("/LayoutModel/Path", "models/PP-DocLayoutV2.onnx").ToUTF8().data();
+        m_config.layoutExecutionProvider = fileConfig.ReadLong("/LayoutModel/ExecutionProvider", 0);
+        m_config.layoutThreads = fileConfig.ReadLong("/LayoutModel/Threads", 0);
         m_config.themeMode = fileConfig.Read("/UI/Theme", "Light").ToUTF8().data();
         m_config.autoRead = fileConfig.ReadBool("/UI/AutoRead", false);
         m_config.selectionAutoTranslate = fileConfig.ReadBool("/UI/SelectionAutoTranslate", true);
@@ -230,6 +243,9 @@ namespace LinguaAlpaca {
         fileConfig.Write("/OCRModel/Port", (long)m_config.ocrPort);
         fileConfig.Write("/OCRModel/CtxSize", (long)m_config.ocrCtxSize);
         fileConfig.Write("/OCRModel/Threads", (long)m_config.ocrThreads);
+        fileConfig.Write("/LayoutModel/Path", wxString::FromUTF8(m_config.layoutModelPath));
+        fileConfig.Write("/LayoutModel/ExecutionProvider", (long)m_config.layoutExecutionProvider);
+        fileConfig.Write("/LayoutModel/Threads", (long)m_config.layoutThreads);
 
         // 划词翻译配置
         fileConfig.Write("/Selection/Enabled", m_config.selectionTranslateEnabled);

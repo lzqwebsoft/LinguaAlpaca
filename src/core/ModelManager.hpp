@@ -16,7 +16,10 @@
 
 namespace LinguaAlpaca {
 
-class ModelManager {
+class DocLayoutEngine;
+class DocumentPipeline;
+
+class ModelManager : public std::enable_shared_from_this<ModelManager> {
 public:
     explicit ModelManager(std::shared_ptr<ConfigManager> configManager);
     ~ModelManager();
@@ -78,6 +81,8 @@ public:
 
     std::shared_ptr<ConfigManager> GetConfigManager() const { return m_configManager; }
     std::shared_ptr<DictEngine> GetDictEngine() const { return m_dictEngine; }
+    std::shared_ptr<DocLayoutEngine> GetDocLayoutEngine() const { return m_layoutEngine; }
+    std::shared_ptr<DocumentPipeline> GetDocumentPipeline();
 
 private:
     std::shared_ptr<ConfigManager> m_configManager;
@@ -86,6 +91,9 @@ private:
     std::shared_ptr<LlamaClient> m_transClient;
     std::shared_ptr<LlamaClient> m_ocrClient;
     std::shared_ptr<DictEngine> m_dictEngine;
+    std::shared_ptr<DocLayoutEngine> m_layoutEngine;
+    std::shared_ptr<DocumentPipeline> m_documentPipeline;
+    mutable std::mutex m_pipelineMutex;
 
     std::shared_ptr<std::atomic<bool>> m_aliveToken;
     std::atomic<bool> m_isTransSwitching{false};

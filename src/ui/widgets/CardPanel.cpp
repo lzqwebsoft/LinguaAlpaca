@@ -5,10 +5,13 @@
 
 namespace LinguaAlpaca::UI {
 
-	CardPanel::CardPanel(wxWindow* parent, const wxString& title, bool isActiveBorder, wxWindowID id)
+	CardPanel::CardPanel(wxWindow* parent, const wxString& title, bool isActiveBorder, bool enableMarkdown, wxWindowID id)
 		: wxPanel(parent, id, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE | wxFULL_REPAINT_ON_RESIZE),
-		m_title(title), m_isActiveBorder(isActiveBorder) {
+		m_title(title), m_isActiveBorder(isActiveBorder), m_isMarkdownEnabled(enableMarkdown) {
 		SetBackgroundStyle(wxBG_STYLE_PAINT);
+		if (m_isMarkdownEnabled) {
+			m_currentMode = CardViewMode::Rendered;
+		}
 		InitUI();
 	}
 
@@ -22,22 +25,26 @@ namespace LinguaAlpaca::UI {
 
 		sizer->AddSpacer(42_dip);
 
-		long textStyle = wxTE_MULTILINE | wxBORDER_NONE;
-		if (m_isActiveBorder) {
-			textStyle |= wxTE_READONLY;
-		}
-
-		m_textCtrl = new TextCtrl(this, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, textStyle);
-		m_textCtrl->SetFont(ThemeFont::GetFont(FontRole::Body));
-		m_textCtrl->SetBackgroundColour(palette.cardBg);
-		m_textCtrl->SetForegroundColour(m_isActiveBorder ? palette.accentPrimary : palette.textPrimary);
-
-		m_tableView = new CustomTableView(this, wxID_ANY);
-		m_tableView->Hide();
-
 		m_contentContainerSizer = new wxBoxSizer(wxVERTICAL);
-		m_contentContainerSizer->Add(m_textCtrl, 1, wxEXPAND);
-		m_contentContainerSizer->Add(m_tableView, 1, wxEXPAND);
+
+		if (m_isMarkdownEnabled) {
+			m_markdownView = new MarkdownView(this, wxID_ANY);
+			m_markdownView->SetOnContentChangedCallback([this](const wxString& text) {
+				SetCharacterCount(text.Length());
+			});
+			m_contentContainerSizer->Add(m_markdownView, 1, wxEXPAND);
+		} else {
+			long textStyle = wxTE_MULTILINE | wxBORDER_NONE;
+			if (m_isActiveBorder) {
+				textStyle |= wxTE_READONLY;
+			}
+
+			m_textCtrl = new TextCtrl(this, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, textStyle);
+			m_textCtrl->SetFont(ThemeFont::GetFont(FontRole::Body));
+			m_textCtrl->SetBackgroundColour(palette.cardBg);
+			m_textCtrl->SetForegroundColour(m_isActiveBorder ? palette.accentPrimary : palette.textPrimary);
+			m_contentContainerSizer->Add(m_textCtrl, 1, wxEXPAND);
+		}
 
 		wxBoxSizer* contentHBox = new wxBoxSizer(wxHORIZONTAL);
 		contentHBox->AddSpacer(14_dip);
@@ -58,15 +65,22 @@ namespace LinguaAlpaca::UI {
 		Bind(wxEVT_LEFT_DOWN, &CardPanel::OnLeftDown, this);
 	}
 
+	TextCtrl* CardPanel::GetTextCtrl() const {
+		if (m_isMarkdownEnabled && m_markdownView) {
+			return m_markdownView->GetTextCtrl();
+		}
+		return m_textCtrl;
+	}
+
 	void CardPanel::UpdateTheme() {
 		auto palette = ThemeColors::GetCurrentPalette();
+		if (m_markdownView) {
+			m_markdownView->UpdateTheme();
+		}
 		if (m_textCtrl) {
 			m_textCtrl->SetBackgroundColour(palette.cardBg);
 			m_textCtrl->SetForegroundColour(m_isActiveBorder ? palette.accentPrimary : palette.textPrimary);
 			m_textCtrl->Refresh();
-		}
-		if (m_tableView) {
-			m_tableView->UpdateTheme();
 		}
 		Refresh();
 	}
@@ -85,76 +99,73 @@ namespace LinguaAlpaca::UI {
 		}
 	}
 
-	void CardPanel::SetContent(const std::string& text) {
+	void CardPanel::SetMarkdown(const std::string& markdown, const std::string& baseDir, bool preserveScroll) {
+		if (m_isMarkdownEnabled && m_markdownView) {
+			m_markdownView->SetMarkdown(markdown, baseDir, preserveScroll);
+			SetCharacterCount(markdown.size());
+			return;
+		}
+		if (m_textCtrl) {
+			m_textCtrl->SetMarkdown(markdown, preserveScroll);
+			SetCharacterCount(markdown.size());
+		}
+	}
+
+	void CardPanel::SetMarkdown(const wxString& markdown, const wxString& baseDir, bool preserveScroll) {
+		SetMarkdown(std::string(markdown.ToUTF8().data()),
+		            std::string(baseDir.ToUTF8().data()),
+		            preserveScroll);
+	}
+
+	void CardPanel::SetContent(const std::string& text, bool preserveScroll) {
 		if (text.empty()) {
 			Clear();
 			return;
 		}
 
+		if (m_isMarkdownEnabled) {
+			SetMarkdown(text, "", preserveScroll);
+			return;
+		}
+
 		wxString wText = wxString::FromUTF8(text);
 		if (m_textCtrl) {
-			m_textCtrl->SetValue(wText);
+			m_textCtrl->SetValue(wText, preserveScroll);
 		}
 		SetCharacterCount(wText.Length());
-
-		if (TableParser::IsTableFormat(text)) {
-			TableData table = TableParser::Parse(text);
-			if (!table.IsEmpty() && (table.RowCount() > 0 || !table.headers.empty())) {
-				std::string md = TableParser::ToMarkdown(table);
-				if (m_textCtrl) {
-					wxString wMd = wxString::FromUTF8(md);
-					m_textCtrl->SetValue(wMd);
-					SetCharacterCount(wMd.Length());
-				}
-				SetTableData(table);
-				SetViewMode(CardViewMode::Table);
-				return;
-			}
-		}
-
-		m_hasTableData = false;
-		m_cachedTableData.Clear();
-		SetViewMode(CardViewMode::Text);
-	}
-
-	void CardPanel::SetTableData(const TableData& table) {
-		m_cachedTableData = table;
-		m_hasTableData = !table.IsEmpty();
-		if (m_tableView) {
-			m_tableView->SetTableData(table);
-		}
-		if (m_hasTableData) {
-			if (m_textCtrl && m_textCtrl->GetValue().IsEmpty()) {
-				std::string md = TableParser::ToMarkdown(table);
-				wxString wMd = wxString::FromUTF8(md);
-				m_textCtrl->SetValue(wMd);
-				SetCharacterCount(wMd.Length());
-			}
-		}
-		Refresh();
 	}
 
 	void CardPanel::SetViewMode(CardViewMode mode) {
 		m_currentMode = mode;
-		if (m_currentMode == CardViewMode::Table && m_hasTableData) {
-			if (m_textCtrl) m_textCtrl->Hide();
-			if (m_tableView) m_tableView->Show();
+
+		if (m_isMarkdownEnabled) {
+			if (m_currentMode == CardViewMode::Rendered) {
+				if (m_markdownView) {
+					m_markdownView->SetViewMode(MarkdownViewMode::Rendered);
+					m_markdownView->Show();
+				}
+			} else if (m_currentMode == CardViewMode::Source || m_currentMode == CardViewMode::Text) {
+				if (m_markdownView) {
+					m_markdownView->SetViewMode(MarkdownViewMode::Source);
+					m_markdownView->Show();
+				}
+			}
 		} else {
 			m_currentMode = CardViewMode::Text;
-			if (m_tableView) m_tableView->Hide();
 			if (m_textCtrl) m_textCtrl->Show();
 		}
+
 		Layout();
 		Refresh();
 	}
 
 	void CardPanel::Clear() {
+		if (m_isMarkdownEnabled && m_markdownView) {
+			m_markdownView->Clear();
+		}
 		if (m_textCtrl) m_textCtrl->Clear();
-		if (m_tableView) m_tableView->Clear();
-		m_hasTableData = false;
-		m_cachedTableData.Clear();
 		SetCharacterCount(0);
-		SetViewMode(CardViewMode::Text);
+		SetViewMode(m_isMarkdownEnabled ? CardViewMode::Rendered : CardViewMode::Text);
 	}
 
 	void CardPanel::OnPaint(wxPaintEvent& WXUNUSED(event)) {
@@ -187,72 +198,72 @@ namespace LinguaAlpaca::UI {
 		double tw = 0, th = 0;
 		gc->GetTextExtent(m_title, &tw, &th);
 
-		// 3. 当存在表格数据时，绘制多视图切换 Tab 按钮
-		if (m_hasTableData) {
+		// 3. 绘制顶部视图切换 Tab 按钮
+		if (m_isMarkdownEnabled) {
 			double tabX = 16_dip + tw + 16_dip;
 			int tabY = 8_dip;
-			int tabW = 72_dip;
+			int tabW = 68_dip;
 			int tabH = 24_dip;
 			double tabRadius = 5.0_dip;
 
-			m_tableTabRect = wxRect(static_cast<int>(tabX), tabY, tabW, tabH);
-			m_textTabRect = wxRect(static_cast<int>(tabX + tabW + 6_dip), tabY, tabW, tabH);
+			m_renderedTabRect = wxRect(static_cast<int>(tabX), tabY, tabW, tabH);
+			m_sourceTabRect = wxRect(static_cast<int>(tabX + tabW + 6_dip), tabY, tabW, tabH);
 
 			wxSize tabIconSz = dip(13, 13);
 
-			// 绘制表格 Tab
-			bool isTableActive = (m_currentMode == CardViewMode::Table);
-			wxColour tableBg = isTableActive ? palette.bannerBg : ((m_hoverTab == 0) ? palette.bannerBg : palette.cardBg);
-			wxColour tableBorder = isTableActive ? palette.cardBorderActive : palette.cardBorder;
-			wxColour tableText = isTableActive ? palette.accentPrimary : palette.textSecondary;
+			// 绘制 [排版] Tab
+			bool isRenderedActive = (m_currentMode == CardViewMode::Rendered);
+			wxColour rendBg = isRenderedActive ? palette.bannerBg : ((m_hoverTab == 0) ? palette.bannerBg : palette.cardBg);
+			wxColour rendBorder = isRenderedActive ? palette.cardBorderActive : palette.cardBorder;
+			wxColour rendText = isRenderedActive ? palette.accentPrimary : palette.textSecondary;
 
-			gc->SetBrush(gc->CreateBrush(wxBrush(tableBg)));
-			gc->SetPen(gc->CreatePen(wxPen(tableBorder, 1.0)));
-			gc->DrawRoundedRectangle(m_tableTabRect.x, m_tableTabRect.y, m_tableTabRect.width, m_tableTabRect.height, tabRadius);
+			gc->SetBrush(gc->CreateBrush(wxBrush(rendBg)));
+			gc->SetPen(gc->CreatePen(wxPen(rendBorder, 1.0)));
+			gc->DrawRoundedRectangle(m_renderedTabRect.x, m_renderedTabRect.y, m_renderedTabRect.width, m_renderedTabRect.height, tabRadius);
 
-			gc->SetFont(m_tabFont, tableText);
-			wxString tableLabel = L"表格";
+			gc->SetFont(m_tabFont, rendText);
+			wxString rendLabel = L"排版";
 			double ltw = 0, lth = 0;
-			gc->GetTextExtent(tableLabel, &ltw, &lth);
+			gc->GetTextExtent(rendLabel, &ltw, &lth);
 
-			wxBitmapBundle tableBundle = IconManager::GetIconBundle(SVG::TABLE, wxSize(13, 13), tableText);
-			wxBitmap tableBmp = tableBundle.GetBitmap(tabIconSz);
+			wxBitmapBundle rendBundle = IconManager::GetIconBundle(SVG::LAYOUT, wxSize(13, 13), rendText);
+			wxBitmap rendBmp = rendBundle.GetBitmap(tabIconSz);
 
-			double totalTableW = tabIconSz.x + 4_dip + ltw;
-			double tableStartX = m_tableTabRect.x + (tabW - totalTableW) / 2.0;
+			double totalRendW = tabIconSz.x + 4_dip + ltw;
+			double rendStartX = m_renderedTabRect.x + (tabW - totalRendW) / 2.0;
 
-			if (tableBmp.IsOk()) {
-				gc->DrawBitmap(tableBmp, tableStartX, m_tableTabRect.y + (tabH - tabIconSz.y) / 2.0, tabIconSz.x, tabIconSz.y);
+			if (rendBmp.IsOk()) {
+				gc->DrawBitmap(rendBmp, rendStartX, m_renderedTabRect.y + (tabH - tabIconSz.y) / 2.0, tabIconSz.x, tabIconSz.y);
 			}
-			gc->DrawText(tableLabel, tableStartX + tabIconSz.x + 4_dip, m_tableTabRect.y + (tabH - lth) / 2.0);
+			gc->DrawText(rendLabel, rendStartX + tabIconSz.x + 4_dip, m_renderedTabRect.y + (tabH - lth) / 2.0);
 
-			// 绘制文本 Tab
-			bool isTextActive = (m_currentMode == CardViewMode::Text);
-			wxColour textBg = isTextActive ? palette.bannerBg : ((m_hoverTab == 1) ? palette.bannerBg : palette.cardBg);
-			wxColour textBorder = isTextActive ? palette.cardBorderActive : palette.cardBorder;
-			wxColour textText = isTextActive ? palette.accentPrimary : palette.textSecondary;
+			// 绘制 [源码] Tab
+			bool isSourceActive = (m_currentMode == CardViewMode::Source || m_currentMode == CardViewMode::Text);
+			wxColour srcBg = isSourceActive ? palette.bannerBg : ((m_hoverTab == 1) ? palette.bannerBg : palette.cardBg);
+			wxColour srcBorder = isSourceActive ? palette.cardBorderActive : palette.cardBorder;
+			wxColour srcText = isSourceActive ? palette.accentPrimary : palette.textSecondary;
 
-			gc->SetBrush(gc->CreateBrush(wxBrush(textBg)));
-			gc->SetPen(gc->CreatePen(wxPen(textBorder, 1.0)));
-			gc->DrawRoundedRectangle(m_textTabRect.x, m_textTabRect.y, m_textTabRect.width, m_textTabRect.height, tabRadius);
+			gc->SetBrush(gc->CreateBrush(wxBrush(srcBg)));
+			gc->SetPen(gc->CreatePen(wxPen(srcBorder, 1.0)));
+			gc->DrawRoundedRectangle(m_sourceTabRect.x, m_sourceTabRect.y, m_sourceTabRect.width, m_sourceTabRect.height, tabRadius);
 
-			gc->SetFont(m_tabFont, textText);
-			wxString textLabel = L"文本";
-			gc->GetTextExtent(textLabel, &ltw, &lth);
+			gc->SetFont(m_tabFont, srcText);
+			wxString srcLabel = L"源码";
+			gc->GetTextExtent(srcLabel, &ltw, &lth);
 
-			wxBitmapBundle textBundle = IconManager::GetIconBundle(SVG::TEXT, wxSize(13, 13), textText);
-			wxBitmap textBmp = textBundle.GetBitmap(tabIconSz);
+			wxBitmapBundle srcBundle = IconManager::GetIconBundle(SVG::TEXT, wxSize(13, 13), srcText);
+			wxBitmap srcBmp = srcBundle.GetBitmap(tabIconSz);
 
-			double totalTextW = tabIconSz.x + 4_dip + ltw;
-			double textStartX = m_textTabRect.x + (tabW - totalTextW) / 2.0;
+			double totalSrcW = tabIconSz.x + 4_dip + ltw;
+			double srcStartX = m_sourceTabRect.x + (tabW - totalSrcW) / 2.0;
 
-			if (textBmp.IsOk()) {
-				gc->DrawBitmap(textBmp, textStartX, m_textTabRect.y + (tabH - tabIconSz.y) / 2.0, tabIconSz.x, tabIconSz.y);
+			if (srcBmp.IsOk()) {
+				gc->DrawBitmap(srcBmp, srcStartX, m_sourceTabRect.y + (tabH - tabIconSz.y) / 2.0, tabIconSz.x, tabIconSz.y);
 			}
-			gc->DrawText(textLabel, textStartX + tabIconSz.x + 4_dip, m_textTabRect.y + (tabH - lth) / 2.0);
+			gc->DrawText(srcLabel, srcStartX + tabIconSz.x + 4_dip, m_sourceTabRect.y + (tabH - lth) / 2.0);
 		} else {
-			m_tableTabRect = wxRect();
-			m_textTabRect = wxRect();
+			m_renderedTabRect = wxRect();
+			m_sourceTabRect = wxRect();
 		}
 
 		// 4. 绘制右侧 SVG 工具图标
@@ -270,16 +281,9 @@ namespace LinguaAlpaca::UI {
 			toolX -= 12_dip;
 		}
 
-		// 5. 绘制 Footer 字符数与行列表格统计
+		// 5. 绘制 Footer 字符数统计
 		gc->SetFont(m_countFont, palette.textSecondary);
-
-		wxString countText;
-		if (m_currentMode == CardViewMode::Table && m_hasTableData) {
-			countText = wxString::Format(L"%zu 行 × %zu 列 (%zu 字符)",
-				m_cachedTableData.RowCount(), m_cachedTableData.ColCount(), m_charCount);
-		} else {
-			countText = wxString::Format(L"%zu 字符", m_charCount);
-		}
+		wxString countText = wxString::Format(L"%zu 字符", m_charCount);
 
 		double cw, ch;
 		gc->GetTextExtent(countText, &cw, &ch);
@@ -298,10 +302,10 @@ namespace LinguaAlpaca::UI {
 		m_hoverTab = -1;
 
 		// 检查顶部 Tab 悬浮
-		if (m_hasTableData) {
-			if (m_tableTabRect.Contains(x, y)) {
+		if (m_isMarkdownEnabled) {
+			if (m_renderedTabRect.Contains(x, y)) {
 				m_hoverTab = 0;
-			} else if (m_textTabRect.Contains(x, y)) {
+			} else if (m_sourceTabRect.Contains(x, y)) {
 				m_hoverTab = 1;
 			}
 		}
@@ -320,42 +324,46 @@ namespace LinguaAlpaca::UI {
 			}
 		}
 
-		if (oldHoverTool != m_hoverToolIndex || oldHoverTab != m_hoverTab) {
-			if (m_hoverToolIndex != -1 || m_hoverTab != -1) {
-				SetCursor(wxCursor(wxCURSOR_HAND));
-			} else {
-				SetCursor(wxCursor(wxCURSOR_DEFAULT));
-			}
+		if (m_hoverToolIndex != -1) {
+			SetCursor(wxCursor(wxCURSOR_HAND));
+			SetToolTip(m_tools[m_hoverToolIndex].tooltip);
+		} else if (m_hoverTab != -1) {
+			SetCursor(wxCursor(wxCURSOR_HAND));
+			UnsetToolTip();
+		} else {
+			SetCursor(wxCursor(wxCURSOR_ARROW));
+			UnsetToolTip();
+		}
 
-			if (m_hoverToolIndex >= 0 && m_hoverToolIndex < (int)m_tools.size()) {
-				SetToolTip(m_tools[m_hoverToolIndex].tooltip);
-			} else {
-				UnsetToolTip();
-			}
+		if (oldHoverTool != m_hoverToolIndex || oldHoverTab != m_hoverTab) {
 			Refresh();
 		}
+
+		event.Skip();
 	}
 
-	void CardPanel::OnMouseLeave(wxMouseEvent& WXUNUSED(event)) {
+	void CardPanel::OnMouseLeave(wxMouseEvent& event) {
 		if (m_hoverToolIndex != -1 || m_hoverTab != -1) {
 			m_hoverToolIndex = -1;
 			m_hoverTab = -1;
-			SetCursor(wxCursor(wxCURSOR_DEFAULT));
+			SetCursor(wxCursor(wxCURSOR_ARROW));
 			UnsetToolTip();
 			Refresh();
 		}
+		event.Skip();
 	}
 
 	void CardPanel::OnLeftDown(wxMouseEvent& event) {
 		int x = event.GetX();
 		int y = event.GetY();
 
-		if (m_hasTableData) {
-			if (m_tableTabRect.Contains(x, y)) {
-				SetViewMode(CardViewMode::Table);
+		if (m_isMarkdownEnabled) {
+			if (m_renderedTabRect.Contains(x, y)) {
+				SetViewMode(CardViewMode::Rendered);
 				return;
-			} else if (m_textTabRect.Contains(x, y)) {
-				SetViewMode(CardViewMode::Text);
+			}
+			if (m_sourceTabRect.Contains(x, y)) {
+				SetViewMode(CardViewMode::Source);
 				return;
 			}
 		}
@@ -365,6 +373,8 @@ namespace LinguaAlpaca::UI {
 				m_tools[m_hoverToolIndex].onClick();
 			}
 		}
+
+		event.Skip();
 	}
 
 } // namespace LinguaAlpaca::UI

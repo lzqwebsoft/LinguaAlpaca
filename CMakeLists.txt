@@ -26,6 +26,14 @@ set(wxBUILD_SAMPLES OFF CACHE BOOL "" FORCE)
 set(wxBUILD_DEMOS OFF CACHE BOOL "" FORCE)
 set(wxBUILD_TESTS OFF CACHE BOOL "" FORCE)
 
+# 启用 wxWidgets 嵌入式 Web 引擎 (wxWebView) 支持
+set(wxUSE_WEBVIEW ON CACHE BOOL "" FORCE)
+if(WIN32)
+    set(wxUSE_WEBVIEW_EDGE ON CACHE BOOL "" FORCE)
+elseif(APPLE)
+    set(wxUSE_WEBVIEW_WEBKIT ON CACHE BOOL "" FORCE)
+endif()
+
 # 引入第三方依赖
 add_subdirectory(third_party/wxWidgets)
 
@@ -72,6 +80,9 @@ else()
 endif()
 add_subdirectory(third_party/llama.cpp)
 
+# 自动检测并载入官方 ONNX Runtime 预编译库 (支持 Windows/macOS/Linux)
+include(cmake/setup_onnxruntime.cmake)
+
 # 模块化源码组织
 set(CORE_SOURCES
     src/core/Types.hpp
@@ -108,10 +119,12 @@ set(CORE_SOURCES
     src/core/dict/DictEngine.cpp
     src/core/markdown/MarkdownFormatter.hpp
     src/core/markdown/MarkdownFormatter.cpp
-    src/core/table/TableParser.hpp
-    src/core/table/TableParser.cpp
     src/core/PlatformHelper.hpp
     src/core/PlatformHelper.cpp
+    src/core/pdf/PdfHelper.hpp
+    src/core/pdf/PdfHelper.cpp
+    src/core/document/DocumentPipeline.hpp
+    src/core/document/DocumentPipeline.cpp
     src/core/VersionChecker.hpp
     src/core/VersionChecker.cpp
 )
@@ -122,6 +135,8 @@ set(ENGINE_SOURCES
     src/engine/LlamaCppTranslationEngine.cpp
     src/engine/LlamaCppOcrEngine.hpp
     src/engine/LlamaCppOcrEngine.cpp
+    src/engine/DocLayoutEngine.hpp
+    src/engine/DocLayoutEngine.cpp
 )
 
 set(UI_SOURCES
@@ -140,14 +155,16 @@ set(UI_SOURCES
     src/ui/widgets/LeftAlignedRadioBox.hpp
     src/ui/widgets/StatusBadge.hpp
     src/ui/widgets/StatusBadge.cpp
+    src/ui/widgets/OcrProgressPanel.hpp
+    src/ui/widgets/OcrProgressPanel.cpp
     src/ui/widgets/SidebarNav.hpp
     src/ui/widgets/SidebarNav.cpp
     src/ui/widgets/SegmentedBar.hpp
     src/ui/widgets/SegmentedBar.cpp
     src/ui/widgets/CardPanel.hpp
     src/ui/widgets/CardPanel.cpp
-    src/ui/widgets/CustomTableView.hpp
-    src/ui/widgets/CustomTableView.cpp
+    src/ui/widgets/MarkdownView.hpp
+    src/ui/widgets/MarkdownView.cpp
     src/ui/widgets/LanguageBar.hpp
     src/ui/widgets/LanguageBar.cpp
     src/ui/widgets/WelcomeModelDialog.hpp
@@ -209,6 +226,10 @@ add_executable(${PROJECT_NAME} WIN32 MACOSX_BUNDLE
 # 确保编译主程序前已构建 llama-server 可执行程序
 add_dependencies(${PROJECT_NAME} llama-server)
 
+if(COMMAND wx_webview_copy_webview2_loader)
+    wx_webview_copy_webview2_loader(${PROJECT_NAME})
+endif()
+
 # 包含头文件路径
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -223,10 +244,12 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     wx::base
     wx::adv
     wx::net
+    wx::webview
     llama
     llama-common
     cpp-httplib
     mtmd
+    onnxruntime
 )
 
 if(TARGET wxzlib)
@@ -239,14 +262,26 @@ endif()
 
 if(WIN32)
     target_link_libraries(${PROJECT_NAME} PRIVATE ole32 oleaut32 windowsapp)
-    # 自动仅复制 Windows 程序实际依赖的动态链接库 (Runtime DLLs) 及 llama-server
+    # 自动仅复制 Windows 程序实际依赖的动态链接库 (Runtime DLLs) 及 llama-server, onnxruntime.dll, WebView2Loader.dll
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND}
             -DDEST_DIR=$<TARGET_FILE_DIR:${PROJECT_NAME}>
-            "-DDLLS=$<TARGET_RUNTIME_DLLS:${PROJECT_NAME}>;$<TARGET_RUNTIME_DLLS:llama-server>"
+            "-DDLLS=$<TARGET_RUNTIME_DLLS:${PROJECT_NAME}>;$<TARGET_RUNTIME_DLLS:llama-server>;${ORT_BIN};${CMAKE_BINARY_DIR}/third_party/wxWidgets/lib/vc_x64_dll/WebView2Loader.dll"
             -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_runtime_deps.cmake"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_CURRENT_SOURCE_DIR}/resources/web"
+            "$<TARGET_FILE_DIR:${PROJECT_NAME}>/resources/web"
     )
 elseif(APPLE)
+    # 针对 macOS App Bundle，自动将 libonnxruntime.dylib 打包进 Frameworks
+    set_source_files_properties("${ORT_BIN}" PROPERTIES
+        MACOSX_PACKAGE_LOCATION "Frameworks"
+    )
+    target_sources(${PROJECT_NAME} PRIVATE "${ORT_BIN}")
+    set_target_properties(${PROJECT_NAME} PROPERTIES
+        INSTALL_RPATH "@executable_path/../Frameworks"
+        BUILD_WITH_INSTALL_RPATH TRUE
+    )
     set_target_properties(${PROJECT_NAME} PROPERTIES
         MACOSX_BUNDLE TRUE
         MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/resources/Info.plist.in"

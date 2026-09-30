@@ -404,10 +404,11 @@ void TextCtrl::OnMouseMove(wxMouseEvent& event) {
     }
 }
 
-void TextCtrl::SetValue(const wxString& value) {
+void TextCtrl::SetValue(const wxString& value, bool preserveScroll) {
     m_isMarkdownMode = false;
     m_rawMarkdown.clear();
     if (m_textCtrl) {
+        int savedFirstLine = preserveScroll ? GetFirstVisibleLine() : 0;
         m_suppressTextEvent = true;
         wxTextAttr emptyAttr;
         m_textCtrl->SetDefaultStyle(emptyAttr);
@@ -416,6 +417,11 @@ void TextCtrl::SetValue(const wxString& value) {
         m_textCtrl->SetValue(value);
         m_suppressTextEvent = false;
         SanitizeNativeTextAttributes(true);
+        if (preserveScroll && savedFirstLine > 0) {
+            ScrollToLine(savedFirstLine);
+        } else if (!preserveScroll) {
+            ScrollToLine(0);
+        }
         UpdateScrollInfo();
     }
 }
@@ -424,8 +430,9 @@ wxString TextCtrl::GetValue() const {
     return m_textCtrl ? m_textCtrl->GetValue() : wxString();
 }
 
-void TextCtrl::AppendText(const wxString& text) {
+void TextCtrl::AppendText(const wxString& text, bool preserveScroll) {
     if (m_textCtrl) {
+        int savedFirstLine = preserveScroll ? GetFirstVisibleLine() : 0;
 #ifdef __APPLE__
         NSScrollView* sv = GetMacScrollView(m_textCtrl);
         NSTextView* tv = sv ? (NSTextView*)[sv documentView] : nil;
@@ -443,6 +450,9 @@ void TextCtrl::AppendText(const wxString& text) {
             }
         }
 #endif
+        if (preserveScroll && savedFirstLine > 0) {
+            ScrollToLine(savedFirstLine);
+        }
         if (!IsFrozen()) {
             UpdateScrollInfo();
         }
@@ -522,12 +532,14 @@ bool TextCtrl::IsFrozen() const {
     return wxPanel::IsFrozen() || (m_textCtrl && m_textCtrl->IsFrozen());
 }
 
-void TextCtrl::SetMarkdown(const std::string& markdownText) {
+void TextCtrl::SetMarkdown(const std::string& markdownText, bool preserveScroll) {
     m_isMarkdownMode = true;
     m_rawMarkdown = markdownText;
 
     if (!m_textCtrl)
         return;
+
+    int savedFirstLine = preserveScroll ? GetFirstVisibleLine() : 0;
 
     m_suppressTextEvent = true;
     m_textCtrl->Freeze();
@@ -540,6 +552,11 @@ void TextCtrl::SetMarkdown(const std::string& markdownText) {
         m_textCtrl->Thaw();
         m_suppressTextEvent = false;
         SanitizeNativeTextAttributes(false);
+        if (preserveScroll && savedFirstLine > 0) {
+            ScrollToLine(savedFirstLine);
+        } else if (!preserveScroll) {
+            ScrollToLine(0);
+        }
         UpdateScrollInfo();
         return;
     }
@@ -694,12 +711,16 @@ void TextCtrl::SetMarkdown(const std::string& markdownText) {
     m_textCtrl->Thaw();
     m_suppressTextEvent = false;
     SanitizeNativeTextAttributes(false);
-    ScrollToLine(0);
+    if (preserveScroll && savedFirstLine > 0) {
+        ScrollToLine(savedFirstLine);
+    } else if (!preserveScroll) {
+        ScrollToLine(0);
+    }
     UpdateScrollInfo();
 }
 
-void TextCtrl::SetMarkdown(const wxString& markdownText) {
-    SetMarkdown(std::string(markdownText.ToUTF8().data()));
+void TextCtrl::SetMarkdown(const wxString& markdownText, bool preserveScroll) {
+    SetMarkdown(std::string(markdownText.ToUTF8().data()), preserveScroll);
 }
 
 void TextCtrl::SetEditable(bool editable) {

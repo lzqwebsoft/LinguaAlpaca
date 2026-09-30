@@ -7,8 +7,8 @@ add_executable(unit_tests
     DictEngineTest.cpp
     DictFormatterTest.cpp
     MarkdownFormatterTest.cpp
-    TableParserTest.cpp
     VersionCheckerTest.cpp
+    DocumentPipelineTest.cpp
     ${CMAKE_SOURCE_DIR}/src/core/Logger.cpp
     ${CMAKE_SOURCE_DIR}/src/core/Config.cpp
     ${CMAKE_SOURCE_DIR}/src/core/AppVersion.cpp
@@ -25,9 +25,12 @@ add_executable(unit_tests
     ${CMAKE_SOURCE_DIR}/src/core/dict/DictFormatter.cpp
     ${CMAKE_SOURCE_DIR}/src/core/dict/DictEngine.cpp
     ${CMAKE_SOURCE_DIR}/src/core/markdown/MarkdownFormatter.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/table/TableParser.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/PlatformHelper.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/pdf/PdfHelper.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/document/DocumentPipeline.cpp
     ${CMAKE_SOURCE_DIR}/src/core/VersionChecker.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/LlamaCppTranslationEngine.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/DocLayoutEngine.cpp
 )
 
 # 确保编译测试前已构建 llama-server 可执行程序
@@ -49,6 +52,7 @@ target_link_libraries(unit_tests PRIVATE
     llama-common
     cpp-httplib
     mtmd
+    onnxruntime
 )
 
 if(TARGET wxzlib)
@@ -62,10 +66,10 @@ endif()
 if(WIN32)
     target_link_libraries(unit_tests PRIVATE ole32 oleaut32 windowsapp)
     add_custom_command(TARGET unit_tests POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            $<TARGET_RUNTIME_DLLS:unit_tests>
-            $<TARGET_FILE_DIR:unit_tests>
-        COMMAND_EXPAND_LISTS
+        COMMAND ${CMAKE_COMMAND}
+            -DDEST_DIR=$<TARGET_FILE_DIR:unit_tests>
+            "-DDLLS=$<TARGET_RUNTIME_DLLS:unit_tests>;${ORT_BIN}"
+            -P "${CMAKE_SOURCE_DIR}/cmake/copy_runtime_deps.cmake"
     )
 elseif(APPLE)
     set_source_files_properties(

@@ -7,20 +7,39 @@
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
+#include <atomic>
 #include <chrono>
 #include <thread>
 #include <vector>
 #include <windows.h>
 #include <wx/clipbrd.h>
 #include <wx/dataobj.h>
+#include <wx/datetime.h>
 #include <wx/filename.h>
 #include <wx/image.h>
 #include <wx/mstream.h>
+#include <wx/stdpaths.h>
 
 
 namespace LinguaAlpaca {
 
 namespace {
+
+wxString SaveClipboardBitmapToTempFile(const wxImage& img) {
+  if (!img.IsOk()) return "";
+  wxString tempDir = wxStandardPaths::Get().GetTempDir() + wxFileName::GetPathSeparator() + "LinguaAlpaca";
+  if (!wxDirExists(tempDir)) {
+    wxFileName::Mkdir(tempDir, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
+  }
+  static std::atomic<uint64_t> s_clipCounter{0};
+  wxString timeStr = wxDateTime::Now().Format("%Y%m%d_%H%M%S");
+  wxString tempPath = tempDir + wxFileName::GetPathSeparator() + 
+      wxString::Format("clipboard_%s_%llu.png", timeStr, ++s_clipCounter);
+  if (const_cast<wxImage&>(img).SaveFile(tempPath, wxBITMAP_TYPE_PNG)) {
+    return tempPath;
+  }
+  return "";
+}
 
 // UTF-8 -> std::wstring
 std::wstring Utf8ToWide(const std::string &str) {
@@ -398,7 +417,26 @@ ClipboardHelper::GetSelectedTextViaSendInput(bool preserveClipboard) {
   DWORD copySeq = 0;
 
 #ifdef _WIN32
+  wchar_t modPath[MAX_PATH] = { 0 };
+  GetModuleFileNameW(nullptr, modPath, MAX_PATH);
+  if (wcsstr(modPath, L"unit_tests") != nullptr) {
+    return "";
+  }
+
   HWND fgWnd = GetForegroundWindow();
+  HWND consoleWnd = GetConsoleWindow();
+  if (fgWnd && (fgWnd == consoleWnd || fgWnd == GetAncestor(consoleWnd, GA_ROOT))) {
+    return "";
+  }
+
+  DWORD fgPid = 0;
+  if (fgWnd) {
+    GetWindowThreadProcessId(fgWnd, &fgPid);
+  }
+  if (fgPid == GetCurrentProcessId()) {
+    return "";
+  }
+
   bool targetIsPdf = IsPdfReaderWindow(fgWnd);
 
   // 2. 阶段 1：除专有 PDF 阅读器以外的全部软件（VS Code 终端、编辑器、浏览器、Office 等），
@@ -517,8 +555,14 @@ bool ClipboardHelper::GetClipboardImage(wxImage& outImage, wxString* outFileName
         wxImage img = bmp.ConvertToImage();
         if (img.IsOk()) {
           outImage = img;
-          if (outFileName) *outFileName = L"剪贴板截图.png";
-          if (outFilePath) *outFilePath = L"[剪贴板截图]";
+          wxString tempPath = SaveClipboardBitmapToTempFile(img);
+          if (!tempPath.empty()) {
+            if (outFileName) *outFileName = wxFileName(tempPath).GetFullName();
+            if (outFilePath) *outFilePath = tempPath;
+          } else {
+            if (outFileName) *outFileName = L"剪贴板截图.png";
+            if (outFilePath) *outFilePath = L"[剪贴板截图]";
+          }
           handled = true;
         }
       }
@@ -591,11 +635,14 @@ bool ClipboardHelper::HasImage() {
 
 #else // Non-Windows fallback using wxTheClipboard and macOS native pasteboard / CGEvent
 
+#include <atomic>
 #include <wx/clipbrd.h>
 #include <wx/dataobj.h>
+#include <wx/datetime.h>
 #include <wx/filename.h>
 #include <wx/image.h>
 #include <wx/mstream.h>
+#include <wx/stdpaths.h>
 
 #include "Logger.hpp"
 
@@ -608,6 +655,26 @@ bool ClipboardHelper::HasImage() {
 #endif
 
 namespace LinguaAlpaca {
+
+namespace {
+
+wxString SaveClipboardBitmapToTempFile(const wxImage& img) {
+    if (!img.IsOk()) return "";
+    wxString tempDir = wxStandardPaths::Get().GetTempDir() + wxFileName::GetPathSeparator() + "LinguaAlpaca";
+    if (!wxDirExists(tempDir)) {
+        wxFileName::Mkdir(tempDir, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
+    }
+    static std::atomic<uint64_t> s_clipCounter{0};
+    wxString timeStr = wxDateTime::Now().Format("%Y%m%d_%H%M%S");
+    wxString tempPath = tempDir + wxFileName::GetPathSeparator() + 
+        wxString::Format("clipboard_%s_%llu.png", timeStr, ++s_clipCounter);
+    if (const_cast<wxImage&>(img).SaveFile(tempPath, wxBITMAP_TYPE_PNG)) {
+        return tempPath;
+    }
+    return "";
+}
+
+} // namespace
 
 std::string ClipboardHelper::GetClipboardText() {
     if (wxTheClipboard && wxTheClipboard->Open()) {
@@ -870,8 +937,14 @@ bool ClipboardHelper::GetClipboardImage(wxImage& outImage, wxString* outFileName
                 wxImage img;
                 if (img.LoadFile(memStream, wxBITMAP_TYPE_ANY) && img.IsOk()) {
                     outImage = img;
-                    if (outFileName) *outFileName = L"剪贴板截图.png";
-                    if (outFilePath) *outFilePath = L"[剪贴板截图]";
+                    wxString tempPath = SaveClipboardBitmapToTempFile(img);
+                    if (!tempPath.empty()) {
+                        if (outFileName) *outFileName = wxFileName(tempPath).GetFullName();
+                        if (outFilePath) *outFilePath = tempPath;
+                    } else {
+                        if (outFileName) *outFileName = L"剪贴板截图.png";
+                        if (outFilePath) *outFilePath = L"[剪贴板截图]";
+                    }
                     LOG_INFO("ClipboardHelper", "GetClipboardImage: loaded raw image data type: " + std::string([type UTF8String]) + ", size=" + std::to_string(data.length));
                     return true;
                 }
@@ -888,8 +961,14 @@ bool ClipboardHelper::GetClipboardImage(wxImage& outImage, wxString* outFileName
                     wxImage img;
                     if (img.LoadFile(memStream, wxBITMAP_TYPE_ANY) && img.IsOk()) {
                         outImage = img;
-                        if (outFileName) *outFileName = L"剪贴板截图.png";
-                        if (outFilePath) *outFilePath = L"[剪贴板截图]";
+                        wxString tempPath = SaveClipboardBitmapToTempFile(img);
+                        if (!tempPath.empty()) {
+                            if (outFileName) *outFileName = wxFileName(tempPath).GetFullName();
+                            if (outFilePath) *outFilePath = tempPath;
+                        } else {
+                            if (outFileName) *outFileName = L"剪贴板截图.png";
+                            if (outFilePath) *outFilePath = L"[剪贴板截图]";
+                        }
                         [nsImg release];
                         LOG_INFO("ClipboardHelper", "GetClipboardImage: loaded via NSImage TIFFRepresentation");
                         return true;
@@ -1001,8 +1080,14 @@ bool ClipboardHelper::GetClipboardImage(wxImage& outImage, wxString* outFileName
                 wxImage img = bmp.ConvertToImage();
                 if (img.IsOk()) {
                     outImage = img;
-                    if (outFileName) *outFileName = L"剪贴板截图.png";
-                    if (outFilePath) *outFilePath = L"[剪贴板截图]";
+                    wxString tempPath = SaveClipboardBitmapToTempFile(img);
+                    if (!tempPath.empty()) {
+                        if (outFileName) *outFileName = wxFileName(tempPath).GetFullName();
+                        if (outFilePath) *outFilePath = tempPath;
+                    } else {
+                        if (outFileName) *outFileName = L"剪贴板截图.png";
+                        if (outFilePath) *outFilePath = L"[剪贴板截图]";
+                    }
                     handled = true;
                 }
             }

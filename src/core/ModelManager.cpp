@@ -1,5 +1,7 @@
 #pragma execution_character_set("utf-8")
 #include "ModelManager.hpp"
+#include "engine/DocLayoutEngine.hpp"
+#include "core/document/DocumentPipeline.hpp"
 
 #include <iostream>
 #include <filesystem>
@@ -25,13 +27,42 @@ namespace LinguaAlpaca {
 		m_transClient = std::make_shared<LlamaClient>(m_transServer);
 		m_ocrClient = std::make_shared<LlamaClient>(m_ocrServer);
 		m_dictEngine = std::make_shared<DictEngine>();
+		m_layoutEngine = std::make_shared<DocLayoutEngine>();
 
 		if (m_configManager) {
-			std::string dictDir = m_configManager->GetConfig().dictDirPath;
+			auto cfg = m_configManager->GetConfig();
+			std::string dictDir = cfg.dictDirPath;
 			if (!dictDir.empty()) {
 				m_dictEngine->SetDictDir(dictDir);
 			}
+			std::string layoutPath = cfg.layoutModelPath;
+			std::string resolvedPath = DocLayoutEngine::ResolveLayoutModelPath(layoutPath);
+			if (resolvedPath.empty()) {
+				// 兜底检测默认相对路径模型
+				const std::vector<std::string> defaultCandidates = {
+					"models/PP-DocLayoutV3.onnx",
+					"models/PP-DocLayoutV2.onnx"
+				};
+				for (const auto& cand : defaultCandidates) {
+					std::string candResolved = DocLayoutEngine::ResolveLayoutModelPath(cand);
+					if (!candResolved.empty()) {
+						resolvedPath = candResolved;
+						break;
+					}
+				}
+			}
+			if (!resolvedPath.empty()) {
+				m_layoutEngine->Initialize(resolvedPath, cfg.layoutExecutionProvider, cfg.layoutThreads);
+			}
 		}
+	}
+
+	std::shared_ptr<DocumentPipeline> ModelManager::GetDocumentPipeline() {
+		std::lock_guard<std::mutex> lock(m_pipelineMutex);
+		if (!m_documentPipeline) {
+			m_documentPipeline = std::make_shared<DocumentPipeline>(shared_from_this(), m_layoutEngine);
+		}
+		return m_documentPipeline;
 	}
 
 	ModelManager::~ModelManager() {
@@ -276,6 +307,65 @@ namespace LinguaAlpaca {
 				}
 			}).detach();
 		}
+		else if (type == TargetModelType::DocLayout) {
+			std::string targetModelPath = appConfig.layoutModelPath;
+			std::string resolvedPath = DocLayoutEngine::ResolveLayoutModelPath(targetModelPath);
+			if (resolvedPath.empty()) {
+				resolvedPath = DocLayoutEngine::ResolveLayoutModelPath("models/PP-DocLayoutV3.onnx");
+				if (resolvedPath.empty()) {
+					resolvedPath = DocLayoutEngine::ResolveLayoutModelPath("models/PP-DocLayoutV2.onnx");
+				}
+			}
+
+			if (resolvedPath.empty()) {
+				ServerStatusInfo info;
+				info.state = ServerHealthState::Unconfigured;
+				info.message = "PP-DocLayout 版面分析模型未配置或文件不存在";
+				info.activeType = type;
+				if (onComplete) onComplete(false, info);
+				return;
+			}
+
+			if (m_layoutEngine && m_layoutEngine->IsLoaded() && m_layoutEngine->GetModelPath() == resolvedPath) {
+				ServerStatusInfo info;
+				info.state = ServerHealthState::Ready;
+				info.message = "PP-DocLayout ONNX 模型就绪";
+				info.activeType = type;
+				info.currentModel = resolvedPath;
+				if (onComplete) onComplete(true, info);
+				return;
+			}
+
+			auto aliveToken = m_aliveToken;
+			std::thread([this, aliveToken, resolvedPath, appConfig, type, onProgress, onComplete]() {
+				if (!aliveToken->load()) return;
+				if (onProgress) {
+					onProgress("正在加载 PP-DocLayout 版面分析模型...");
+				}
+
+				bool ok = m_layoutEngine->Initialize(resolvedPath, appConfig.layoutExecutionProvider, appConfig.layoutThreads);
+
+				ServerStatusInfo finalInfo;
+				finalInfo.activeType = type;
+				finalInfo.currentModel = resolvedPath;
+				if (ok) {
+					finalInfo.state = ServerHealthState::Ready;
+					finalInfo.message = "PP-DocLayout ONNX 模型已成功就绪";
+				} else {
+					finalInfo.state = ServerHealthState::Error;
+					finalInfo.message = "PP-DocLayout 模型加载失败: " + m_layoutEngine->GetLastError();
+				}
+
+				{
+					std::lock_guard<std::mutex> lock(m_healthCacheMutex);
+					m_healthCache[static_cast<int>(type)] = { finalInfo, std::chrono::steady_clock::now() };
+				}
+
+				if (aliveToken->load() && onComplete) {
+					onComplete(ok, finalInfo);
+				}
+			}).detach();
+		}
 	}
 
 	void ModelManager::StopModelAsync(TargetModelType type, std::function<void()> onComplete) {
@@ -338,6 +428,20 @@ namespace LinguaAlpaca {
 				info.currentModel = appConfig.ocrModelPath;
 				info.port = m_ocrServer->GetPort();
 				info.baseUrl = m_ocrServer->GetBaseUrl();
+			}
+		}
+		else if (targetType == TargetModelType::DocLayout) {
+			std::string resolvedPath = DocLayoutEngine::ResolveLayoutModelPath(appConfig.layoutModelPath);
+			info.currentModel = resolvedPath.empty() ? appConfig.layoutModelPath : resolvedPath;
+			if (m_layoutEngine && m_layoutEngine->IsLoaded()) {
+				info.state = ServerHealthState::Ready;
+				info.message = "PP-DocLayout ONNX 模型就绪";
+			} else if (resolvedPath.empty()) {
+				info.state = ServerHealthState::Unconfigured;
+				info.message = "版面分析模型未配置 (默认启用智能启发式)";
+			} else {
+				info.state = ServerHealthState::Offline;
+				info.message = "版面分析模型未就绪";
 			}
 		}
 		else {

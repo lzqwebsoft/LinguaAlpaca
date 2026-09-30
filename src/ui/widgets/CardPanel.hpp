@@ -4,14 +4,14 @@
 #include <functional>
 #include "../theme/Theme.hpp"
 #include "TextCtrl.hpp"
-#include "CustomTableView.hpp"
-#include "core/table/TableParser.hpp"
+#include "MarkdownView.hpp"
 
 namespace LinguaAlpaca::UI {
 
 enum class CardViewMode {
-    Text,
-    Table
+    Rendered,
+    Source,
+    Text
 };
 
 struct CardToolIcon {
@@ -23,21 +23,20 @@ struct CardToolIcon {
 
 class CardPanel : public wxPanel {
 public:
-    CardPanel(wxWindow* parent, const wxString& title, bool isActiveBorder = false, wxWindowID id = wxID_ANY);
+    CardPanel(wxWindow* parent, const wxString& title, bool isActiveBorder = false, bool enableMarkdown = false, wxWindowID id = wxID_ANY);
 
     void AddToolIcon(int id, const char* svgContent, const wxString& tooltip, std::function<void()> onClick);
     void SetCharacterCount(size_t count);
     void UpdateTheme();
 
-    TextCtrl* GetTextCtrl() const { return m_textCtrl; }
-    CustomTableView* GetTableView() const { return m_tableView; }
+    TextCtrl* GetTextCtrl() const;
+    MarkdownView* GetMarkdownView() const { return m_markdownView; }
 
-    void SetContent(const std::string& text);
-    void SetTableData(const TableData& table);
+    void SetContent(const std::string& text, bool preserveScroll = false);
+    void SetMarkdown(const std::string& markdown, const std::string& baseDir = "", bool preserveScroll = false);
+    void SetMarkdown(const wxString& markdown, const wxString& baseDir = wxEmptyString, bool preserveScroll = false);
     void SetViewMode(CardViewMode mode);
     CardViewMode GetViewMode() const { return m_currentMode; }
-    bool HasTableData() const { return m_hasTableData; }
-    const TableData& GetTableData() const { return m_cachedTableData; }
     void Clear();
 
 private:
@@ -49,15 +48,14 @@ private:
 
     wxString m_title;
     bool m_isActiveBorder;
+    bool m_isMarkdownEnabled{false};
     size_t m_charCount{0};
 
     TextCtrl* m_textCtrl{nullptr};
-    CustomTableView* m_tableView{nullptr};
+    MarkdownView* m_markdownView{nullptr};
     wxBoxSizer* m_contentContainerSizer{nullptr};
 
-    CardViewMode m_currentMode{CardViewMode::Text};
-    bool m_hasTableData{false};
-    TableData m_cachedTableData;
+    CardViewMode m_currentMode{CardViewMode::Rendered};
 
     std::vector<CardToolIcon> m_tools;
     int m_hoverToolIndex{-1};
@@ -67,10 +65,10 @@ private:
     wxFont m_tabFont;
     wxFont m_countFont;
 
-    // 顶部视图切换 Tab 区域
-    wxRect m_tableTabRect;
-    wxRect m_textTabRect;
-    int m_hoverTab{-1}; // 0: Table, 1: Text, -1: None
+    // 顶部 Markdown 视图切换 Tab 区域
+    wxRect m_renderedTabRect;
+    wxRect m_sourceTabRect;
+    int m_hoverTab{-1}; // 0: Rendered, 1: Source
 };
 
 } // namespace LinguaAlpaca::UI

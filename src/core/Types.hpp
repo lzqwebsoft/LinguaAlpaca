@@ -216,12 +216,13 @@ private:
 enum class TargetModelType {
     None,
     Translation,
-    Ocr
+    Ocr,
+    DocLayout
 };
 
 enum class ServerHealthState {
     Unconfigured, // 模型未配置路径或文件不存在
-    Offline,      // llama_server 进程未运行
+    Offline,      // 服务未运行 / 权重未加载
     Loading,      // 正在启动或正在装载权重 (/health 503)
     Ready,        // 模型就绪且响应正常 (/health 200)
     Error         // 运行异常或探针报错 (/health 500)
@@ -235,6 +236,65 @@ struct ServerStatusInfo {
     int port{0};
     std::string baseUrl;
 };
+
+// ============================================================================
+// 文档版面分析数据结构
+// ============================================================================
+
+enum class LayoutElementType {
+    Unknown,
+    Text,        // 普通段落
+    Title,       // 文档/章节标题
+    Header,      // 页眉
+    Footer,      // 页脚
+    Table,       // 表格区域
+    Formula,     // 公式区域
+    Image,       // 图像/插图
+    Chart        // 图表
+};
+
+struct LayoutElement {
+    int id{0};
+    LayoutElementType type{LayoutElementType::Unknown};
+    std::string labelName;
+    float score{0.0f};
+    int x1{0};
+    int y1{0};
+    int x2{0};
+    int y2{0};
+    int readingOrder{0};
+};
+
+struct DocumentLayoutResult {
+    int pageIndex{0};
+    int imageWidth{0};
+    int imageHeight{0};
+    std::vector<LayoutElement> elements;
+};
+
+// ============================================================================
+// 文档版面过滤与阅读顺序恢复配置 (对齐 PaddleX 官方产线规范)
+// ============================================================================
+
+struct DocLayoutFilterConfig {
+    // 1. 基础类别过滤开关
+    bool filterHeader{true};             // 是否过滤页眉 (header / header_image)
+    bool filterFooter{true};             // 是否过滤页脚 (footer / footer_image)
+    bool filterPageNumber{true};         // 是否过滤独立页码 (number)
+
+    // 2. 几何坐标辅助参数 (相对原图高度比例，0.0f ~ 1.0f)
+    float headerMarginRatio{0.08f};      // 顶部页眉敏感区高度比例 (默认顶部 8%)
+    float footerMarginRatio{0.08f};      // 底部页脚敏感区高度比例 (默认底部 8%)
+
+    // 3. 几何兜底过滤保护参数 (针对被误判为 Text/Title 的漏检页眉页脚)
+    bool enableGeometricFallback{true};  // 是否启用几何空间兜底过滤
+    float maxHeaderHeightRatio{0.05f};   // 允许认定为页眉的最大单框高度比例 (超过 5% 的多行大段落不予误删)
+    float maxFooterHeightRatio{0.05f};   // 允许认定为页脚的最大单框高度比例
+
+    // 4. 置信度门限
+    float scoreThreshold{0.35f};         // 检测框置信度过滤门限
+};
+
 
 // ============================================================================
 // 历史记录

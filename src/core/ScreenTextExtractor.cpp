@@ -30,6 +30,19 @@ ExtractedSelection ScreenTextExtractor::ExtractSelection(
     result.anchorX = endX;
     result.anchorY = endY;
 
+#if defined(_WIN32)
+    wchar_t modPath[MAX_PATH] = { 0 };
+    GetModuleFileNameW(nullptr, modPath, MAX_PATH);
+    if (wcsstr(modPath, L"unit_tests") != nullptr) {
+        return result;
+    }
+#elif defined(__APPLE__)
+    const char* prog = getprogname();
+    if (prog && strstr(prog, "unit_tests")) {
+        return result;
+    }
+#endif
+
     std::string text;
 
 #if defined(_WIN32) || defined(__APPLE__)

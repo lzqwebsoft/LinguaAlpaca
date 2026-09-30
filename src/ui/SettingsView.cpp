@@ -2,6 +2,7 @@
 #include "widgets/AboutDialog.hpp"
 #include "core/ClipboardHelper.hpp"
 #include "core/Downloader.hpp"
+#include "engine/DocLayoutEngine.hpp"
 #include "theme/IconManager.hpp"
 #include "theme/Theme.hpp"
 #include "theme/PlatformThemeHelper.hpp"
@@ -25,6 +26,7 @@ SettingsView::SettingsView(wxWindow* parent, std::shared_ptr<ModelManager> model
     m_statusTimer.Bind(wxEVT_TIMER, [this](wxTimerEvent&) {
         UpdateTranslationStatus();
         UpdateOcrStatus();
+        UpdateLayoutStatus();
     });
 }
 
@@ -39,6 +41,7 @@ bool SettingsView::Show(bool show) {
     if (show) {
         UpdateTranslationStatus();
         UpdateOcrStatus();
+        UpdateLayoutStatus();
         if (!m_statusTimer.IsRunning()) {
             m_statusTimer.Start(1500);
         }
@@ -523,6 +526,120 @@ void SettingsView::InitUI() {
     m_mainSizer->Add(m_ocrCard, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 16_dip);
 
     // ====================================================================
+    // Group 2.5: 文档版面分析模型 (Document Layout Analysis Model Settings Card)
+    // ====================================================================
+    m_layoutCard = new wxPanel(m_contentPanel, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE);
+    m_layoutCard->SetBackgroundColour(palette.cardBg);
+    SetupCardStyle(m_layoutCard);
+
+    wxBoxSizer* layoutCardSizer = new wxBoxSizer(wxVERTICAL);
+
+    // 卡片标题 + 状态指示
+    wxBoxSizer* layoutTitleSizer = new wxBoxSizer(wxHORIZONTAL);
+    wxBitmapBundle layoutTitleBundle = IconManager::GetIconBundle(SVG::LAYOUT, wxSize(18, 18), palette.accentPrimary);
+    m_layoutTitleIcon = new wxStaticBitmap(m_layoutCard, wxID_ANY, layoutTitleBundle);
+
+    m_layoutTitleText = new wxStaticText(m_layoutCard, wxID_ANY, L"文档版面分析模型 (Document Layout Analysis Model)");
+    m_layoutTitleText->SetFont(wxFont(12, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
+    m_layoutTitleText->SetForegroundColour(palette.textPrimary);
+
+    m_layoutStatusBadge = new StatusBadge(m_layoutCard);
+
+    layoutTitleSizer->Add(m_layoutTitleIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8_dip);
+    layoutTitleSizer->Add(m_layoutTitleText, 0, wxALIGN_CENTER_VERTICAL);
+    layoutTitleSizer->AddStretchSpacer(1);
+    layoutTitleSizer->Add(m_layoutStatusBadge, 0, wxALIGN_CENTER_VERTICAL);
+
+    layoutCardSizer->Add(layoutTitleSizer, 0, wxEXPAND | wxALL, 16_dip);
+
+    // 模型文件路径选择行 (统一 70_dip 标签对齐)
+    wxBoxSizer* layoutPathSizer = new wxBoxSizer(wxHORIZONTAL);
+    m_layoutPathLabel = new wxStaticText(m_layoutCard, wxID_ANY, L"ONNX 模型", wxDefaultPosition, wxSize(70_dip, -1));
+    m_layoutPathLabel->SetFont(wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+    m_layoutPathLabel->SetForegroundColour(palette.textPrimary);
+
+    m_layoutPathCtrl = new CustomInputBox(m_layoutCard, wxID_ANY, L"", L"选择 PP-DocLayoutV2 .onnx 模型文件路径", wxDefaultPosition, wxSize(-1, 38_dip));
+    m_layoutPathCtrl->SetPrefixIcon(SVG::LAYOUT, dip(16, 16));
+
+    m_layoutBrowseBtn = new CustomButton(m_layoutCard, wxID_ANY, L"浏览", ButtonStyle::Secondary, wxDefaultPosition, dip(90, 38));
+    m_layoutBrowseBtn->SetIcon(SVG::BROWSE, dip(16, 16));
+
+    m_layoutOpenDirBtn = new CustomButton(m_layoutCard, wxID_ANY, L"打开模型目录", ButtonStyle::Secondary, wxDefaultPosition, dip(135, 38));
+    m_layoutOpenDirBtn->SetIcon(SVG::FOLDER_OPEN, dip(16, 16));
+
+    layoutPathSizer->Add(m_layoutPathLabel, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 16_dip);
+    layoutPathSizer->Add(m_layoutPathCtrl, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8_dip);
+    layoutPathSizer->Add(m_layoutBrowseBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8_dip);
+    layoutPathSizer->Add(m_layoutOpenDirBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 16_dip);
+    layoutCardSizer->Add(layoutPathSizer, 0, wxEXPAND | wxBOTTOM, 12_dip);
+
+    // 运行参数设置行
+    wxBoxSizer* layoutParamSizer = new wxBoxSizer(wxHORIZONTAL);
+    m_layoutProviderLabel = new wxStaticText(m_layoutCard, wxID_ANY, L"计算加速：");
+    m_layoutProviderLabel->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+    m_layoutProviderLabel->SetForegroundColour(palette.textPrimary);
+
+    wxArrayString providerModes;
+    providerModes.Add(L"CPU 高效多线程模式 (默认推荐)");
+#if defined(_WIN32)
+    providerModes.Add(L"DirectML 显卡硬件加速 (DirectX12)");
+#elif defined(__APPLE__)
+    providerModes.Add(L"CoreML 硬件加速 (Apple Silicon)");
+#else
+    providerModes.Add(L"硬件加速模式");
+#endif
+    m_layoutProviderChoice = new CustomChoice(m_layoutCard, wxID_ANY, wxDefaultPosition, dip(250, 34), providerModes);
+    m_layoutProviderChoice->SetSelection(0);
+
+    layoutParamSizer->Add(m_layoutProviderLabel, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 16_dip);
+    layoutParamSizer->Add(m_layoutProviderChoice, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 14_dip);
+    layoutCardSizer->Add(layoutParamSizer, 0, wxEXPAND | wxBOTTOM, 12_dip);
+
+    // 操作按钮 (保存配置 / 测试加载)
+    wxBoxSizer* layoutActionSizer = new wxBoxSizer(wxHORIZONTAL);
+    m_layoutSaveBtn = new CustomButton(m_layoutCard, wxID_ANY, L"保存版面配置", ButtonStyle::Primary, wxDefaultPosition, dip(140, 38));
+    m_layoutSaveBtn->SetIcon(SVG::SAVE, dip(15, 15), *wxWHITE);
+
+    m_layoutTestBtn = new CustomButton(m_layoutCard, wxID_ANY, L"测试模型加载", ButtonStyle::Secondary, wxDefaultPosition, dip(140, 38));
+    m_layoutTestBtn->SetIcon(SVG::TEST, dip(15, 15));
+
+    layoutActionSizer->Add(m_layoutSaveBtn, 0, wxRIGHT, 10_dip);
+    layoutActionSizer->Add(m_layoutTestBtn, 0);
+    layoutCardSizer->Add(layoutActionSizer, 0, wxLEFT | wxBOTTOM, 14_dip);
+
+    // 底部模型说明
+    m_layoutFooterPanel = new wxPanel(m_layoutCard, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE);
+    m_layoutFooterPanel->SetBackgroundColour(palette.cardBg);
+    wxBoxSizer* layoutFooterSizer = new wxBoxSizer(wxHORIZONTAL);
+
+    wxBitmapBundle layoutInfoBundle = IconManager::GetIconBundle(SVG::INFO, wxSize(15, 15), palette.accentPrimary);
+    m_layoutInfoIcon = new wxStaticBitmap(m_layoutFooterPanel, wxID_ANY, layoutInfoBundle);
+
+    m_layoutFooterText = new wxStaticText(m_layoutFooterPanel, wxID_ANY, L"说明: 由 ONNX Runtime 原生驱动，负责解析文档元素 (文本/表格/公式) 及拓扑阅读顺序。");
+    m_layoutFooterText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+    m_layoutFooterText->SetForegroundColour(palette.textSecondary);
+
+    wxStaticText* layoutLinkSep = new wxStaticText(m_layoutFooterPanel, wxID_ANY, L"  |  模型下载：");
+    layoutLinkSep->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+    layoutLinkSep->SetForegroundColour(palette.textSecondary);
+
+    m_layoutModelLink = new wxHyperlinkCtrl(m_layoutFooterPanel, wxID_ANY, L"PP-DocLayoutV2.onnx (HuggingFace)", "https://huggingface.co/paddlepaddle/PP-DocLayoutV2");
+    m_layoutModelLink->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+    m_layoutModelLink->SetNormalColour(palette.accentPrimary);
+    m_layoutModelLink->SetHoverColour(palette.accentHover);
+
+    layoutFooterSizer->Add(m_layoutInfoIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6_dip);
+    layoutFooterSizer->Add(m_layoutFooterText, 0, wxALIGN_CENTER_VERTICAL);
+    layoutFooterSizer->Add(layoutLinkSep, 0, wxALIGN_CENTER_VERTICAL);
+    layoutFooterSizer->Add(m_layoutModelLink, 0, wxALIGN_CENTER_VERTICAL);
+    m_layoutFooterPanel->SetSizer(layoutFooterSizer);
+
+    layoutCardSizer->Add(m_layoutFooterPanel, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 16_dip);
+
+    m_layoutCard->SetSizer(layoutCardSizer);
+    m_mainSizer->Add(m_layoutCard, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 16_dip);
+
+    // ====================================================================
     // Group 3: 划词翻译设置卡片
     // ====================================================================
     m_selectionCard = new wxPanel(m_contentPanel, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE);
@@ -850,6 +967,12 @@ void SettingsView::InitUI() {
                 m_ocrNglCtrl->Show(isCustom);
         }
 
+        // 版面分析模型参数回显
+        if (m_layoutPathCtrl)
+            m_layoutPathCtrl->SetValue(wxString::FromUTF8(cfg.layoutModelPath));
+        if (m_layoutProviderChoice)
+            m_layoutProviderChoice->SetSelection(cfg.layoutExecutionProvider);
+
         SetSelectionConfig(cfg);
         SetDictConfig(cfg);
         SetLogConfig(cfg);
@@ -876,6 +999,12 @@ void SettingsView::InitUI() {
     m_ocrStopBtn->Bind(wxEVT_BUTTON, &SettingsView::OnStopOcrModel, this);
     m_ocrTestBtn->Bind(wxEVT_BUTTON, &SettingsView::OnTestOcrModel, this);
 
+    // 事件绑定 - 版面分析模型 Group
+    m_layoutBrowseBtn->Bind(wxEVT_BUTTON, &SettingsView::OnBrowseLayoutModel, this);
+    m_layoutOpenDirBtn->Bind(wxEVT_BUTTON, &SettingsView::OnOpenModelDir, this);
+    m_layoutSaveBtn->Bind(wxEVT_BUTTON, &SettingsView::OnSaveLayoutConfig, this);
+    m_layoutTestBtn->Bind(wxEVT_BUTTON, &SettingsView::OnTestLayoutModel, this);
+
     // 事件绑定 - 划词翻译 Group
     m_selectionModeRadio->Bind(wxEVT_RADIOBOX, &SettingsView::OnSelectionModeChanged, this);
     m_selectionSaveBtn->Bind(wxEVT_BUTTON, &SettingsView::OnSaveSelectionConfig, this);
@@ -896,6 +1025,7 @@ void SettingsView::InitUI() {
 
     UpdateTranslationStatus();
     UpdateOcrStatus();
+    UpdateLayoutStatus();
 }
 
 void SettingsView::SetModelPath(const wxString& path) {
@@ -1331,6 +1461,89 @@ void SettingsView::OnTestOcrModel(wxCommandEvent& WXUNUSED(event)) {
                                      }));
 }
 
+void SettingsView::UpdateLayoutStatus() {
+    if (!m_layoutStatusBadge)
+        return;
+
+    wxString curPath = m_layoutPathCtrl ? m_layoutPathCtrl->GetValue() : L"";
+    if (curPath.IsEmpty()) {
+        m_layoutStatusBadge->SetStatus(ServerHealthState::Unconfigured, L"● 未配置模型");
+        return;
+    }
+
+    if (curPath != m_lastLayoutPath) {
+        m_lastLayoutPath = curPath;
+        m_lastLayoutFileExists = wxFileExists(curPath);
+    }
+
+    if (m_lastLayoutFileExists) {
+        m_layoutStatusBadge->SetStatus(ServerHealthState::Ready, L"● 就绪 (ONNX 运行时)");
+    } else {
+        m_layoutStatusBadge->SetStatus(ServerHealthState::Unconfigured, L"● 模型文件未找到");
+    }
+}
+
+void SettingsView::OnBrowseLayoutModel(wxCommandEvent& WXUNUSED(event)) {
+    wxFileDialog openFileDialog(this, L"选择 PP-DocLayout 版面分析模型文件", "", "",
+                                "ONNX Model Files (*.onnx)|*.onnx|All Files (*.*)|*.*", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+
+    if (openFileDialog.ShowModal() == wxID_OK) {
+        wxString path = openFileDialog.GetPath();
+        if (m_layoutPathCtrl)
+            m_layoutPathCtrl->SetValue(path);
+        m_lastLayoutPath.clear();
+        UpdateLayoutStatus();
+    }
+}
+
+void SettingsView::OnSaveLayoutConfig(wxCommandEvent& WXUNUSED(event)) {
+    wxString layoutPath = m_layoutPathCtrl ? m_layoutPathCtrl->GetValue() : L"";
+    int provider = m_layoutProviderChoice ? m_layoutProviderChoice->GetSelection() : 0;
+
+    if (m_configManager) {
+        m_configManager->SaveLayoutConfig(layoutPath.ToUTF8().data(), provider, 0);
+    }
+
+    if (m_modelManager) {
+        m_modelManager->EnsureModelAsync(TargetModelType::DocLayout, nullptr, [this](bool, const ServerStatusInfo&) {
+            UpdateLayoutStatus();
+        });
+    }
+
+    m_lastLayoutPath.clear();
+    UpdateLayoutStatus();
+
+    std::string resolved = DocLayoutEngine::ResolveLayoutModelPath(layoutPath.ToUTF8().data());
+    if (!resolved.empty()) {
+        wxMessageBox(L"文档版面分析模型配置已成功保存并装载！", L"系统设置", wxOK | wxICON_INFORMATION, this);
+    } else {
+        wxMessageBox(L"配置已保存。提示：当前指定的 ONNX 版面分析模型文件路径尚未找到有效模型文件。", L"系统设置", wxOK | wxICON_WARNING, this);
+    }
+}
+
+void SettingsView::OnTestLayoutModel(wxCommandEvent& WXUNUSED(event)) {
+    wxString path = m_layoutPathCtrl ? m_layoutPathCtrl->GetValue() : L"";
+    std::string resolved = DocLayoutEngine::ResolveLayoutModelPath(path.ToUTF8().data());
+    if (resolved.empty()) {
+        wxMessageBox(L"请先指定有效的 PP-DocLayout .onnx 模型文件或所在目录路径！", L"测试模型失败", wxOK | wxICON_WARNING, this);
+        return;
+    }
+
+    int provider = m_layoutProviderChoice ? m_layoutProviderChoice->GetSelection() : 0;
+
+    DocLayoutEngine testEngine;
+    bool ok = testEngine.Initialize(resolved, provider, 4);
+    UpdateLayoutStatus();
+
+    if (ok) {
+        wxMessageBox(wxString::Format(L"文档版面分析模型测试成功！\n模型文件: %s\nONNX Runtime 会话已成功构建，计算图优化完成并就绪！", wxString::FromUTF8(resolved)),
+                     L"测试模型成功", wxOK | wxICON_INFORMATION, this);
+    } else {
+        wxMessageBox(L"文档版面分析模型加载失败:\n" + wxString::FromUTF8(testEngine.GetLastError()),
+                     L"测试模型失败", wxOK | wxICON_ERROR, this);
+    }
+}
+
 void SettingsView::UpdateTheme() {
     auto palette = ThemeColors::GetCurrentPalette();
     SetBackgroundColour(palette.windowBg);
@@ -1383,6 +1596,31 @@ void SettingsView::UpdateTheme() {
         m_ocrFooterText->SetForegroundColour(palette.textSecondary);
     if (m_ocrInfoIcon) {
         m_ocrInfoIcon->SetBitmap(IconManager::GetIconBundle(SVG::INFO, wxSize(15, 15), palette.accentPrimary));
+    }
+
+    if (m_layoutCard) {
+        m_layoutCard->SetBackgroundColour(palette.cardBg);
+        m_layoutCard->Refresh();
+    }
+    if (m_layoutTitleIcon) {
+        m_layoutTitleIcon->SetBitmap(IconManager::GetIconBundle(SVG::LAYOUT, wxSize(18, 18), palette.accentPrimary));
+    }
+    if (m_layoutTitleText)
+        m_layoutTitleText->SetForegroundColour(palette.textPrimary);
+    if (m_layoutPathLabel)
+        m_layoutPathLabel->SetForegroundColour(palette.textPrimary);
+    if (m_layoutProviderLabel)
+        m_layoutProviderLabel->SetForegroundColour(palette.textPrimary);
+    if (m_layoutFooterPanel)
+        m_layoutFooterPanel->SetBackgroundColour(palette.cardBg);
+    if (m_layoutFooterText)
+        m_layoutFooterText->SetForegroundColour(palette.textSecondary);
+    if (m_layoutInfoIcon) {
+        m_layoutInfoIcon->SetBitmap(IconManager::GetIconBundle(SVG::INFO, wxSize(15, 15), palette.accentPrimary));
+    }
+    if (m_layoutModelLink) {
+        m_layoutModelLink->SetNormalColour(palette.accentPrimary);
+        m_layoutModelLink->SetHoverColour(palette.accentHover);
     }
 
     if (m_prefCard) {

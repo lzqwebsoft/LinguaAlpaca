@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <base64.hpp>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <nlohmann/json.hpp>
@@ -36,7 +37,12 @@ static std::string FormatImageUrl(const std::string& imagePath) {
         return imagePath;
     }
 
+#ifdef _WIN32
+    std::filesystem::path p = std::filesystem::u8path(imagePath);
+    std::ifstream file(p, std::ios::binary);
+#else
     std::ifstream file(imagePath, std::ios::binary);
+#endif
     if (!file) {
         std::cerr << "[LlamaClient] Warning: Could not open local image file: " << imagePath << std::endl;
         return imagePath;
@@ -154,7 +160,7 @@ void LlamaClient::TranslateStreamAsync(const TranslationTask& task, StreamTokenC
                      {"repetition_penalty", 1.05},
                      {"max_tokens", 4096}};
 
-        std::string reqBody = body.dump();
+        std::string reqBody = body.dump(-1, ' ', false, json::error_handler_t::replace);
         std::string accumulatedText;
         bool hasError = false;
         std::string errorMsg;
@@ -304,7 +310,7 @@ void LlamaClient::RecognizeStream(const std::string& imagePath, const std::strin
             {"model", "default"},        {"messages", json::array({{{"role", "user"}, {"content", messageContent}}})}, {"stream", true}, {"temperature", 0.1}, {"top_p", 0.9}, {"max_tokens", 4096},
             {"repetition_penalty", 1.05}};
 
-        std::string reqBody = body.dump();
+        std::string reqBody = body.dump(-1, ' ', false, json::error_handler_t::replace);
         std::string accumulatedText;
         bool hasError = false;
         std::string errorMsg;

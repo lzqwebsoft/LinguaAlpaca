@@ -24,9 +24,9 @@ public:
     ~TextCtrl() override;
 
     // 核心文本内容接口
-    void SetValue(const wxString& value);
+    void SetValue(const wxString& value, bool preserveScroll = false);
     wxString GetValue() const;
-    void AppendText(const wxString& text);
+    void AppendText(const wxString& text, bool preserveScroll = false);
     void Clear();
     void WriteText(const wxString& text);
     void SetHint(const wxString& hint);
@@ -39,8 +39,8 @@ public:
     bool IsFrozen() const;
 
     // Markdown 富文本渲染
-    void SetMarkdown(const std::string& markdownText);
-    void SetMarkdown(const wxString& markdownText);
+    void SetMarkdown(const std::string& markdownText, bool preserveScroll = false);
+    void SetMarkdown(const wxString& markdownText, bool preserveScroll = false);
     bool IsMarkdownMode() const { return m_isMarkdownMode; }
     const std::string& GetRawMarkdown() const { return m_rawMarkdown; }
 

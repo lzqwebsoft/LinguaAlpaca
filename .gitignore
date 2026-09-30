@@ -44,4 +44,11 @@ third_party/wxWidgets/build/
 third_party/llama.cpp/build/
 .cache/
 
+# Ignore precompiled ONNX Runtime library
+third_party/onnxruntime/
+
+# Ignore layout analysis model weights
+models/*.onnx
+
 .DS_Store
+

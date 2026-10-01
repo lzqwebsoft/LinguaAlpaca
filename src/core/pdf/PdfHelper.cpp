@@ -7,20 +7,66 @@
 #include <wx/filefn.h>
 #include <algorithm>
 #include <fstream>
+#include <mutex>
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <windows.h>
+#include <objbase.h>
 #include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.Storage.h>
 #include <winrt/Windows.Storage.Streams.h>
 #include <winrt/Windows.Data.Pdf.h>
 #pragma comment(lib, "windowsapp.lib")
+
+namespace {
+// 全局 PDF 文档对象级互斥锁与单例缓存（杜绝频繁翻页或批量渲染时重复从磁盘解析数百页 PDF 结构）
+std::mutex s_pdfDocMutex;
+std::wstring s_cachedPdfPath;
+winrt::Windows::Data::Pdf::PdfDocument s_cachedPdfDoc{nullptr};
+
+struct WinRtApartmentScope {
+    bool initialized{false};
+    WinRtApartmentScope() {
+        HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+        if (SUCCEEDED(hr)) {
+            initialized = true;
+        }
+    }
+    ~WinRtApartmentScope() {
+        if (initialized) {
+            CoUninitialize();
+        }
+    }
+};
+
+winrt::Windows::Data::Pdf::PdfDocument GetOrLoadPdfDocLocked(const std::wstring& wpath) {
+    if (s_cachedPdfDoc && s_cachedPdfPath == wpath) {
+        return s_cachedPdfDoc;
+    }
+    s_cachedPdfDoc = nullptr;
+    s_cachedPdfPath.clear();
+
+    auto file = winrt::Windows::Storage::StorageFile::GetFileFromPathAsync(wpath).get();
+    auto doc = winrt::Windows::Data::Pdf::PdfDocument::LoadFromFileAsync(file).get();
+    s_cachedPdfPath = wpath;
+    s_cachedPdfDoc = doc;
+    return doc;
+}
+} // namespace
 #endif
 
 namespace LinguaAlpaca {
+
+void PdfHelper::ClearCache() {
+#ifdef _WIN32
+    std::lock_guard<std::mutex> lock(s_pdfDocMutex);
+    s_cachedPdfDoc = nullptr;
+    s_cachedPdfPath.clear();
+#endif
+}
 
 bool PdfHelper::IsPdfFile(const std::string& filePath) {
     if (filePath.empty()) return false;
@@ -38,13 +84,14 @@ int PdfHelper::GetPageCount(const std::string& filePath) {
     }
 
 #ifdef _WIN32
+    WinRtApartmentScope apt;
     try {
         std::wstring wpath = wxString::FromUTF8(filePath).ToStdWstring();
         // 替换斜杠为 Windows 标准反斜杠以兼容 WinRT StorageFile
         std::replace(wpath.begin(), wpath.end(), L'/', L'\\');
 
-        auto file = winrt::Windows::Storage::StorageFile::GetFileFromPathAsync(wpath).get();
-        auto doc = winrt::Windows::Data::Pdf::PdfDocument::LoadFromFileAsync(file).get();
+        std::lock_guard<std::mutex> lock(s_pdfDocMutex);
+        auto doc = GetOrLoadPdfDocLocked(wpath);
         return static_cast<int>(doc.PageCount());
     } catch (const winrt::hresult_error& ex) {
         LOG_WARN("PdfHelper", "Failed to query PDF page count (HRESULT): " + std::to_string(ex.code()));
@@ -71,17 +118,23 @@ bool PdfHelper::RenderPage(const std::string& filePath, int pageIndex, wxImage& 
     }
 
 #ifdef _WIN32
+    WinRtApartmentScope apt;
     try {
         std::wstring wpath = wxString::FromUTF8(filePath).ToStdWstring();
         std::replace(wpath.begin(), wpath.end(), L'/', L'\\');
 
-        auto file = winrt::Windows::Storage::StorageFile::GetFileFromPathAsync(wpath).get();
-        auto doc = winrt::Windows::Data::Pdf::PdfDocument::LoadFromFileAsync(file).get();
-        if (pageIndex < 0 || pageIndex >= static_cast<int>(doc.PageCount())) {
-            return false;
+        winrt::Windows::Data::Pdf::PdfPage page{nullptr};
+        {
+            std::lock_guard<std::mutex> lock(s_pdfDocMutex);
+            auto doc = GetOrLoadPdfDocLocked(wpath);
+            if (pageIndex < 0 || pageIndex >= static_cast<int>(doc.PageCount())) {
+                return false;
+            }
+            page = doc.GetPage(static_cast<uint32_t>(pageIndex));
         }
 
-        auto page = doc.GetPage(static_cast<uint32_t>(pageIndex));
+        if (!page) return false;
+
         winrt::Windows::Storage::Streams::InMemoryRandomAccessStream stream;
         winrt::Windows::Data::Pdf::PdfPageRenderOptions options;
         if (targetWidth > 0) {
@@ -122,17 +175,23 @@ std::string PdfHelper::RenderPageToTempFile(const std::string& filePath, int pag
     }
 
 #ifdef _WIN32
+    WinRtApartmentScope apt;
     try {
         std::wstring wpath = wxString::FromUTF8(filePath).ToStdWstring();
         std::replace(wpath.begin(), wpath.end(), L'/', L'\\');
 
-        auto file = winrt::Windows::Storage::StorageFile::GetFileFromPathAsync(wpath).get();
-        auto doc = winrt::Windows::Data::Pdf::PdfDocument::LoadFromFileAsync(file).get();
-        if (pageIndex < 0 || pageIndex >= static_cast<int>(doc.PageCount())) {
-            return "";
+        winrt::Windows::Data::Pdf::PdfPage page{nullptr};
+        {
+            std::lock_guard<std::mutex> lock(s_pdfDocMutex);
+            auto doc = GetOrLoadPdfDocLocked(wpath);
+            if (pageIndex < 0 || pageIndex >= static_cast<int>(doc.PageCount())) {
+                return "";
+            }
+            page = doc.GetPage(static_cast<uint32_t>(pageIndex));
         }
 
-        auto page = doc.GetPage(static_cast<uint32_t>(pageIndex));
+        if (!page) return "";
+
         winrt::Windows::Storage::Streams::InMemoryRandomAccessStream stream;
         winrt::Windows::Data::Pdf::PdfPageRenderOptions options;
         if (targetWidth > 0) {

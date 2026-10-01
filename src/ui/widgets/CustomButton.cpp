@@ -27,6 +27,13 @@ CustomButton::CustomButton(wxWindow *parent, wxWindowID id,
 
 void CustomButton::SetLabel(const wxString &label) {
   m_label = label;
+  InvalidateBestSize();
+  wxSize best = DoGetBestSize();
+  SetMinSize(best);
+  SetSize(best);
+  if (GetParent()) {
+    GetParent()->Layout();
+  }
   Refresh();
 }
 
@@ -34,6 +41,13 @@ void CustomButton::SetIcon(const char *svgContent, const wxSize &iconSize,
                            const wxColour &tintColor) {
   m_iconBundle =
       IconManager::GetIconBundle(svgContent, iconSize, tintColor);
+  InvalidateBestSize();
+  wxSize best = DoGetBestSize();
+  SetMinSize(best);
+  SetSize(best);
+  if (GetParent()) {
+    GetParent()->Layout();
+  }
   Refresh();
 }
 
@@ -42,7 +56,8 @@ wxSize CustomButton::DoGetBestSize() const {
   wxFont font = ThemeFont::GetFont(FontRole::Control, true);
   dc.SetFont(font);
   wxSize extent = dc.GetTextExtent(m_label);
-  return wxSize(extent.x + 36_dip, 40_dip);
+  int iconW = m_iconBundle.IsOk() ? (16_dip + 8_dip) : 0;
+  return wxSize(extent.x + 44_dip + iconW, 42_dip);
 }
 
 void CustomButton::OnPaint(wxPaintEvent &WXUNUSED(event)) {

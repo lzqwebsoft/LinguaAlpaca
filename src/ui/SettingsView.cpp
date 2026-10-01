@@ -623,7 +623,7 @@ void SettingsView::InitUI() {
     layoutLinkSep->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
     layoutLinkSep->SetForegroundColour(palette.textSecondary);
 
-    m_layoutModelLink = new wxHyperlinkCtrl(m_layoutFooterPanel, wxID_ANY, L"PP-DocLayoutV2.onnx (HuggingFace)", "https://huggingface.co/paddlepaddle/PP-DocLayoutV2");
+    m_layoutModelLink = new wxHyperlinkCtrl(m_layoutFooterPanel, wxID_ANY, L"PP-DocLayoutV3.onnx (HuggingFace)", "https://huggingface.co/PaddlePaddle/PP-DocLayoutV3_onnx");
     m_layoutModelLink->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
     m_layoutModelLink->SetNormalColour(palette.accentPrimary);
     m_layoutModelLink->SetHoverColour(palette.accentHover);
@@ -1130,8 +1130,7 @@ void SettingsView::UpdateOcrStatus() {
     if (curMainPath != m_lastOcrMainPath || curMmprojPath != m_lastOcrMmprojPath) {
         m_lastOcrMainPath = curMainPath;
         m_lastOcrMmprojPath = curMmprojPath;
-        m_lastOcrFileExists = (!curMainPath.IsEmpty() && !curMmprojPath.IsEmpty() &&
-                               wxFileExists(curMainPath) && wxFileExists(curMmprojPath));
+        m_lastOcrFileExists = (!curMainPath.IsEmpty() && !curMmprojPath.IsEmpty() && wxFileExists(curMainPath) && wxFileExists(curMmprojPath));
     }
 
     // 状态与端口无变化时直接跳过
@@ -1484,8 +1483,7 @@ void SettingsView::UpdateLayoutStatus() {
 }
 
 void SettingsView::OnBrowseLayoutModel(wxCommandEvent& WXUNUSED(event)) {
-    wxFileDialog openFileDialog(this, L"选择 PP-DocLayout 版面分析模型文件", "", "",
-                                "ONNX Model Files (*.onnx)|*.onnx|All Files (*.*)|*.*", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+    wxFileDialog openFileDialog(this, L"选择 PP-DocLayout 版面分析模型文件", "", "", "ONNX Model Files (*.onnx)|*.onnx|All Files (*.*)|*.*", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
 
     if (openFileDialog.ShowModal() == wxID_OK) {
         wxString path = openFileDialog.GetPath();
@@ -1505,9 +1503,7 @@ void SettingsView::OnSaveLayoutConfig(wxCommandEvent& WXUNUSED(event)) {
     }
 
     if (m_modelManager) {
-        m_modelManager->EnsureModelAsync(TargetModelType::DocLayout, nullptr, [this](bool, const ServerStatusInfo&) {
-            UpdateLayoutStatus();
-        });
+        m_modelManager->EnsureModelAsync(TargetModelType::DocLayout, nullptr, [this](bool, const ServerStatusInfo&) { UpdateLayoutStatus(); });
     }
 
     m_lastLayoutPath.clear();
@@ -1536,11 +1532,10 @@ void SettingsView::OnTestLayoutModel(wxCommandEvent& WXUNUSED(event)) {
     UpdateLayoutStatus();
 
     if (ok) {
-        wxMessageBox(wxString::Format(L"文档版面分析模型测试成功！\n模型文件: %s\nONNX Runtime 会话已成功构建，计算图优化完成并就绪！", wxString::FromUTF8(resolved)),
-                     L"测试模型成功", wxOK | wxICON_INFORMATION, this);
+        wxMessageBox(wxString::Format(L"文档版面分析模型测试成功！\n模型文件: %s\nONNX Runtime 会话已成功构建，计算图优化完成并就绪！", wxString::FromUTF8(resolved)), L"测试模型成功",
+                     wxOK | wxICON_INFORMATION, this);
     } else {
-        wxMessageBox(L"文档版面分析模型加载失败:\n" + wxString::FromUTF8(testEngine.GetLastError()),
-                     L"测试模型失败", wxOK | wxICON_ERROR, this);
+        wxMessageBox(L"文档版面分析模型加载失败:\n" + wxString::FromUTF8(testEngine.GetLastError()), L"测试模型失败", wxOK | wxICON_ERROR, this);
     }
 }
 
@@ -2097,9 +2092,7 @@ void SettingsView::UpdateDictListSummary() {
     bool isDirty = (m_renderedTheme != currentTheme) || (m_renderedDictKeys.size() != dicts.size());
     if (!isDirty) {
         for (size_t i = 0; i < dicts.size(); ++i) {
-            if (m_renderedDictKeys[i].bookName != dicts[i].bookName ||
-                m_renderedDictKeys[i].ifoPath != dicts[i].ifoPath ||
-                m_renderedDictKeys[i].wordCount != dicts[i].wordCount) {
+            if (m_renderedDictKeys[i].bookName != dicts[i].bookName || m_renderedDictKeys[i].ifoPath != dicts[i].ifoPath || m_renderedDictKeys[i].wordCount != dicts[i].wordCount) {
                 isDirty = true;
                 break;
             }
@@ -2275,18 +2268,13 @@ void SettingsView::UpdateDictListSummary() {
             itemCard->SetSizer(cardSizer);
 
             // 悬停提示: 显示完整文件路径及全部元数据
-            wxString fullInfoTooltip = wxString::Format(
-                L"【%s】\n"
-                L"• 词条数量: %s 词条\n"
-                L"• 存储格式: %s\n"
-                L"%s"
-                L"• 描述文件: %s",
-                bookTitle,
-                countNumStr,
-                (d.isDz ? L"DictZip 压缩格式 (.dz)" : L"纯文本未压缩 (.dict)"),
-                (d.version.empty() ? L"" : wxString::Format(L"• 词典版本: v%s\n", wxString::FromUTF8(d.version))),
-                wxString::FromUTF8(d.ifoPath)
-            );
+            wxString fullInfoTooltip = wxString::Format(L"【%s】\n"
+                                                        L"• 词条数量: %s 词条\n"
+                                                        L"• 存储格式: %s\n"
+                                                        L"%s"
+                                                        L"• 描述文件: %s",
+                                                        bookTitle, countNumStr, (d.isDz ? L"DictZip 压缩格式 (.dz)" : L"纯文本未压缩 (.dict)"),
+                                                        (d.version.empty() ? L"" : wxString::Format(L"• 词典版本: v%s\n", wxString::FromUTF8(d.version))), wxString::FromUTF8(d.ifoPath));
             itemCard->SetToolTip(fullInfoTooltip);
             nameText->SetToolTip(fullInfoTooltip);
             pathText->SetToolTip(fullInfoTooltip);

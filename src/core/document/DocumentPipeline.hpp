@@ -59,13 +59,32 @@ public:
     );
     ~DocumentPipeline();
 
-    // 启动解析任务 (在后台异步线程运行)
+    struct ResumeInfo {
+        bool hasResumeData{false};
+        int totalPages{0};
+        int lastProcessedPage{0};   // 1-indexed: 上次处理到的最后一页 (即旧一页)
+        int completedPages{0};       // 已经完全确认完成的页数 (lastProcessedPage - 1)
+        bool isCompleted{false};
+        std::string markdown;
+        std::string jsonStructured;
+    };
+
+    // 检查历史解析落盘状态与断点数据
+    static ResumeInfo CheckResumeInfo(const std::string& inputFilePath, const std::string& outputDir = "");
+
+    // 提取指定页数前（包含第 pageCount 页）的 Markdown 内容
+    static std::string ExtractMarkdownUpToPage(const std::string& fullMd, int pageCount);
+
+    // 启动或断点恢复解析任务 (在后台异步线程运行)
     void StartParseAsync(
         const std::string& inputFilePath,
         const std::string& outputDir,
         bool translateEnglishToChinese,
         DocProgressCallback onProgress,
-        DocCompleteCallback onComplete
+        DocCompleteCallback onComplete,
+        int startFromPage = 0,
+        const std::string& initialMarkdown = "",
+        const std::string& initialJson = ""
     );
 
     void Cancel();

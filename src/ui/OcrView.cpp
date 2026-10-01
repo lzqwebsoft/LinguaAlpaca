@@ -8,6 +8,7 @@
 #include "theme/Theme.hpp"
 #include "MainFrame.hpp"
 #include <base64.hpp>
+#include <nlohmann/json.hpp>
 #include <atomic>
 #include <fstream>
 #include <wx/clipbrd.h>
@@ -29,12 +30,19 @@ OcrView::OcrView(wxWindow* parent, std::shared_ptr<ModelManager> modelManager, w
     InitUI();
 
     m_healthTimer.Bind(wxEVT_TIMER, [this](wxTimerEvent&) { UpdateStatusBadge(); });
+    m_pdfDebounceTimer.Bind(wxEVT_TIMER, &OcrView::OnPdfDebounceTimer, this);
+    StartRenderWorker();
 }
 
 OcrView::~OcrView() {
     if (m_healthTimer.IsRunning()) {
         m_healthTimer.Stop();
     }
+    if (m_pdfDebounceTimer.IsRunning()) {
+        m_pdfDebounceTimer.Stop();
+    }
+    StopRenderWorker();
+    ClearPageCache();
     WinTtsHelper::GetInstance().Stop();
 }
 
@@ -48,6 +56,9 @@ bool OcrView::Show(bool show) {
     } else {
         if (m_healthTimer.IsRunning()) {
             m_healthTimer.Stop();
+        }
+        if (m_pdfDebounceTimer.IsRunning()) {
+            m_pdfDebounceTimer.Stop();
         }
     }
     return res;
@@ -150,12 +161,19 @@ void OcrView::InitUI() {
                 int drawX = pad + (availW - drawW) / 2;
                 int drawY = pad + (availH - drawH) / 2;
 
-                wxImage scaledImg = m_loadedImage;
-                scaledImg.Rescale(drawW, drawH, wxIMAGE_QUALITY_HIGH);
-                wxBitmap bmp(scaledImg);
+                if (!m_cachedDisplayBmp.IsOk() || m_cachedDrawW != drawW || m_cachedDrawH != drawH ||
+                    m_cachedDisplayPage != m_pdfCurrentPage || m_cachedImagePath != m_loadedImagePath) {
+                    wxImage scaledImg = m_loadedImage;
+                    scaledImg.Rescale(drawW, drawH, wxIMAGE_QUALITY_HIGH);
+                    m_cachedDisplayBmp = wxBitmap(scaledImg);
+                    m_cachedDrawW = drawW;
+                    m_cachedDrawH = drawH;
+                    m_cachedDisplayPage = m_pdfCurrentPage;
+                    m_cachedImagePath = m_loadedImagePath;
+                }
 
                 gc->Clip(4_dip, 4_dip, size.x - 8_dip, size.y - 8_dip);
-                gc->DrawBitmap(bmp, drawX, drawY, drawW, drawH);
+                gc->DrawBitmap(m_cachedDisplayBmp, drawX, drawY, drawW, drawH);
 
                 // 悬浮在图片上时，绘制半透明暗色遮罩与交互按钮 (识别进行中仍支持预览与翻页查看)
                 if (m_isDropzoneHovered || m_isDraggingPdfSlider) {
@@ -379,23 +397,25 @@ void OcrView::InitUI() {
         }
     });
 
-    m_resultCard->AddToolIcon(3, SVG::SAVE, L"导出 Markdown (.md)", [this]() { ExportMarkdown(); });
+    m_resultCard->AddToolIcon(3, SVG::FOLDER_OPEN, L"打开输出文件夹", [this]() { OpenOutputDir(); });
 
-    m_resultCard->AddToolIcon(4, SVG::CODE, L"导出 JSON (.json)", [this]() { ExportJson(); });
-
-    m_resultCard->AddToolIcon(5, SVG::FOLDER_OPEN, L"打开输出文件夹", [this]() { OpenOutputDir(); });
-
-    m_resultCard->AddToolIcon(6, SVG::CLEAR, L"清空内容", [this]() {
+    m_resultCard->AddToolIcon(4, SVG::CLEAR, L"清空内容", [this]() {
         if (!m_resultCard)
             return;
         WinTtsHelper::GetInstance().Stop();
         m_resultCard->Clear();
         m_lastMarkdownResult.Clear();
         m_lastJsonResult.Clear();
+        m_resumeFromPage = 0;
+        m_resumeInitialMarkdown.clear();
+        m_resumeInitialJson.clear();
         if (m_openFolderBtn) {
             m_openFolderBtn->Hide();
             if (GetSizer())
                 GetSizer()->Layout();
+        }
+        if (m_recognizeBtn) {
+            m_recognizeBtn->SetLabel(L"开始文档解析");
         }
         UpdateTranslateButtonVisibility();
     });
@@ -411,7 +431,8 @@ void OcrView::InitUI() {
     // 3. Bottom Action Bar: Recognize / Stop / OpenFolder / Translate Buttons
     wxBoxSizer* bottomSizer = new wxBoxSizer(wxHORIZONTAL);
 
-    m_recognizeBtn = new CustomButton(this, wxID_ANY, L"开始文档解析", ButtonStyle::Primary, wxDefaultPosition, dip(155, 42));
+    m_recognizeBtn = new CustomButton(this, wxID_ANY, L"开始文档解析", ButtonStyle::Primary, wxDefaultPosition, dip(-1, 42));
+    m_recognizeBtn->SetMinSize(dip(155, 42));
     m_recognizeBtn->SetIcon(SVG::LAYOUT, dip(16, 16), *wxWHITE);
 
     m_stopBtn = new CustomButton(this, wxID_ANY, L"停止", ButtonStyle::Danger, wxDefaultPosition, dip(145, 42));
@@ -629,7 +650,17 @@ void OcrView::OnDropzoneMouseMove(wxMouseEvent& event) {
             double pagePerPixel = static_cast<double>(m_pdfTotalPages - 1) / availableH;
             int newPage = std::clamp(m_sliderDragStartPage + static_cast<int>(std::round(deltaY * pagePerPixel)), 0, m_pdfTotalPages - 1);
             if (newPage != m_pdfCurrentPage) {
-                SetPdfPage(newPage);
+                m_pdfCurrentPage = newPage;
+                wxImage cached;
+                if (TryGetPageCache(newPage, cached)) {
+                    m_loadedImage = cached;
+                    m_cachedDisplayBmp = wxNullBitmap;
+                    m_pdfDebounceTimer.Stop();
+                } else {
+                    // 用户正在高速拖拽滑块中，不触发昂贵光栅化
+                    // 仅当用户在某个页面停顿超过 120ms 时，才调度后台渲染
+                    m_pdfDebounceTimer.StartOnce(120);
+                }
             }
         }
         if (m_dropzonePanel) {
@@ -730,8 +761,16 @@ void OcrView::OnDropzoneLeftDown(wxMouseEvent& event) {
 void OcrView::OnDropzoneLeftUp(wxMouseEvent& event) {
     if (m_isDraggingPdfSlider) {
         m_isDraggingPdfSlider = false;
+        m_pdfDebounceTimer.Stop();
         if (m_dropzonePanel && m_dropzonePanel->HasCapture()) {
             m_dropzonePanel->ReleaseMouse();
+        }
+        wxImage cached;
+        if (TryGetPageCache(m_pdfCurrentPage, cached)) {
+            m_loadedImage = cached;
+            m_cachedDisplayBmp = wxNullBitmap;
+        } else {
+            RequestPdfPageAsync(m_pdfCurrentPage);
         }
         if (m_dropzonePanel) {
             m_dropzonePanel->Refresh();
@@ -744,10 +783,12 @@ void OcrView::OnDropzoneLeftUp(wxMouseEvent& event) {
 void OcrView::OnDropzoneMouseWheel(wxMouseEvent& event) {
     if (m_isPdfDoc && m_pdfTotalPages > 1) {
         int rot = event.GetWheelRotation();
-        if (rot > 0) {
-            SetPdfPage(m_pdfCurrentPage - 1);
-        } else if (rot < 0) {
-            SetPdfPage(m_pdfCurrentPage + 1);
+        int delta = (rot > 0) ? -1 : ((rot < 0) ? 1 : 0);
+        if (delta != 0) {
+            int newPage = std::clamp(m_pdfCurrentPage + delta, 0, m_pdfTotalPages - 1);
+            if (newPage != m_pdfCurrentPage) {
+                SetPdfPage(newPage);
+            }
         }
         return;
     }
@@ -769,10 +810,27 @@ void OcrView::LoadImageFile(const wxString& filePath) {
     wxFileName docFn(filePath);
     m_lastOutputDir = docFn.GetPath() + "/" + docFn.GetName();
 
+    ClearPageCache();
+    m_cachedDisplayBmp = wxNullBitmap;
+    m_pdfDebounceTimer.Stop();
+
     if (m_isPdfDoc) {
         m_pdfTotalPages = PdfHelper::GetPageCount(filePath.ToUTF8().data());
         m_pdfCurrentPage = 0;
-        PdfHelper::RenderPage(filePath.ToUTF8().data(), 0, m_loadedImage, 1600);
+        if (PdfHelper::RenderPage(filePath.ToUTF8().data(), 0, m_loadedImage, 1000)) {
+            PutPageCache(0, m_loadedImage);
+            if (m_pdfTotalPages > 1) {
+                std::lock_guard<std::mutex> lock(m_workerMutex);
+                m_pendingTask = WorkerTask{
+                    filePath.ToUTF8().data(),
+                    1,
+                    0,
+                    1000,
+                    true
+                };
+                m_workerCv.notify_one();
+            }
+        }
         if (m_progressPanel) {
             m_progressPanel->SetIdle(wxString::Format(L"PDF 文档已就绪 (共 %d 页)，支持垂直滑动条或滚轮滑动翻页", m_pdfTotalPages));
         }
@@ -792,6 +850,267 @@ void OcrView::LoadImageFile(const wxString& filePath) {
     }
 
     UpdateDropzoneUI();
+
+    // 检查并弹框提示是否恢复之前的历史进度
+    CheckAndPromptResume(filePath);
+}
+
+bool OcrView::CheckAndPromptResume(const wxString& filePath) {
+    if (filePath.IsEmpty() || !wxFileExists(filePath))
+        return false;
+
+    wxFileName docFn(filePath);
+    std::string baseDocName = docFn.GetName().ToUTF8().data();
+    std::string outDir = std::string(docFn.GetPath().ToUTF8().data()) + "/" + baseDocName;
+
+    auto resumeInfo = DocumentPipeline::CheckResumeInfo(filePath.ToUTF8().data(), outDir);
+    if (!resumeInfo.hasResumeData) {
+        m_resumeFromPage = 0;
+        m_resumeInitialMarkdown.clear();
+        m_resumeInitialJson.clear();
+        return false;
+    }
+
+    int total = resumeInfo.totalPages > 0 ? resumeInfo.totalPages : (m_pdfTotalPages > 0 ? m_pdfTotalPages : 1);
+    int completed = resumeInfo.completedPages;
+
+    if (resumeInfo.isCompleted || (total > 0 && completed >= total)) {
+        wxString msg = wxString::Format(
+            L"检测到该文档之前已完成全部解析（共 %d 页）。\n\n"
+            L"是否直接载入历史解析结果？\n\n"
+            L"• 点击「是」：载入历史 Markdown 与结构化图文排版\n"
+            L"• 点击「否」：重新从头开始全新解析",
+            total
+        );
+        int answer = wxMessageBox(msg, L"发现历史解析结果", wxYES_NO | wxICON_QUESTION, this);
+        if (answer == wxYES) {
+            m_lastMarkdownResult = wxString::FromUTF8(resumeInfo.markdown);
+            m_lastJsonResult = wxString::FromUTF8(resumeInfo.jsonStructured);
+            if (m_resultCard) {
+                m_resultCard->SetMarkdown(resumeInfo.markdown, outDir, false);
+                m_resultCard->SetCharacterCount(m_lastMarkdownResult.Length());
+            }
+            if (m_progressPanel) {
+                m_progressPanel->SetCompleted(total, wxString::FromUTF8(outDir));
+            }
+            if (m_openFolderBtn) {
+                m_openFolderBtn->Show();
+                if (GetSizer())
+                    GetSizer()->Layout();
+            }
+            UpdateTranslateButtonVisibility();
+            if (m_recognizeBtn) {
+                m_recognizeBtn->SetLabel(L"重新开始文档解析");
+            }
+            m_resumeFromPage = 0;
+            m_resumeInitialMarkdown.clear();
+            m_resumeInitialJson.clear();
+            return true;
+        } else {
+            m_resumeFromPage = 0;
+            m_resumeInitialMarkdown.clear();
+            m_resumeInitialJson.clear();
+            if (m_resultCard) {
+                m_resultCard->Clear();
+                m_resultCard->SetCharacterCount(0);
+            }
+            m_lastMarkdownResult.Clear();
+            m_lastJsonResult.Clear();
+            if (m_openFolderBtn) {
+                m_openFolderBtn->Hide();
+                if (GetSizer())
+                    GetSizer()->Layout();
+            }
+            UpdateTranslateButtonVisibility();
+            return false;
+        }
+    } else if (resumeInfo.lastProcessedPage > 0) {
+        int targetPage = resumeInfo.lastProcessedPage; // 1-indexed: 旧一页 (例如第 26 页)
+        int fullyDone = resumeInfo.completedPages;     // 1-indexed: 旧一页之前已完全确认的页数 (例如第 25 页)
+        int pct = (fullyDone * 100) / (total > 0 ? total : 1);
+        wxString msg = wxString::Format(
+            L"检测到该文档存在未完成的历史解析记录（上次处理至第 %d 页，共 %d 页）：\n\n"
+            L"• 为保证数据完整无遗漏，将从旧一页（第 %d 页）开始重新完整解析\n"
+            L"• 已确认的前 %d 页内容将被完整保留，并与后续解析结果自动合并\n\n"
+            L"是否恢复进度并继续解析？\n\n"
+            L"• 点击「是」：从第 %d 页继续解析并合并 Markdown 与 JSON\n"
+            L"• 点击「否」：放弃历史进度，重新从第 1 页开始全新解析",
+            targetPage, total, targetPage, fullyDone, targetPage
+        );
+        int answer = wxMessageBox(msg, L"恢复解析进度提示", wxYES_NO | wxICON_QUESTION, this);
+        if (answer == wxYES) {
+            std::string cleanMd = DocumentPipeline::ExtractMarkdownUpToPage(resumeInfo.markdown, fullyDone);
+            m_lastMarkdownResult = wxString::FromUTF8(cleanMd);
+            m_lastJsonResult = wxString::FromUTF8(resumeInfo.jsonStructured);
+            if (m_resultCard) {
+                m_resultCard->SetMarkdown(cleanMd, outDir, false);
+                m_resultCard->SetCharacterCount(m_lastMarkdownResult.Length());
+            }
+            if (m_progressPanel) {
+                m_progressPanel->SetProgress(
+                    fullyDone, total, pct,
+                    wxString::Format(L"已恢复至第 %d / %d 页进度，点击「继续文档解析」将从第 %d 页重新解析并合并", fullyDone, total, targetPage)
+                );
+            }
+            if (m_openFolderBtn) {
+                m_openFolderBtn->Show();
+                if (GetSizer())
+                    GetSizer()->Layout();
+            }
+            UpdateTranslateButtonVisibility();
+            if (m_recognizeBtn) {
+                m_recognizeBtn->SetLabel(wxString::Format(L"继续文档解析 (第 %d-%d 页)", targetPage, total));
+            }
+            if (GetSizer()) {
+                GetSizer()->Layout();
+            }
+            m_resumeFromPage = fullyDone; // 0-indexed: 例如第 26 页对应 0-indexed 为 25
+            m_resumeInitialMarkdown = resumeInfo.markdown;
+            m_resumeInitialJson = resumeInfo.jsonStructured;
+            return true;
+        } else {
+            m_resumeFromPage = 0;
+            m_resumeInitialMarkdown.clear();
+            m_resumeInitialJson.clear();
+            if (m_resultCard) {
+                m_resultCard->Clear();
+                m_resultCard->SetCharacterCount(0);
+            }
+            m_lastMarkdownResult.Clear();
+            m_lastJsonResult.Clear();
+            if (m_openFolderBtn) {
+                m_openFolderBtn->Hide();
+                if (GetSizer())
+                    GetSizer()->Layout();
+            }
+            UpdateTranslateButtonVisibility();
+            return false;
+        }
+    }
+
+    return false;
+}
+
+void OcrView::PutPageCache(int page, const wxImage& img) {
+    if (!img.IsOk())
+        return;
+    auto it = m_pdfPageCache.find(page);
+    if (it != m_pdfPageCache.end()) {
+        m_pdfPageCacheOrder.remove(page);
+        m_pdfPageCacheOrder.push_front(page);
+        it->second = img;
+        return;
+    }
+    if (m_pdfPageCacheOrder.size() >= MAX_PDF_PAGE_CACHE) {
+        int oldest = m_pdfPageCacheOrder.back();
+        m_pdfPageCacheOrder.pop_back();
+        m_pdfPageCache.erase(oldest);
+    }
+    m_pdfPageCache[page] = img;
+    m_pdfPageCacheOrder.push_front(page);
+}
+
+bool OcrView::TryGetPageCache(int page, wxImage& outImg) {
+    auto it = m_pdfPageCache.find(page);
+    if (it != m_pdfPageCache.end()) {
+        m_pdfPageCacheOrder.remove(page);
+        m_pdfPageCacheOrder.push_front(page);
+        outImg = it->second;
+        return true;
+    }
+    return false;
+}
+
+void OcrView::ClearPageCache() {
+    {
+        std::lock_guard<std::mutex> lock(m_workerMutex);
+        m_pendingTask.reset();
+    }
+    m_pdfPageCache.clear();
+    m_pdfPageCacheOrder.clear();
+}
+
+void OcrView::StartRenderWorker() {
+    m_workerStop = false;
+    m_renderWorker = std::thread([this]() {
+#ifdef _WIN32
+        // 为工作线程初始化 COM MTA 多线程套间，保证 WinRT 异步操作永不挂起
+        HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+#endif
+
+        while (true) {
+            WorkerTask task;
+            {
+                std::unique_lock<std::mutex> lock(m_workerMutex);
+                m_workerCv.wait(lock, [this]() {
+                    return m_workerStop || m_pendingTask.has_value();
+                });
+
+                if (m_workerStop) {
+                    break;
+                }
+
+                task = *m_pendingTask;
+                m_pendingTask.reset();
+            }
+
+            // 执行光栅化（在无锁状态下执行，保证主线程完全不被阻塞）
+            wxImage img;
+            bool ok = PdfHelper::RenderPage(task.filePath, task.pageIndex, img, task.targetWidth);
+            if (ok && img.IsOk()) {
+                auto onPageReady = BindUi([this, page = task.pageIndex, reqId = task.reqId, isPrefetch = task.isPrefetch](wxImage renderedImg) {
+                    PutPageCache(page, renderedImg);
+                    if (!isPrefetch && reqId == m_pdfRenderRequestId.load() && m_pdfCurrentPage == page) {
+                        m_loadedImage = renderedImg;
+                        m_cachedDisplayBmp = wxNullBitmap;
+                        if (m_dropzonePanel) {
+                            m_dropzonePanel->Refresh();
+                        }
+                    }
+                });
+                onPageReady(std::move(img));
+            }
+
+            // 如果当前没有新的主任务，且刚才渲染的不是预加载任务，则自动尝试预加载下一页
+            {
+                std::lock_guard<std::mutex> lock(m_workerMutex);
+                if (!m_workerStop && !m_pendingTask.has_value() && !task.isPrefetch) {
+                    int nextP = task.pageIndex + 1;
+                    if (nextP < m_pdfTotalPages && m_pdfPageCache.find(nextP) == m_pdfPageCache.end()) {
+                        m_pendingTask = WorkerTask{
+                            task.filePath,
+                            nextP,
+                            0,
+                            task.targetWidth,
+                            true
+                        };
+                    }
+                }
+            }
+        }
+
+#ifdef _WIN32
+        if (SUCCEEDED(hr)) {
+            CoUninitialize();
+        }
+#endif
+    });
+}
+
+void OcrView::StopRenderWorker() {
+    {
+        std::lock_guard<std::mutex> lock(m_workerMutex);
+        m_workerStop = true;
+        m_pendingTask.reset();
+    }
+    m_workerCv.notify_all();
+    if (m_renderWorker.joinable()) {
+        m_renderWorker.join();
+    }
+}
+
+void OcrView::OnPdfDebounceTimer(wxTimerEvent& WXUNUSED(event)) {
+    RequestPdfPageAsync(m_pdfCurrentPage);
 }
 
 void OcrView::SetPdfPage(int page) {
@@ -801,56 +1120,47 @@ void OcrView::SetPdfPage(int page) {
     if (clampedPage == m_pdfCurrentPage && m_loadedImage.IsOk())
         return;
     m_pdfCurrentPage = clampedPage;
-    PdfHelper::RenderPage(m_loadedImagePath.ToUTF8().data(), m_pdfCurrentPage, m_loadedImage, 1600);
-    if (m_dropzonePanel)
-        m_dropzonePanel->Refresh();
-}
 
-void OcrView::ExportMarkdown() {
-    if (m_lastMarkdownResult.IsEmpty()) {
-        if (m_resultCard && m_resultCard->GetTextCtrl()) {
-            m_lastMarkdownResult = m_resultCard->GetTextCtrl()->GetValue();
-        }
-    }
-    if (m_lastMarkdownResult.IsEmpty()) {
-        wxMessageBox(L"当前暂无识别或解析内容可导出！", L"提示", wxOK | wxICON_INFORMATION, this);
-        return;
-    }
-
-    wxString defaultName = m_imageFileName.IsEmpty() ? L"document.md" : wxFileName(m_imageFileName).GetName() + L".md";
-    wxFileDialog saveDialog(this, L"导出 Markdown 文件", "", defaultName, "Markdown Files (*.md)|*.md|All Files (*.*)|*.*", wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
-
-    if (saveDialog.ShowModal() == wxID_OK) {
-        wxString savePath = saveDialog.GetPath();
-        std::ofstream out(savePath.ToStdWstring(), std::ios::binary);
-        if (out) {
-            std::string utf8 = m_lastMarkdownResult.ToUTF8().data();
-            out.write(utf8.data(), utf8.size());
-            out.close();
-            wxMessageBox(L"Markdown 文档已成功导出！", L"导出成功", wxOK | wxICON_INFORMATION, this);
-        }
+    wxImage cached;
+    if (TryGetPageCache(clampedPage, cached)) {
+        m_loadedImage = cached;
+        m_cachedDisplayBmp = wxNullBitmap;
+        if (m_dropzonePanel)
+            m_dropzonePanel->Refresh();
+    } else {
+        RequestPdfPageAsync(clampedPage);
+        if (m_dropzonePanel)
+            m_dropzonePanel->Refresh();
     }
 }
 
-void OcrView::ExportJson() {
-    if (m_lastJsonResult.IsEmpty()) {
-        wxMessageBox(L"当前暂无结构化 JSON 数据！请先运行「文档解析」流水线。", L"提示", wxOK | wxICON_INFORMATION, this);
+void OcrView::RequestPdfPageAsync(int page) {
+    if (!m_isPdfDoc || m_pdfTotalPages <= 1 || m_loadedImagePath.IsEmpty())
+        return;
+
+    int clampedPage = std::clamp(page, 0, m_pdfTotalPages - 1);
+
+    wxImage cached;
+    if (TryGetPageCache(clampedPage, cached)) {
+        m_loadedImage = cached;
+        m_cachedDisplayBmp = wxNullBitmap;
+        if (m_dropzonePanel)
+            m_dropzonePanel->Refresh();
         return;
     }
 
-    wxString defaultName = m_imageFileName.IsEmpty() ? L"document.json" : wxFileName(m_imageFileName).GetName() + L".json";
-    wxFileDialog saveDialog(this, L"导出结构化 JSON 数据", "", defaultName, "JSON Files (*.json)|*.json|All Files (*.*)|*.*", wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
-
-    if (saveDialog.ShowModal() == wxID_OK) {
-        wxString savePath = saveDialog.GetPath();
-        std::ofstream out(savePath.ToStdWstring(), std::ios::binary);
-        if (out) {
-            std::string utf8 = m_lastJsonResult.ToUTF8().data();
-            out.write(utf8.data(), utf8.size());
-            out.close();
-            wxMessageBox(L"结构化 JSON 数据已成功导出！", L"导出成功", wxOK | wxICON_INFORMATION, this);
-        }
+    uint64_t reqId = ++m_pdfRenderRequestId;
+    {
+        std::lock_guard<std::mutex> lock(m_workerMutex);
+        m_pendingTask = WorkerTask{
+            m_loadedImagePath.ToUTF8().data(),
+            clampedPage,
+            reqId,
+            1000,
+            false
+        };
     }
+    m_workerCv.notify_one();
 }
 
 void OcrView::OpenOutputDir() {
@@ -892,6 +1202,11 @@ bool OcrView::PasteImageFromClipboard() {
                 }
             }
         }
+
+        ClearPageCache();
+        m_cachedDisplayBmp = wxNullBitmap;
+        m_pdfDebounceTimer.Stop();
+        PdfHelper::ClearCache();
 
         m_loadedImagePath = filePath;
         m_imageFileName = fileName;
@@ -957,6 +1272,10 @@ void OcrView::ShowDropzoneContextMenu(const wxPoint& pos) {
             OpenImagePreview();
             break;
         case 1004:
+            ClearPageCache();
+            m_cachedDisplayBmp = wxNullBitmap;
+            m_pdfDebounceTimer.Stop();
+            PdfHelper::ClearCache();
             m_loadedImagePath.Clear();
             m_imageFileName.Clear();
             m_loadedImage.Destroy();
@@ -967,6 +1286,12 @@ void OcrView::ShowDropzoneContextMenu(const wxPoint& pos) {
             m_pdfSliderThumbRect = wxRect();
             m_isDraggingPdfSlider = false;
             m_isHoveringPdfSlider = false;
+            m_resumeFromPage = 0;
+            m_resumeInitialMarkdown.clear();
+            m_resumeInitialJson.clear();
+            if (m_recognizeBtn) {
+                m_recognizeBtn->SetLabel(L"开始文档解析");
+            }
             if (m_progressPanel) {
                 m_progressPanel->Reset();
             }
@@ -1072,14 +1397,18 @@ void OcrView::DoExecuteDocumentPipeline(const std::string& docPath) {
     }
 
     WinTtsHelper::GetInstance().Stop();
+    m_lastRenderTimestamp = 0;
+    m_lastRenderedPage = -1;
 
-    // 清空结果卡片并重置字符计数，准备呈现最新识别内容
-    if (m_resultCard) {
-        m_resultCard->Clear();
-        m_resultCard->SetCharacterCount(0);
+    // 仅在非断点续传时清空结果卡片与重置计数
+    if (m_resumeFromPage <= 0) {
+        if (m_resultCard) {
+            m_resultCard->Clear();
+            m_resultCard->SetCharacterCount(0);
+        }
+        m_lastMarkdownResult.Clear();
+        m_lastJsonResult.Clear();
     }
-    m_lastMarkdownResult.Clear();
-    m_lastJsonResult.Clear();
 
     if (m_openFolderBtn) {
         m_openFolderBtn->Hide();
@@ -1089,7 +1418,11 @@ void OcrView::DoExecuteDocumentPipeline(const std::string& docPath) {
     UpdateTranslateButtonVisibility();
 
     if (m_progressPanel) {
-        m_progressPanel->SetStarting(L"正在启动 PaddleOCR-VL 两阶段文档解析流水线...");
+        if (m_resumeFromPage > 0) {
+            m_progressPanel->SetStarting(wxString::Format(L"正在准备断点续传，将从第 %d 页接续解析...", m_resumeFromPage + 1));
+        } else {
+            m_progressPanel->SetStarting(L"正在启动 PaddleOCR-VL 两阶段文档解析流水线...");
+        }
     }
 
     SetState(OcrTaskState::Recognizing);
@@ -1173,27 +1506,50 @@ void OcrView::DoExecuteDocumentPipeline(const std::string& docPath) {
                                                                                    } else {
                                                                                        pageFraction = 0.9;
                                                                                    }
-                                                                                   percent = std::clamp(static_cast<int>(((curPage + pageFraction) / totalPages) * 100.0), 1, 99);
-                                                                               }
+                                                                                   percent = (std::clamp)(static_cast<int>(((curPage + pageFraction) / totalPages) * 100.0), 1, 99);
+                                                                                }
 
-                                                                               // 更新独立进度组件
-                                                                               if (m_progressPanel) {
+                                                                                // 1. 更新独立进度组件（进度条、百分比、当前阶段信息保持 100% 实时反馈）
+                                                                                if (m_progressPanel) {
                                                                                    m_progressPanel->SetProgress(displayPage, totalPages, percent, wxString::FromUTF8(stageDesc));
-                                                                               }
+                                                                                }
 
-                                                                               // 接收 Markdown 结果并保持滑动条位置不变 (preserveScroll = true)
-                                                                               if (m_resultCard) {
+                                                                                // 2. 接收 Markdown 结果并进行智能平滑节流，彻底杜绝百页长文档频繁全量重排卡死 UI 线程
+                                                                                auto now = std::chrono::steady_clock::now();
+                                                                                uint64_t nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+                                                                                bool isPageDone = (stageDesc.find("完成") != std::string::npos);
+                                                                                bool shouldRender = false;
+
+                                                                                if (totalPages <= 1) {
+                                                                                   // 单页图像模式：间隔 400ms 刷新或单页完成时必刷新
+                                                                                   if (nowMs - m_lastRenderTimestamp >= 400 || isPageDone) {
+                                                                                       shouldRender = true;
+                                                                                   }
+                                                                                } else {
+                                                                                   // 多页 PDF 模式：单页完成时立刻刷新，单页内部识别若耗时较长（超过 2.5 秒）按需流式刷新
+                                                                                   if (isPageDone || curPage != m_lastRenderedPage || (nowMs - m_lastRenderTimestamp >= 2500)) {
+                                                                                       shouldRender = true;
+                                                                                   }
+                                                                                }
+
+                                                                                if (shouldRender && m_resultCard && !currentMarkdown.empty()) {
+                                                                                   m_lastRenderTimestamp = nowMs;
+                                                                                   m_lastRenderedPage = curPage;
                                                                                    m_resultCard->SetMarkdown(currentMarkdown, std::string(m_lastOutputDir.ToUTF8().data()), true);
-                                                                               }
-                                                                               m_lastMarkdownResult = wxString::FromUTF8(currentMarkdown);
+                                                                                }
+                                                                                m_lastMarkdownResult = wxString::FromUTF8(currentMarkdown);
                                                                            }),
                                                                            BindUi([this](bool success, std::string fullMarkdown, std::string jsonStructured, std::string error) {
                                                                                SetState(OcrTaskState::Idle);
                                                                                if (success) {
+                                                                                   m_resumeFromPage = 0;
+                                                                                   m_resumeInitialMarkdown.clear();
+                                                                                   m_resumeInitialJson.clear();
                                                                                    m_lastMarkdownResult = wxString::FromUTF8(fullMarkdown);
                                                                                    m_lastJsonResult = wxString::FromUTF8(jsonStructured);
                                                                                    if (m_resultCard) {
                                                                                        m_resultCard->SetMarkdown(fullMarkdown, std::string(m_lastOutputDir.ToUTF8().data()), true);
+                                                                                       m_resultCard->SetCharacterCount(m_lastMarkdownResult.Length());
                                                                                    }
                                                                                    if (m_progressPanel) {
                                                                                        m_progressPanel->SetCompleted(m_pdfTotalPages > 0 ? m_pdfTotalPages : 1, m_lastOutputDir);
@@ -1204,28 +1560,82 @@ void OcrView::DoExecuteDocumentPipeline(const std::string& docPath) {
                                                                                            GetSizer()->Layout();
                                                                                    }
                                                                                    UpdateTranslateButtonVisibility();
+                                                                                   if (m_recognizeBtn) {
+                                                                                       m_recognizeBtn->SetLabel(L"重新开始文档解析");
+                                                                                   }
                                                                                    wxMessageBox(L"PaddleOCR-VL 两阶段文档解析完成！\n\n"
                                                                                                 L"• 结构化 Markdown 已生成并在右侧渲染\n"
-                                                                                                L"• 结果已自动保存至: " +
+                                                                                                L"• 结果已实时自动保存至: " +
                                                                                                     m_lastOutputDir +
                                                                                                     L"\n"
                                                                                                     L"• 表格、插图、公式均已按阅读顺序结构化重构",
                                                                                                 L"文档解析完成", wxOK | wxICON_INFORMATION, this);
                                                                                } else {
                                                                                    // 中断或失败状态完全由独立进度组件展示，彻底避免冲掉 m_resultCard 识别结果
+                                                                                   m_lastMarkdownResult = wxString::FromUTF8(fullMarkdown);
+                                                                                   m_lastJsonResult = wxString::FromUTF8(jsonStructured);
+                                                                                   if (m_resultCard) {
+                                                                                       m_resultCard->SetMarkdown(fullMarkdown, std::string(m_lastOutputDir.ToUTF8().data()), true);
+                                                                                       m_resultCard->SetCharacterCount(m_lastMarkdownResult.Length());
+                                                                                   }
+                                                                                   if (m_openFolderBtn) {
+                                                                                       m_openFolderBtn->Show();
+                                                                                       if (GetSizer())
+                                                                                           GetSizer()->Layout();
+                                                                                   }
+
+                                                                                   int targetPage = 0;
+                                                                                   int fullyDone = 0;
+                                                                                   try {
+                                                                                       if (!jsonStructured.empty()) {
+                                                                                           auto j = nlohmann::json::parse(jsonStructured);
+                                                                                           int comp = j.value("completed_pages", 0);
+                                                                                           int lastPIdx = 0;
+                                                                                           bool lastPComp = true;
+                                                                                           if (j.contains("pages") && j["pages"].is_array() && !j["pages"].empty()) {
+                                                                                               lastPIdx = j["pages"].back().value("page_index", static_cast<int>(j["pages"].size()));
+                                                                                               lastPComp = j["pages"].back().value("is_page_completed", true);
+                                                                                           }
+                                                                                           if (j.contains("last_interrupted_page")) {
+                                                                                               targetPage = j.value("last_interrupted_page", 0);
+                                                                                           } else if (!lastPComp && lastPIdx > 0) {
+                                                                                               targetPage = lastPIdx;
+                                                                                           } else {
+                                                                                               targetPage = (std::max)(lastPIdx, comp);
+                                                                                           }
+                                                                                           fullyDone = (std::max)(0, targetPage - 1);
+                                                                                       }
+                                                                                   } catch (...) {}
+
+                                                                                   int total = m_pdfTotalPages > 0 ? m_pdfTotalPages : 1;
+                                                                                   if (targetPage > 0 && targetPage <= total) {
+                                                                                       m_resumeFromPage = fullyDone; // 0-indexed: 例如第 26 页对应 0-indexed 为 25
+                                                                                       m_resumeInitialMarkdown = fullMarkdown;
+                                                                                       m_resumeInitialJson = jsonStructured;
+                                                                                       if (m_recognizeBtn) {
+                                                                                           m_recognizeBtn->SetLabel(wxString::Format(L"继续文档解析 (第 %d-%d 页)", targetPage, total));
+                                                                                       }
+                                                                                       if (GetSizer()) {
+                                                                                           GetSizer()->Layout();
+                                                                                       }
+                                                                                   }
+
                                                                                    if (error == "用户已取消解析") {
                                                                                        if (m_progressPanel) {
-                                                                                           m_progressPanel->SetCancelled(m_pdfCurrentPage + 1, m_pdfTotalPages,
-                                                                                                                         L"用户已取消解析，已保留已生成的 Markdown 结果");
+                                                                                           m_progressPanel->SetCancelled(fullyDone > 0 ? fullyDone : (m_pdfCurrentPage + 1), total,
+                                                                                                                         L"用户已取消解析，已实时保存已生成的 Markdown 与 JSON 结果");
                                                                                        }
                                                                                    } else {
                                                                                        if (m_progressPanel) {
-                                                                                           m_progressPanel->SetError(wxString::FromUTF8("文档解析中断或异常: " + error));
+                                                                                           m_progressPanel->SetError(wxString::FromUTF8("文档解析中断或异常: " + error + " (已实时保存已完成部分)"));
                                                                                        }
                                                                                    }
                                                                                    UpdateTranslateButtonVisibility();
                                                                                }
-                                                                           }));
+                                                                           }),
+                                                                           m_resumeFromPage,
+                                                                           m_resumeInitialMarkdown,
+                                                                           m_resumeInitialJson);
                                              }));
                                      }));
 }

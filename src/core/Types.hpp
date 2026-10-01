@@ -293,6 +293,11 @@ struct DocLayoutFilterConfig {
 
     // 4. 置信度门限
     float scoreThreshold{0.35f};         // 检测框置信度过滤门限
+
+    // 5. 版面块合并与包含性重叠抑制 (对齐 PaddleX merge_layout_blocks 与 IoS 规范)
+    bool mergeLayoutBlocks{true};        // 是否启用包含性重叠与子框去重抑制
+    float containmentIosThreshold{0.70f};// 子框包含度抑制门限 (IoS >= 0.70 说明小框大部分被大框包含)
+    float overlapIouThreshold{0.45f};    // 同类重影框抑制门限 (IoU >= 0.45 剔除同类低分重影)
 };
 
 

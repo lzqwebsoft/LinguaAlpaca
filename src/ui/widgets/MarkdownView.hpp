@@ -82,6 +82,7 @@ private:
     bool m_isWebViewReady{false};
     bool m_hasPendingRender{false};
     bool m_pendingPreserveScroll{false};
+    bool m_isTextCtrlDirty{false};
 
     std::function<void(const wxString&)> m_onImageClickCallback;
     std::function<void(const wxString&)> m_onContentChangedCallback;

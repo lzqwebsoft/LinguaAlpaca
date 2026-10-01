@@ -2,8 +2,13 @@
 #include <wx/wx.h>
 #include <wx/dnd.h>
 #include <wx/timer.h>
+#include <unordered_map>
+#include <list>
 #include <memory>
 #include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <optional>
 #include <atomic>
 #include "AsyncTrackable.hpp"
 #include "core/ModelManager.hpp"
@@ -62,19 +67,55 @@ private:
     void UpdateTranslateButtonVisibility();
 
     void SetPdfPage(int page);
+    void RequestPdfPageAsync(int page);
+    void OnPdfDebounceTimer(wxTimerEvent& event);
+    void PutPageCache(int page, const wxImage& img);
+    bool TryGetPageCache(int page, wxImage& outImg);
+    void ClearPageCache();
+    void StartRenderWorker();
+    void StopRenderWorker();
+
     void DoExecuteDocumentPipeline(const std::string& docPath);
-    void ExportMarkdown();
-    void ExportJson();
     void OpenOutputDir();
 
     void SetState(OcrTaskState state);
     void LoadImageFile(const wxString& filePath);
+    bool CheckAndPromptResume(const wxString& filePath);
     bool PasteImageFromClipboard();
     void ShowDropzoneContextMenu(const wxPoint& pos);
     void UpdateDropzoneUI();
 
     std::shared_ptr<ModelManager> m_modelManager;
     wxTimer m_healthTimer;
+    wxTimer m_pdfDebounceTimer;
+    std::atomic<uint64_t> m_pdfRenderRequestId{0};
+
+    // 专用单任务后台渲染工作线程 (单槽位新任务覆盖旧任务，彻底杜绝高频拖拽/翻页时线程爆炸与 COM 阻塞)
+    std::thread m_renderWorker;
+    std::mutex m_workerMutex;
+    std::condition_variable m_workerCv;
+    bool m_workerStop{false};
+
+    struct WorkerTask {
+        std::string filePath;
+        int pageIndex{0};
+        uint64_t reqId{0};
+        int targetWidth{1000};
+        bool isPrefetch{false};
+    };
+    std::optional<WorkerTask> m_pendingTask;
+
+    // PDF 页面 LRU 缓存与快速预览 (最大缓存 20 页，保证滑动和翻页 0ms 瞬间响应)
+    std::unordered_map<int, wxImage> m_pdfPageCache;
+    std::list<int> m_pdfPageCacheOrder;
+    static constexpr size_t MAX_PDF_PAGE_CACHE = 20;
+
+    // 缩放绘制位图缓存 (消除鼠标悬停/拖拽时每帧高开销 wxIMAGE_QUALITY_HIGH 重采样)
+    wxBitmap m_cachedDisplayBmp;
+    int m_cachedDrawW{0};
+    int m_cachedDrawH{0};
+    int m_cachedDisplayPage{-1};
+    wxString m_cachedImagePath;
 
     OcrTaskState m_currentState{OcrTaskState::Idle};
 
@@ -88,6 +129,15 @@ private:
     wxString m_lastMarkdownResult;
     wxString m_lastJsonResult;
     wxString m_lastOutputDir;
+
+    // 断点恢复与进度追踪
+    int m_resumeFromPage{0};
+    std::string m_resumeInitialMarkdown;
+    std::string m_resumeInitialJson;
+
+    // 渲染平滑调度与节流控制（彻底避免百页文档频繁重排卡死 UI）
+    uint64_t m_lastRenderTimestamp{0};
+    int m_lastRenderedPage{-1};
 
     // Dropzone hover & action states
     bool m_isDropzoneHovered{false};

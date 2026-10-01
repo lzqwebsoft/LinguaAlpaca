@@ -149,6 +149,26 @@ void MarkdownView::InitWebView() {
     if (!m_webView)
         return;
 
+    // 禁用 WebView 弹出菜单与快捷键，防止触发后焦点陷入底层浏览器无法回到主界面
+    m_webView->EnableContextMenu(false);
+    m_webView->EnableBrowserAcceleratorKeys(false);
+    m_webView->EnableAccessToDevTools(false);
+
+    m_webView->Bind(wxEVT_CONTEXT_MENU, [](wxContextMenuEvent&) {
+        // 显式拦截并阻止 wxWidgets 层的右键菜单事件
+    });
+
+    wxString antiFocusTrapScript =
+        "window.addEventListener('contextmenu', function(e) { e.preventDefault(); e.stopPropagation(); return false; }, true);\n"
+        "window.addEventListener('keydown', function(e) {\n"
+        "    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {\n"
+        "        if (e.key === 'c' || e.key === 'C' || e.key === 'a' || e.key === 'A') return;\n"
+        "    }\n"
+        "    if (e.key && e.key.startsWith('F') && e.key.length > 1) { e.preventDefault(); e.stopPropagation(); return false; }\n"
+        "    if (e.ctrlKey || e.metaKey || e.altKey) { e.preventDefault(); e.stopPropagation(); return false; }\n"
+        "}, true);";
+    m_webView->AddUserScript(antiFocusTrapScript);
+
 #ifdef _WIN32
     RemoveNativeWindowBorders(m_webView);
 #endif
@@ -167,7 +187,7 @@ void MarkdownView::InitWebView() {
         }
     });
 
-    // 拦截网页内链接与图片点击协议
+    // 拦截网页内链接与图片点击协议，禁止 WebView 内部跳转外部网页，统统调用系统默认浏览器打开
     m_webView->Bind(wxEVT_WEBVIEW_NAVIGATING, [this](wxWebViewEvent& event) {
         wxString url = event.GetURL();
 
@@ -177,19 +197,60 @@ void MarkdownView::InitWebView() {
             wxString encoded = url.Mid(21);
             wxString decoded = wxURI::Unescape(encoded);
             if (m_onImageClickCallback) {
-                m_onImageClickCallback(decoded);
+                wxTheApp->CallAfter([this, decoded]() {
+                    if (m_onImageClickCallback) {
+                        m_onImageClickCallback(decoded);
+                    }
+                });
             }
             return;
         }
 
-        // 2. 拦截外网链接，使用操作系统默认浏览器打开
-        if (url.StartsWith("http://") || url.StartsWith("https://")) {
+        // 2. 拦截自定义外部链接协议: lingua-external-link://<encoded_url>
+        if (url.StartsWith("lingua-external-link://")) {
             event.Veto();
-            wxLaunchDefaultBrowser(url);
+            wxString encoded = url.Mid(23);
+            wxString decoded = wxURI::Unescape(encoded);
+            wxTheApp->CallAfter([decoded]() {
+                wxLaunchDefaultBrowser(decoded);
+            });
             return;
         }
 
-        // 允许初始 file:// 页面载入
+        // 3. 兜底拦截直接通过原生机制触发的外网链接 (http/https/mailto/ftp)
+        if (url.StartsWith("http://") || url.StartsWith("https://") ||
+            url.StartsWith("mailto:") || url.StartsWith("ftp://")) {
+            event.Veto();
+            wxTheApp->CallAfter([url]() {
+                wxLaunchDefaultBrowser(url);
+            });
+            return;
+        }
+
+        // 4. 允许初始模版页面 file:// 载入，严格拦截其它外部 file:// 页面跳转
+        if (url.StartsWith("file://")) {
+            wxString templatePath = FindHtmlTemplatePath();
+            wxString normTemplate = "file:///" + templatePath;
+            normTemplate.Replace("\\", "/");
+            if (url != normTemplate && !url.StartsWith(normTemplate + "?") && !url.StartsWith(normTemplate + "#")) {
+                event.Veto();
+                wxTheApp->CallAfter([url]() {
+                    wxLaunchDefaultBrowser(url);
+                });
+                return;
+            }
+        }
+    });
+
+    // 拦截并阻止任何新建窗口事件 (如 target="_blank" 或 window.open)，强制由系统默认浏览器打开
+    m_webView->Bind(wxEVT_WEBVIEW_NEWWINDOW, [](wxWebViewEvent& event) {
+        event.Veto();
+        wxString url = event.GetURL();
+        if (!url.IsEmpty() && !url.StartsWith("about:") && !url.StartsWith("javascript:")) {
+            wxTheApp->CallAfter([url]() {
+                wxLaunchDefaultBrowser(url);
+            });
+        }
     });
 }
 
@@ -225,16 +286,21 @@ void MarkdownView::SetMarkdown(const std::string& markdown, const std::string& b
     m_rawMarkdown = markdown;
     m_baseDir = baseDir;
 
-    // 同步给源码编辑器
-    if (m_textCtrl) {
-        wxString ws = wxString::FromUTF8(m_rawMarkdown);
-        if (ws.IsEmpty() && !m_rawMarkdown.empty()) {
-            ws = wxString(m_rawMarkdown.c_str(), wxConvLocal);
+    // 仅在源码编辑模式下才同步给 TextCtrl，在排版模式下标记脏位延迟同步，彻底避免大量文本卡死 Win32 RichEdit
+    if (m_currentMode == MarkdownViewMode::Source) {
+        if (m_textCtrl) {
+            wxString ws = wxString::FromUTF8(m_rawMarkdown);
+            if (ws.IsEmpty() && !m_rawMarkdown.empty()) {
+                ws = wxString(m_rawMarkdown.c_str(), wxConvLocal);
+            }
+            m_textCtrl->SetValue(ws, preserveScroll);
         }
-        m_textCtrl->SetValue(ws, preserveScroll);
+        m_isTextCtrlDirty = false;
+    } else {
+        m_isTextCtrlDirty = true;
     }
 
-    // 若处于排版模式，派发给 WebView 渲染
+    // 若处于排版模式，派发给 WebView 异步渲染
     if (m_webView) {
         if (m_isWebViewReady) {
             DoRenderMarkdown(preserveScroll);
@@ -256,24 +322,14 @@ void MarkdownView::DoRenderMarkdown(bool preserveScroll) {
         return;
 
     try {
-        wxString wsMd = wxString::FromUTF8(m_rawMarkdown);
-        if (wsMd.IsEmpty() && !m_rawMarkdown.empty()) {
-            wsMd = wxString(m_rawMarkdown.c_str(), wxConvLocal);
-        }
+        std::string jsonMd = nlohmann::json(m_rawMarkdown).dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
+        std::string jsonBase = nlohmann::json(m_baseDir).dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
 
-        wxString wsBase = wxString::FromUTF8(m_baseDir);
-        if (wsBase.IsEmpty() && !m_baseDir.empty()) {
-            wsBase = wxString(m_baseDir.c_str(), wxConvLocal);
-        }
-
-        wxString jsonMd = SafeJsStringLiteral(wsMd);
-        wxString jsonBase = SafeJsStringLiteral(wsBase);
-
-        wxString jsCall = "renderMarkdown(" + jsonMd + ", "
-                        + jsonBase + ", "
+        wxString jsCall = "renderMarkdown(" + wxString::FromUTF8(jsonMd) + ", "
+                        + wxString::FromUTF8(jsonBase) + ", "
                         + (preserveScroll ? "true" : "false") + ");";
 
-        m_webView->RunScript(jsCall);
+        m_webView->RunScriptAsync(jsCall);
     } catch (const std::exception& ex) {
         LOG_WARN("MarkdownView", std::string("DoRenderMarkdown exception: ") + ex.what());
     } catch (...) {
@@ -303,13 +359,16 @@ void MarkdownView::SetViewMode(MarkdownViewMode mode) {
         m_webView->Show();
         m_textCtrl->Hide();
     } else {
-        // 切换为源码模式
+        // 切换为源码模式，按需把最新 markdown 文本同步给 TextCtrl
         if (m_textCtrl) {
-            wxString ws = wxString::FromUTF8(m_rawMarkdown);
-            if (ws.IsEmpty() && !m_rawMarkdown.empty()) {
-                ws = wxString(m_rawMarkdown.c_str(), wxConvLocal);
+            if (m_isTextCtrlDirty) {
+                wxString ws = wxString::FromUTF8(m_rawMarkdown);
+                if (ws.IsEmpty() && !m_rawMarkdown.empty()) {
+                    ws = wxString(m_rawMarkdown.c_str(), wxConvLocal);
+                }
+                m_textCtrl->SetValue(ws, true);
+                m_isTextCtrlDirty = false;
             }
-            m_textCtrl->SetValue(ws, true);
             m_textCtrl->Show();
         }
         m_webView->Hide();
@@ -321,12 +380,13 @@ void MarkdownView::SetViewMode(MarkdownViewMode mode) {
 void MarkdownView::Clear() {
     m_rawMarkdown.clear();
     m_baseDir.clear();
+    m_isTextCtrlDirty = false;
 
     if (m_textCtrl) {
         m_textCtrl->Clear();
     }
     if (m_webView && m_isWebViewReady) {
-        m_webView->RunScript("renderMarkdown('', '', false);");
+        m_webView->RunScriptAsync("renderMarkdown('', '', false);");
     }
 }
 
@@ -372,7 +432,7 @@ void MarkdownView::ApplyThemeToWebView() {
         wxString jsCall = "setTheme(" + wxString(isDark ? "true" : "false") + ", "
                         + wxString::FromUTF8(palStr) + ");";
 
-        m_webView->RunScript(jsCall);
+        m_webView->RunScriptAsync(jsCall);
     } catch (const std::exception& ex) {
         LOG_WARN("MarkdownView", std::string("ApplyThemeToWebView exception: ") + ex.what());
     } catch (...) {

@@ -14,6 +14,34 @@
     <div id="content"></div>
 
     <script>
+        // 彻底禁用 WebView 右键弹出菜单与快捷键，防止抢占和锁死焦点
+        window.addEventListener('contextmenu', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            return false;
+        }, true);
+
+        window.addEventListener('keydown', function(e) {
+            // 允许基础复制 (Ctrl+C / Cmd+C) 与全选 (Ctrl+A / Cmd+A)
+            if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {
+                if (e.key === 'c' || e.key === 'C' || e.key === 'a' || e.key === 'A') {
+                    return;
+                }
+            }
+            // 禁用 F1 - F12
+            if (e.key && e.key.startsWith('F') && e.key.length > 1) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+            // 禁用组合快捷键 (防止触发浏览器默认刷新、查找、打印等，防止焦点陷入 WebView)
+            if (e.ctrlKey || e.metaKey || e.altKey) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+        }, true);
+
         // 配置 marked 选项 (GFM、自动断行、保留 HTML)
         if (typeof marked !== 'undefined') {
             marked.use({
@@ -22,18 +50,51 @@
             });
         }
 
-        // 通知 C++ 点击了图片
+        // 通知 C++ 点击了图片 (通过自定义协议跨平台兼容 Windows WebView2 与 macOS WKWebView)
         function notifyImageClick(src) {
             try {
-                if (window.chrome && window.chrome.webview) {
-                    window.chrome.webview.postMessage(JSON.stringify({ type: 'image_click', src: src }));
-                } else {
-                    window.location.href = "lingua-img-preview://" + encodeURIComponent(src);
-                }
+                window.location.href = "lingua-img-preview://" + encodeURIComponent(src);
             } catch (e) {
                 console.error("notifyImageClick failed:", e);
             }
         }
+
+        // 全局拦截所有 <a> 超链接点击与中键点击，阻止 WebView 内部跳转，通过协议通知宿主调用系统默认浏览器打开
+        function handleLinkClick(e) {
+            var link = e.target.closest('a');
+            if (!link) return;
+
+            var href = link.getAttribute('href');
+            if (!href) return;
+
+            // 内部锚点 (#section) 允许在文档内部平滑滚动，不拦截
+            if (href.startsWith('#')) {
+                return;
+            }
+
+            // 彻底阻止 WebView 内部跳转行为与默认新窗口事件
+            e.preventDefault();
+            e.stopPropagation();
+
+            var targetUrl = href.trim();
+            if (!targetUrl || targetUrl.startsWith('javascript:') || targetUrl.startsWith('about:')) {
+                return;
+            }
+
+            // 如果链接缺少协议头 (如 www.baidu.com 或 github.com)，自动补齐 https://
+            if (!targetUrl.match(/^[a-zA-Z][a-zA-Z0-9+.-]*:/)) {
+                targetUrl = "https://" + targetUrl;
+            }
+
+            try {
+                window.location.href = "lingua-external-link://" + encodeURIComponent(targetUrl);
+            } catch (err) {
+                console.error("open external link failed:", err);
+            }
+        }
+
+        document.addEventListener('click', handleLinkClick, true);
+        document.addEventListener('auxclick', handleLinkClick, true);
 
         // 主题动态同步
         function setTheme(isDark, palette) {

@@ -121,14 +121,62 @@ TEST_CASE("DocLayoutEngine - Test with User Newspaper Image", "[layout]") {
                  << elem.x1 << ", " << elem.y1 << ", " << elem.x2 << ", " << elem.y2 << "]\n";
         }
 
-        // Verify bounding boxes stay within image bounds
-        for (const auto& elem : result.elements) {
-            REQUIRE(elem.x1 >= 0);
-            REQUIRE(elem.y1 >= 0);
-            REQUIRE(elem.x2 <= result.imageWidth);
-            REQUIRE(elem.y2 <= result.imageHeight);
+        // Verify bounding boxes stay within image bounds and no duplicate containment
+        for (size_t i = 0; i < result.elements.size(); ++i) {
+            const auto& a = result.elements[i];
+            REQUIRE(a.x1 >= 0);
+            REQUIRE(a.y1 >= 0);
+            REQUIRE(a.x2 <= result.imageWidth);
+            REQUIRE(a.y2 <= result.imageHeight);
+
+            int areaA = (a.x2 - a.x1) * (a.y2 - a.y1);
+            for (size_t j = i + 1; j < result.elements.size(); ++j) {
+                const auto& b = result.elements[j];
+                int areaB = (b.x2 - b.x1) * (b.y2 - b.y1);
+                int ix1 = (std::max)(a.x1, b.x1);
+                int iy1 = (std::max)(a.y1, b.y1);
+                int ix2 = (std::min)(a.x2, b.x2);
+                int iy2 = (std::min)(a.y2, b.y2);
+                int iw = (std::max)(0, ix2 - ix1);
+                int ih = (std::max)(0, iy2 - iy1);
+                int interArea = iw * ih;
+                if (interArea > 0 && areaA > 0 && areaB > 0) {
+                    float ios = static_cast<float>(interArea) / (std::min)(areaA, areaB);
+                    if (a.labelName == b.labelName) {
+                        // 相同类别绝不能存在高度包含的重复嵌套框
+                        CHECK(ios < 0.70f);
+                    }
+                }
+            }
         }
     }
+}
+
+TEST_CASE("DocLayoutEngine - Suppress Contained and Duplicate Footnote Boxes", "[layout]") {
+    // 模拟官方 PaddleOCR 示例中 test_newspaper 检测到的 3 个图注候选框
+    // 框 1: 单行切片框 (score=0.4316)
+    // 框 2: 多行完整块 (score=0.6346)
+    // 框 3: 右下落款切片框 (score=0.3509)
+    std::vector<LayoutElement> elements = {
+        LayoutElement{1, LayoutElementType::Text, "vision_footnote", 0.4316f, 810, 702, 1452, 724, 0},
+        LayoutElement{2, LayoutElementType::Text, "vision_footnote", 0.6346f, 809, 702, 1486, 750, 0},
+        LayoutElement{3, LayoutElementType::Text, "vision_footnote", 0.3509f, 1246, 729, 1487, 750, 0}
+    };
+
+    DocLayoutFilterConfig cfg;
+    cfg.mergeLayoutBlocks = true;
+    cfg.containmentIosThreshold = 0.70f;
+
+    DocLayoutEngine::SuppressContainedOrDuplicateBoxes(elements, cfg);
+
+    // 核心断言：两个单行局部碎片框必须被抑制，仅保留唯一的多行完整图注大框！
+    REQUIRE(elements.size() == 1);
+    CHECK(elements[0].labelName == "vision_footnote");
+    CHECK(elements[0].score >= 0.6346f);
+    CHECK(elements[0].x1 <= 809);
+    CHECK(elements[0].y1 <= 702);
+    CHECK(elements[0].x2 >= 1486);
+    CHECK(elements[0].y2 >= 750);
 }
 
 TEST_CASE("DocumentPipeline - Never delete original input image or document file", "[pipeline]") {

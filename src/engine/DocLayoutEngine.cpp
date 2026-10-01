@@ -147,6 +147,63 @@ void DocLayoutEngine::Unload() {
 
 namespace {
 
+// PP-DocLayoutV3 官方 25 类标签完整定义 (对齐 PP-DocLayoutV3 config.json 规范)
+const std::vector<std::string> kDocLayoutLabels = {
+    "abstract",          // 0
+    "algorithm",         // 1
+    "aside_text",        // 2
+    "chart",             // 3
+    "content",           // 4
+    "display_formula",   // 5
+    "doc_title",         // 6
+    "figure_title",      // 7
+    "footer",            // 8
+    "footer_image",      // 9
+    "footnote",          // 10
+    "formula_number",    // 11
+    "header",            // 12
+    "header_image",      // 13
+    "image",             // 14
+    "inline_formula",    // 15
+    "number",            // 16
+    "paragraph_title",   // 17
+    "reference",         // 18
+    "reference_content", // 19
+    "seal",              // 20
+    "table",             // 21
+    "text",              // 22
+    "vertical_text",     // 23
+    "vision_footnote"    // 24
+};
+
+inline std::pair<LayoutElementType, std::string> MapDocLayoutClass(int classId) {
+    std::string labelName = "text";
+    if (classId >= 0 && classId < static_cast<int>(kDocLayoutLabels.size())) {
+        labelName = kDocLayoutLabels[classId];
+    }
+
+    LayoutElementType type = LayoutElementType::Text;
+    if (labelName == "doc_title" || labelName == "paragraph_title") {
+        type = LayoutElementType::Title;
+    } else if (labelName == "image" || labelName == "seal") {
+        type = LayoutElementType::Image;
+    } else if (labelName == "table") {
+        type = LayoutElementType::Table;
+    } else if (labelName == "display_formula" || labelName == "inline_formula") {
+        type = LayoutElementType::Formula;
+    } else if (labelName == "chart") {
+        type = LayoutElementType::Chart;
+    } else if (labelName == "header" || labelName == "header_image") {
+        type = LayoutElementType::Header;
+    } else if (labelName == "footer" || labelName == "footer_image") {
+        type = LayoutElementType::Footer;
+    } else {
+        type = LayoutElementType::Text;
+    }
+
+    return {type, labelName};
+}
+
 /**
  * @brief 判断当前候选版面元素是否属于应该被过滤的页眉/页脚/页码 (双重过滤策略)
  */
@@ -411,6 +468,121 @@ void SortLayoutReadingOrderRobust(std::vector<LayoutElement>& elements, int orig
 
 } // anonymous namespace
 
+void DocLayoutEngine::SuppressContainedOrDuplicateBoxes(std::vector<LayoutElement>& elements, const DocLayoutFilterConfig& cfg) {
+    if (elements.size() <= 1) return;
+
+    std::vector<bool> suppressed(elements.size(), false);
+
+    for (size_t i = 0; i < elements.size(); ++i) {
+        if (suppressed[i]) continue;
+        auto& boxA = elements[i];
+        int areaA = (boxA.x2 - boxA.x1) * (boxA.y2 - boxA.y1);
+        if (areaA <= 0) { suppressed[i] = true; continue; }
+
+        for (size_t j = i + 1; j < elements.size(); ++j) {
+            if (suppressed[j]) continue;
+            auto& boxB = elements[j];
+            int areaB = (boxB.x2 - boxB.x1) * (boxB.y2 - boxB.y1);
+            if (areaB <= 0) { suppressed[j] = true; continue; }
+
+            int interX1 = (std::max)(boxA.x1, boxB.x1);
+            int interY1 = (std::max)(boxA.y1, boxB.y1);
+            int interX2 = (std::min)(boxA.x2, boxB.x2);
+            int interY2 = (std::min)(boxA.y2, boxB.y2);
+
+            int interW = (std::max)(0, interX2 - interX1);
+            int interH = (std::max)(0, interY2 - interY1);
+            int interArea = interW * interH;
+            if (interArea <= 0) continue;
+
+            float minArea = static_cast<float>((std::min)(areaA, areaB));
+            float unionArea = static_cast<float>(areaA + areaB - interArea);
+            float ios = static_cast<float>(interArea) / minArea;
+            float iou = (unionArea > 0) ? (static_cast<float>(interArea) / unionArea) : 0.0f;
+
+            // A. 处理落在 Image 区域内部的文字碎片 (IoS >= 0.80)，非独立图注
+            if (boxA.type == LayoutElementType::Image && 
+                (boxB.type == LayoutElementType::Text || boxB.type == LayoutElementType::Title) &&
+                boxB.labelName != "vision_footnote" && boxB.labelName != "figure_title") {
+                if (ios >= 0.80f) {
+                    suppressed[j] = true;
+                    continue;
+                }
+            } else if (boxB.type == LayoutElementType::Image && 
+                (boxA.type == LayoutElementType::Text || boxA.type == LayoutElementType::Title) &&
+                boxA.labelName != "vision_footnote" && boxA.labelName != "figure_title") {
+                if (ios >= 0.80f) {
+                    suppressed[i] = true;
+                    break;
+                }
+            }
+
+            bool sameLabel = (boxA.labelName == boxB.labelName);
+            bool bothTextLike = (boxA.type == LayoutElementType::Text || boxA.type == LayoutElementType::Title) &&
+                                (boxB.type == LayoutElementType::Text || boxB.type == LayoutElementType::Title);
+
+            // B. 包含性抑制 (IoS >= cfg.containmentIosThreshold)
+            if (ios >= cfg.containmentIosThreshold && (sameLabel || bothTextLike)) {
+                size_t largeIdx = (areaA >= areaB) ? i : j;
+                size_t smallIdx = (areaA >= areaB) ? j : i;
+                auto& largeBox = elements[largeIdx];
+                auto& smallBox = elements[smallIdx];
+
+                // 如果两框面积高度接近 (IoU >= 0.70)，按置信度择优
+                if (iou >= 0.70f) {
+                    if (boxA.score >= boxB.score) {
+                        suppressed[j] = true;
+                    } else {
+                        suppressed[i] = true;
+                        break;
+                    }
+                    continue;
+                }
+
+                // 吸收合并外包络，保留大块，抑制小切片
+                largeBox.x1 = (std::min)(largeBox.x1, smallBox.x1);
+                largeBox.y1 = (std::min)(largeBox.y1, smallBox.y1);
+                largeBox.x2 = (std::max)(largeBox.x2, smallBox.x2);
+                largeBox.y2 = (std::max)(largeBox.y2, smallBox.y2);
+                largeBox.score = (std::max)(largeBox.score, smallBox.score);
+                if (largeBox.readingOrder < 0 && smallBox.readingOrder >= 0) {
+                    largeBox.readingOrder = smallBox.readingOrder;
+                }
+
+                LOG_DEBUG("DocLayoutEngine", 
+                    wxString::Format("Suppressed nested sub-box [%s score=%.2f] into enclosing block [%s score=%.2f], IoS=%.2f",
+                        smallBox.labelName.c_str(), smallBox.score,
+                        largeBox.labelName.c_str(), largeBox.score, ios).ToStdString());
+
+                suppressed[smallIdx] = true;
+                if (smallIdx == i) {
+                    break; // boxA 已被抑制，退出内循环
+                }
+                continue;
+            }
+
+            // C. 同类别的重影检测框抑制 (IoU >= cfg.overlapIouThreshold)
+            if (iou >= cfg.overlapIouThreshold && sameLabel) {
+                if (boxA.score >= boxB.score) {
+                    suppressed[j] = true;
+                } else {
+                    suppressed[i] = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    std::vector<LayoutElement> filtered;
+    filtered.reserve(elements.size());
+    for (size_t i = 0; i < elements.size(); ++i) {
+        if (!suppressed[i]) {
+            filtered.push_back(elements[i]);
+        }
+    }
+    elements = std::move(filtered);
+}
+
 bool DocLayoutEngine::AnalyzeLayout(const std::string& imagePath, DocumentLayoutResult& outResult, const DocLayoutFilterConfig& filterConfig) {
     if (!wxFileExists(wxString::FromUTF8(imagePath))) {
         m_lastError = "目标图像文件不存在: " + imagePath;
@@ -591,47 +763,10 @@ bool DocLayoutEngine::AnalyzeLayout(const std::string& imagePath, DocumentLayout
                     elem.y2 = y2;
                     elem.readingOrder = readOrder;
 
-                    // PP-DocLayoutV3 官方 25 类别映射
-                    if (classId == 6) {
-                        elem.type = LayoutElementType::Title;
-                        elem.labelName = "doc_title";
-                    } else if (classId == 17) {
-                        elem.type = LayoutElementType::Title;
-                        elem.labelName = "paragraph_title";
-                    } else if (classId == 14 || classId == 9 || classId == 13) {
-                        elem.type = LayoutElementType::Image;
-                        elem.labelName = "figure";
-                    } else if (classId == 21) {
-                        elem.type = LayoutElementType::Table;
-                        elem.labelName = "table";
-                    } else if (classId == 5 || classId == 15) {
-                        elem.type = LayoutElementType::Formula;
-                        elem.labelName = "formula";
-                    } else if (classId == 3) {
-                        elem.type = LayoutElementType::Chart;
-                        elem.labelName = "chart";
-                    } else if (classId == 12) {
-                        elem.type = LayoutElementType::Header;
-                        elem.labelName = "header";
-                    } else if (classId == 8) {
-                        elem.type = LayoutElementType::Footer;
-                        elem.labelName = "footer";
-                    } else if (classId == 20) {
-                        elem.type = LayoutElementType::Image;
-                        elem.labelName = "seal";
-                    } else if (classId == 24) {
-                        elem.type = LayoutElementType::Text;
-                        elem.labelName = "number";
-                    } else if (classId == 16) {
-                        elem.type = LayoutElementType::Header;
-                        elem.labelName = "header_image";
-                    } else if (classId == 18) {
-                        elem.type = LayoutElementType::Footer;
-                        elem.labelName = "footer_image";
-                    } else {
-                        elem.type = LayoutElementType::Text;
-                        elem.labelName = "text";
-                    }
+                    // PP-DocLayoutV3 官方 25 类别精确映射
+                    auto [mappedType, mappedLabel] = MapDocLayoutClass(classId);
+                    elem.type = mappedType;
+                    elem.labelName = mappedLabel;
 
                     // 执行语义与几何双重过滤 (页眉/页脚/独立页码)
                     if (ShouldFilterElement(elem, origW, origH, filterConfig)) {
@@ -643,7 +778,12 @@ bool DocLayoutEngine::AnalyzeLayout(const std::string& imagePath, DocumentLayout
             }
         }
 
-        // 1. 优先读取模型原生预测的 read_order (端到端注意力/Pointer Network 拓扑流)
+        // 1. 包含性重叠与子框去重抑制 (对齐 PaddleX merge_layout_blocks 与 IoS 规范)
+        if (filterConfig.mergeLayoutBlocks) {
+            SuppressContainedOrDuplicateBoxes(outResult.elements, filterConfig);
+        }
+
+        // 2. 优先读取模型原生预测的 read_order (端到端注意力/Pointer Network 拓扑流)
         bool hasModelReadOrder = false;
         int firstValidOrder = -1;
         for (const auto& elem : outResult.elements) {

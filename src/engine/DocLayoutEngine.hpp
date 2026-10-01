@@ -39,6 +39,9 @@ public:
     void SetFilterConfig(const DocLayoutFilterConfig& config) { m_filterConfig = config; }
     const DocLayoutFilterConfig& GetFilterConfig() const { return m_filterConfig; }
 
+    // 版块去重与包含性重叠抑制算法 (对齐 PaddleX merge_layout_blocks 与 IoS 规范)
+    static void SuppressContainedOrDuplicateBoxes(std::vector<LayoutElement>& elements, const DocLayoutFilterConfig& cfg);
+
     // 对整页文档图像进行版面分析与元素定位 (支持自定义过滤参数，默认使用引擎内嵌配置)
     bool AnalyzeLayout(const std::string& imagePath, DocumentLayoutResult& outResult, const DocLayoutFilterConfig& filterConfig);
     bool AnalyzeLayout(const std::string& imagePath, DocumentLayoutResult& outResult) {

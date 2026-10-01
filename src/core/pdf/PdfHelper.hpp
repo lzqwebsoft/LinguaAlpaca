@@ -29,6 +29,9 @@ public:
 
     // 将单页直接光栅化保存为临时 PNG 图像文件并返回临时路径（若输入已是普通图片，则直接返回原文件路径，调用方绝不可将其作为临时文件删除）
     static std::string RenderPageToTempFile(const std::string& filePath, int pageIndex, const std::string& tempDir, int targetWidth = 1600);
+
+    // 清理已缓存的 PDF 文档对象（释放文件句柄与内存）
+    static void ClearCache();
 };
 
 } // namespace LinguaAlpaca

@@ -313,12 +313,124 @@ bool DocumentPipeline::SaveToJson(const std::string& saveDir, const std::string&
     return true;
 }
 
+DocumentPipeline::ResumeInfo DocumentPipeline::CheckResumeInfo(const std::string& inputFilePath, const std::string& outputDir) {
+    ResumeInfo info;
+    if (inputFilePath.empty()) return info;
+
+    wxFileName inFn(wxString::FromUTF8(inputFilePath));
+    std::string baseDocName = inFn.GetName().ToUTF8().data();
+    std::string actualOutputDir = outputDir;
+    if (actualOutputDir.empty()) {
+        actualOutputDir = std::string(inFn.GetPath().ToUTF8().data()) + "/" + baseDocName;
+    }
+
+    wxString mdPath = wxString::FromUTF8(actualOutputDir) + "/" + wxString::FromUTF8(baseDocName) + ".md";
+    wxString jsonPath = wxString::FromUTF8(actualOutputDir) + "/" + wxString::FromUTF8(baseDocName) + ".json";
+
+    if (!wxFileExists(mdPath) || !wxFileExists(jsonPath)) {
+        return info;
+    }
+
+    std::ifstream jsonFile(jsonPath.ToStdWstring(), std::ios::binary);
+    if (!jsonFile) return info;
+    std::string jsonStr((std::istreambuf_iterator<char>(jsonFile)), std::istreambuf_iterator<char>());
+    jsonFile.close();
+
+    std::ifstream mdFile(mdPath.ToStdWstring(), std::ios::binary);
+    if (!mdFile) return info;
+    std::string mdStr((std::istreambuf_iterator<char>(mdFile)), std::istreambuf_iterator<char>());
+    mdFile.close();
+
+    try {
+        json j = json::parse(jsonStr);
+        info.totalPages = j.value("total_pages", 0);
+        int completedInJson = j.value("completed_pages", 0);
+
+        int pagesCount = 0;
+        int lastPageIndex = 0;
+        bool lastPageCompleted = true;
+        if (j.contains("pages") && j["pages"].is_array()) {
+            pagesCount = static_cast<int>(j["pages"].size());
+            if (!j["pages"].empty()) {
+                const auto& lastP = j["pages"].back();
+                lastPageIndex = lastP.value("page_index", pagesCount);
+                if (lastP.contains("is_page_completed")) {
+                    lastPageCompleted = lastP.value("is_page_completed", true);
+                }
+            }
+        }
+
+        info.isCompleted = j.value("is_completed", false);
+        if (!info.isCompleted && info.totalPages > 0 && completedInJson >= info.totalPages && lastPageCompleted) {
+            info.isCompleted = true;
+        }
+
+        if (info.isCompleted) {
+            info.lastProcessedPage = info.totalPages;
+            info.completedPages = info.totalPages;
+        } else {
+            // 未完成时：以记录中最后一页作为旧一页 (从该页开始重新完整解析，防止上次中断导致旧一页未完全解析而丢失数据)
+            int oldPage = 0;
+            if (j.contains("last_interrupted_page")) {
+                oldPage = j.value("last_interrupted_page", 0);
+            }
+            if (oldPage <= 0) {
+                oldPage = (std::max)(lastPageIndex, (std::max)(pagesCount, completedInJson));
+            }
+            info.lastProcessedPage = oldPage;
+            info.completedPages = (std::max)(0, oldPage - 1);
+        }
+
+        info.markdown = mdStr;
+        info.jsonStructured = jsonStr;
+        if (info.lastProcessedPage > 0 || !info.markdown.empty()) {
+            info.hasResumeData = true;
+        }
+    } catch (...) {
+        return info;
+    }
+
+    return info;
+}
+
+std::string DocumentPipeline::ExtractMarkdownUpToPage(const std::string& fullMd, int pageCount) {
+    if (pageCount <= 0 || fullMd.empty()) {
+        return "";
+    }
+
+    // 智能识别分隔符模式 (\r\n\r\n---\r\n\r\n 或 \n\n---\n\n)
+    std::string sep = "\n\n---\n\n";
+    if (fullMd.find("\r\n\r\n---\r\n\r\n") != std::string::npos) {
+        sep = "\r\n\r\n---\r\n\r\n";
+    } else if (fullMd.find("\r\n---\r\n") != std::string::npos && fullMd.find("\n\n---\n\n") == std::string::npos) {
+        sep = "\r\n---\r\n";
+    } else if (fullMd.find("\n---\n") != std::string::npos && fullMd.find("\n\n---\n\n") == std::string::npos) {
+        sep = "\n---\n";
+    }
+
+    size_t pos = 0;
+    for (int i = 0; i < pageCount; ++i) {
+        size_t nextPos = fullMd.find(sep, pos);
+        if (nextPos == std::string::npos) {
+            return fullMd;
+        }
+        if (i == pageCount - 1) {
+            return fullMd.substr(0, nextPos);
+        }
+        pos = nextPos + sep.length();
+    }
+    return fullMd;
+}
+
 void DocumentPipeline::StartParseAsync(
     const std::string& inputFilePath,
     const std::string& outputDir,
     bool translateEnglishToChinese,
     DocProgressCallback onProgress,
-    DocCompleteCallback onComplete) {
+    DocCompleteCallback onComplete,
+    int startFromPage,
+    const std::string& initialMarkdown,
+    const std::string& initialJson) {
 
     Cancel();
     m_shouldStop.store(false);
@@ -326,7 +438,7 @@ void DocumentPipeline::StartParseAsync(
 
     auto aliveToken = m_aliveToken;
 
-    std::thread([this, aliveToken, inputFilePath, outputDir, translateEnglishToChinese, onProgress, onComplete]() {
+    std::thread([this, aliveToken, inputFilePath, outputDir, translateEnglishToChinese, onProgress, onComplete, startFromPage, initialMarkdown, initialJson]() {
         if (!aliveToken->load()) return;
 
         if (!wxFileExists(wxString::FromUTF8(inputFilePath))) {
@@ -361,7 +473,9 @@ void DocumentPipeline::StartParseAsync(
             return;
         }
 
-        LOG_INFO("DocumentPipeline", "Start parsing document: " + inputFilePath + " (Total pages: " + std::to_string(totalPages) + ")");
+        LOG_INFO("DocumentPipeline", "Start parsing document: " + inputFilePath + 
+                 " (Total pages: " + std::to_string(totalPages) + 
+                 ", Start from page: " + std::to_string(startFromPage) + ")");
 
         // 建立临时工作缓存目录
         wxString tempCacheDir = wxStandardPaths::Get().GetTempDir() + "/LinguaAlpaca_doccache";
@@ -370,15 +484,69 @@ void DocumentPipeline::StartParseAsync(
         }
 
         std::string fullMarkdown;
-        json fullDocJson = json::object();
+        json fullDocJson;
+        if (!initialJson.empty()) {
+            try {
+                fullDocJson = json::parse(initialJson);
+            } catch (...) {
+                fullDocJson = json::object();
+            }
+        }
+        if (!fullDocJson.is_object()) {
+            fullDocJson = json::object();
+        }
         fullDocJson["file_name"] = baseDocName;
         fullDocJson["total_pages"] = totalPages;
-        fullDocJson["pages"] = json::array();
+        if (!fullDocJson.contains("pages") || !fullDocJson["pages"].is_array()) {
+            fullDocJson["pages"] = json::array();
+        }
+
+        int actualStartPage = (std::clamp)(startFromPage, 0, totalPages);
+        if (actualStartPage >= totalPages) {
+            actualStartPage = 0;
+            fullDocJson["pages"] = json::array();
+        }
+
+        // 核心要求：从旧一页 (actualStartPage) 重新开始解析，必须彻底清理旧一页的残留数据！
+        // 1. JSON：仅保留旧一页之前的完整页面 (page_index < actualStartPage + 1)
+        if (fullDocJson.contains("pages") && fullDocJson["pages"].is_array()) {
+            auto& pagesArr = fullDocJson["pages"];
+            for (auto it = pagesArr.begin(); it != pagesArr.end(); ) {
+                int pIdx = it->value("page_index", 0);
+                if (pIdx >= actualStartPage + 1) {
+                    it = pagesArr.erase(it);
+                } else {
+                    ++it;
+                }
+            }
+        }
+
+        // 2. Markdown：截取旧一页之前的确认内容，丢弃旧一页未完成的残片，实现安全合并
+        std::string cleanMd;
+        bool allHaveMd = false;
+        if (fullDocJson.contains("pages") && fullDocJson["pages"].is_array() && !fullDocJson["pages"].empty()) {
+            allHaveMd = true;
+            for (const auto& pObj : fullDocJson["pages"]) {
+                if (!pObj.contains("markdown") || pObj["markdown"].get<std::string>().empty()) {
+                    allHaveMd = false;
+                    break;
+                }
+                if (!cleanMd.empty()) {
+                    cleanMd += "\n\n---\n\n";
+                }
+                cleanMd += pObj["markdown"].get<std::string>();
+            }
+        }
+        if (allHaveMd && !cleanMd.empty()) {
+            fullMarkdown = cleanMd;
+        } else {
+            fullMarkdown = ExtractMarkdownUpToPage(initialMarkdown, actualStartPage);
+        }
 
         bool hasError = false;
         std::string errorMessage;
 
-        for (int p = 0; p < totalPages; ++p) {
+        for (int p = actualStartPage; p < totalPages; ++p) {
             if (m_shouldStop.load() || !aliveToken->load()) {
                 hasError = true;
                 errorMessage = "用户已取消解析";
@@ -423,9 +591,11 @@ void DocumentPipeline::StartParseAsync(
             pageJson["page_index"] = p + 1;
             pageJson["elements"] = json::array();
 
+            bool pageInterrupted = false;
             // 3. 阶段 2：裁剪元素子图并进行 VLM 独立识别
             for (size_t elIdx = 0; elIdx < layoutResult.elements.size(); ++elIdx) {
                 if (m_shouldStop.load() || !aliveToken->load()) {
+                    pageInterrupted = true;
                     break;
                 }
 
@@ -586,12 +756,56 @@ void DocumentPipeline::StartParseAsync(
             pageImg.Destroy();
             SafeRemoveTempFile(pageImgPath, inputFilePath, tempCacheDir);
 
+            if (pageInterrupted) {
+                pageJson["markdown"] = pageMarkdown;
+                pageJson["is_page_completed"] = false;
+                if (!pageMarkdown.empty()) {
+                    if (!fullMarkdown.empty()) {
+                        fullMarkdown += "\n\n---\n\n";
+                    }
+                    fullMarkdown += pageMarkdown;
+                    fullDocJson["pages"].push_back(pageJson);
+                }
+                fullDocJson["completed_pages"] = p;
+                fullDocJson["last_interrupted_page"] = p + 1;
+                fullDocJson["is_completed"] = false;
+
+                // 实时落盘保存被中断时的进度与数据
+                std::string interruptedJsonStr;
+                try {
+                    interruptedJsonStr = fullDocJson.dump(2, ' ', false, json::error_handler_t::replace);
+                } catch (...) {
+                    interruptedJsonStr = "{}";
+                }
+                SaveToMarkdown(actualOutputDir, baseDocName, fullMarkdown);
+                SaveToJson(actualOutputDir, baseDocName, interruptedJsonStr);
+
+                hasError = true;
+                errorMessage = "用户已取消解析";
+                break;
+            }
+
+            pageJson["markdown"] = pageMarkdown;
+            pageJson["is_page_completed"] = true;
             fullDocJson["pages"].push_back(pageJson);
 
             if (!fullMarkdown.empty()) {
                 fullMarkdown += "\n\n---\n\n";
             }
             fullMarkdown += pageMarkdown;
+
+            fullDocJson["completed_pages"] = p + 1;
+            fullDocJson["is_completed"] = (p + 1 == totalPages);
+
+            // ★★★ 核心要求 1：每页完成识别后实时落盘保存 Markdown 与 JSON，杜绝中断时数据丢失
+            std::string currentJsonDump;
+            try {
+                currentJsonDump = fullDocJson.dump(2, ' ', false, json::error_handler_t::replace);
+            } catch (...) {
+                currentJsonDump = "{}";
+            }
+            SaveToMarkdown(actualOutputDir, baseDocName, fullMarkdown);
+            SaveToJson(actualOutputDir, baseDocName, currentJsonDump);
 
             if (aliveToken->load() && onProgress) {
                 onProgress(p + 1, totalPages, "第 " + std::to_string(p + 1) + " 页解析完成", fullMarkdown);
@@ -606,9 +820,10 @@ void DocumentPipeline::StartParseAsync(
             jsonDumpStr = "{}";
         }
 
+        // 确保最新解析内容安全落盘
+        SaveToMarkdown(actualOutputDir, baseDocName, fullMarkdown);
+        SaveToJson(actualOutputDir, baseDocName, jsonDumpStr);
         if (!hasError && !m_shouldStop.load()) {
-            SaveToMarkdown(actualOutputDir, baseDocName, fullMarkdown);
-            SaveToJson(actualOutputDir, baseDocName, jsonDumpStr);
             LOG_INFO("DocumentPipeline", "Document parse completed, results saved to: " + actualOutputDir);
         }
 

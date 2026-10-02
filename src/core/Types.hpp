@@ -283,13 +283,13 @@ struct DocLayoutFilterConfig {
     bool filterPageNumber{true};         // 是否过滤独立页码 (number)
 
     // 2. 几何坐标辅助参数 (相对原图高度比例，0.0f ~ 1.0f)
-    float headerMarginRatio{0.08f};      // 顶部页眉敏感区高度比例 (默认顶部 8%)
-    float footerMarginRatio{0.08f};      // 底部页脚敏感区高度比例 (默认底部 8%)
+    float headerMarginRatio{0.18f};      // 顶部页眉敏感区高度比例 (默认顶部 18%，覆盖图书扫描大页边距)
+    float footerMarginRatio{0.18f};      // 底部页脚敏感区高度比例 (默认底部 18%)
 
-    // 3. 几何兜底过滤保护参数 (针对被误判为 Text/Title 的漏检页眉页脚)
+    // 3. 几何兜底过滤保护参数 (针对被误判为 Text/Title 的漏检页眉页脚及边角页码)
     bool enableGeometricFallback{true};  // 是否启用几何空间兜底过滤
-    float maxHeaderHeightRatio{0.05f};   // 允许认定为页眉的最大单框高度比例 (超过 5% 的多行大段落不予误删)
-    float maxFooterHeightRatio{0.05f};   // 允许认定为页脚的最大单框高度比例
+    float maxHeaderHeightRatio{0.06f};   // 允许认定为页眉/页码的最大单框高度比例 (超过 6% 的多行大段落不予误删)
+    float maxFooterHeightRatio{0.06f};   // 允许认定为页脚/页码的最大单框高度比例
 
     // 4. 置信度门限
     float scoreThreshold{0.35f};         // 检测框置信度过滤门限

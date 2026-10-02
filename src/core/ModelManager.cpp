@@ -236,6 +236,7 @@ namespace LinguaAlpaca {
 			serverConfig.port = appConfig.ocrPort;
 			serverConfig.ctxSize = appConfig.ocrCtxSize;
 			serverConfig.threads = appConfig.ocrThreads;
+			serverConfig.parallel = (std::clamp)(appConfig.ocrParallel, 1, 4);
 
 			// 若已在运行且配置一致且健康，直接返回
 			if (m_ocrServer->IsAlive() && !m_isOcrSwitching.load()) {
@@ -248,7 +249,8 @@ namespace LinguaAlpaca {
 						curCfg.ngl == serverConfig.ngl &&
 						curCfg.port == serverConfig.port &&
 						curCfg.ctxSize == serverConfig.ctxSize &&
-						curCfg.threads == serverConfig.threads) {
+						curCfg.threads == serverConfig.threads &&
+						curCfg.parallel == serverConfig.parallel) {
 						probeInfo.activeType = type;
 						probeInfo.currentModel = targetModelPath;
 						probeInfo.port = m_ocrServer->GetPort();
@@ -493,10 +495,11 @@ namespace LinguaAlpaca {
 		const std::string& imagePath,
 		const std::string& taskType,
 		OcrTokenCallback onToken,
-		OcrCompleteCallback onComplete) {
+		OcrCompleteCallback onComplete,
+		std::shared_ptr<std::atomic<bool>> taskCancelToken) {
 
 		if (m_ocrClient) {
-			m_ocrClient->RecognizeStream(imagePath, taskType, "", "", onToken, onComplete);
+			m_ocrClient->RecognizeStream(imagePath, taskType, "", "", onToken, onComplete, taskCancelToken);
 		}
 		else if (onComplete) {
 			onComplete("", false, "OCR 客户端未就绪");
@@ -512,6 +515,19 @@ namespace LinguaAlpaca {
 		if (type == TargetModelType::Ocr || type == TargetModelType::None) {
 			if (m_ocrClient) {
 				m_ocrClient->CancelCurrentTask();
+			}
+		}
+	}
+
+	void ModelManager::ResetCancelState(TargetModelType type) {
+		if (type == TargetModelType::Translation || type == TargetModelType::None) {
+			if (m_transClient) {
+				m_transClient->ResetCancelState();
+			}
+		}
+		if (type == TargetModelType::Ocr || type == TargetModelType::None) {
+			if (m_ocrClient) {
+				m_ocrClient->ResetCancelState();
 			}
 		}
 	}

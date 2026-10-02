@@ -252,8 +252,16 @@ bool LlamaServer::Start(const ServerConfig& config) {
         << " -ngl " << config.ngl
         << " --no-webui --jinja";
 
-    if (config.ctxSize > 0) {
-        cmd << " -c " << config.ctxSize;
+    int slotCtx = config.ctxSize > 0 ? config.ctxSize : 4096;
+    if (!config.mmprojPath.empty() && slotCtx < 4096) {
+        slotCtx = 4096; // 视觉多模态模型每个槽位至少保证 4096 上下文，防止图像切片提示词截断溢出
+    }
+    int parallel = (std::clamp)(config.parallel, 1, 4);
+    int totalCtx = slotCtx * parallel;
+    cmd << " -c " << totalCtx;
+
+    if (parallel > 1) {
+        cmd << " -np " << parallel;
     }
     if (config.threads > 0) {
         cmd << " -t " << config.threads;

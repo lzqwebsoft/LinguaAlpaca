@@ -58,10 +58,12 @@ public:
         const std::string& imagePath,
         const std::string& taskType,
         OcrTokenCallback onToken,
-        OcrCompleteCallback onComplete
+        OcrCompleteCallback onComplete,
+        std::shared_ptr<std::atomic<bool>> taskCancelToken = nullptr
     );
 
     void CancelInference(TargetModelType type = TargetModelType::None);
+    void ResetCancelState(TargetModelType type = TargetModelType::None);
 
     // 历史记录操作
     void AddHistory(const HistoryRecord& record);

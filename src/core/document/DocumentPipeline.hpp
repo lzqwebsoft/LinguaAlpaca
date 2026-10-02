@@ -46,10 +46,12 @@ using DocCompleteCallback = std::function<void(
  * 
  * 核心特性：
  * 1. 严格防爆显存/内存：PDF 按页单向流式光栅化与处理，单页处理完即刻销毁位图与临时文件，内存恒定；
- * 2. 阶段 1：DocLayoutEngine (PP-DocLayoutV2 ONNX Runtime) 进行目标定位与阅读顺序拓扑排序；
- * 3. 阶段 2：裁剪子图并通过 PaddleOCR-VL (llama-server VLM) 针对性推理表格、公式、标题及正文；
- * 4. 阶段 3：restructure_pages 页面重构，支持 Markdown/JSON 结构化自动生成与落盘；
- * 5. 英文文档支持自动触发 Hy-MT2 模型流式翻译为中文。
+ * 2. 核心阶段流水线重叠提速 (Staged Pipeline Overlap)：当前页执行阶段 2 (VLM 视觉推理) 时，后台异步线程并发执行下一页阶段 1 (PDF 光栅化与版面分析与元素切片)，零等待衔接，完全消除页面切换开销；
+ * 3. 严格断点可恢复性 (Resumption & Recoverability)：每页完成/中断时原子级实时落盘，异常或用户取消时自动清理预取临时数据，支持从任意中断页无损继续解析；
+ * 4. 阶段 1：DocLayoutEngine (PP-DocLayoutV2 ONNX Runtime) 进行目标定位与阅读顺序拓扑排序；
+ * 5. 阶段 2：裁剪子图并通过 PaddleOCR-VL (llama-server VLM) 针对性推理表格、公式、标题及正文；
+ * 6. 阶段 3：restructure_pages 页面重构，支持 Markdown/JSON 结构化自动生成与落盘；
+ * 7. 英文文档支持自动触发 Hy-MT2 模型流式翻译为中文。
  */
 class DocumentPipeline : public std::enable_shared_from_this<DocumentPipeline> {
 public:
@@ -96,6 +98,14 @@ public:
 
     // PaddleOCR OTSL 表格转标准 HTML 表格辅助方法
     static std::string ConvertOtslToHtml(const std::string& otslStr);
+
+    // 判定是否属于页眉/页脚区域的独立页码 (用于 Markdown 与 JSON 组装时的二次过滤防护)
+    static bool IsHeaderOrFooterPageNumber(
+        const std::string& text,
+        const std::string& labelName,
+        int x1, int y1, int x2, int y2,
+        int pageW, int pageH
+    );
 
 private:
     std::shared_ptr<ModelManager> m_modelManager;

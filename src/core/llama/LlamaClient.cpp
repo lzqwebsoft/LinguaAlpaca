@@ -10,6 +10,7 @@
 #include <string_view>
 
 #include <http.h>
+#include "core/Logger.hpp"
 
 using json = nlohmann::json;
 
@@ -277,21 +278,27 @@ std::string LlamaClient::SanitizeOcrToken(const std::string& token) {
 }
 
 void LlamaClient::RecognizeStream(const std::string& imagePath, const std::string& taskType, const std::string& /*modelPath*/, const std::string& /*mmprojPath*/, OcrTokenCallback onToken,
-                                  OcrCompleteCallback onComplete) {
+                                  OcrCompleteCallback onComplete, std::shared_ptr<std::atomic<bool>> taskCancelToken) {
 
-    CancelCurrentTask();
-    m_shouldStop.store(false);
+    if (!taskCancelToken) {
+        CancelCurrentTask();
+        m_shouldStop.store(false);
+    }
+    m_activeRequests.fetch_add(1);
     m_isRunning.store(true);
     auto aliveToken = m_aliveToken;
 
-    std::thread([this, aliveToken, imagePath, taskType, onToken, onComplete]() {
+    std::thread([this, aliveToken, taskCancelToken, imagePath, taskType, onToken, onComplete]() {
         if (!aliveToken->load()) {
+            m_activeRequests.fetch_sub(1);
+            if (m_activeRequests.load() <= 0) m_isRunning.store(false);
             return;
         }
 
         std::string currentBaseUrl = GetBaseUrl();
         if (currentBaseUrl.empty()) {
-            m_isRunning.store(false);
+            m_activeRequests.fetch_sub(1);
+            if (m_activeRequests.load() <= 0) m_isRunning.store(false);
             if (aliveToken->load() && onComplete)
                 onComplete("", false, "服务地址为空或未启动");
             return;
@@ -325,7 +332,9 @@ void LlamaClient::RecognizeStream(const std::string& imagePath, const std::strin
             std::string buffer;
             httplib::Headers headers;
             auto res = cli.Post(path, headers, reqBody, "application/json", [&](const char* data, size_t len) {
-                if (!aliveToken->load() || m_shouldStop.load()) {
+                // 关键修复：当传入独立的 taskCancelToken 时，仅受该批次任务自身令牌控制，彻底隔离全局历史 m_shouldStop 标志
+                bool isCancelled = taskCancelToken ? taskCancelToken->load() : m_shouldStop.load();
+                if (!aliveToken->load() || isCancelled) {
                     return false;
                 }
 
@@ -378,20 +387,27 @@ void LlamaClient::RecognizeStream(const std::string& imagePath, const std::strin
 
             if (!res) {
                 hasError = true;
-                errorMsg = "HTTP 请求失败: 无法连接至嵌入服务";
+                errorMsg = "HTTP 请求失败: 无法连接至嵌入服务 (" + currentBaseUrl + ")";
+                LOG_ERROR("LlamaClient", errorMsg);
             } else if (res->status != 200) {
                 hasError = true;
-                errorMsg = "HTTP 错误: " + std::to_string(res->status);
+                errorMsg = "HTTP 错误 " + std::to_string(res->status) + ": " + res->body;
+                LOG_ERROR("LlamaClient", errorMsg);
             }
         } catch (const std::exception& e) {
             hasError = true;
             errorMsg = std::string("异常: ") + e.what();
+            LOG_ERROR("LlamaClient", errorMsg);
         } catch (...) {
             hasError = true;
             errorMsg = "未知 OCR 推理异常";
+            LOG_ERROR("LlamaClient", errorMsg);
         }
 
-        m_isRunning.store(false);
+        m_activeRequests.fetch_sub(1);
+        if (m_activeRequests.load() <= 0) {
+            m_isRunning.store(false);
+        }
 
         if (!aliveToken->load()) {
             return;
@@ -405,7 +421,8 @@ void LlamaClient::RecognizeStream(const std::string& imagePath, const std::strin
             finalCleanText.pop_back();
         }
 
-        if (m_shouldStop.load()) {
+        bool isCancelled = taskCancelToken ? taskCancelToken->load() : m_shouldStop.load();
+        if (isCancelled) {
             if (onComplete)
                 onComplete(finalCleanText, false, "已手动取消");
         } else if (hasError) {
@@ -426,7 +443,7 @@ void LlamaClient::CancelCurrentTask() {
 }
 
 bool LlamaClient::IsRunning() const {
-    return m_isRunning.load();
+    return m_activeRequests.load() > 0 || m_isRunning.load();
 }
 
 } // namespace LinguaAlpaca

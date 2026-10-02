@@ -241,3 +241,66 @@ TEST_CASE("DocumentPipeline - Convert PaddleOCR OTSL table to HTML table", "[tab
     REQUIRE(html.find("</table>") != std::string::npos);
 }
 
+TEST_CASE("DocLayoutEngine - Filter Header and Footer Page Numbers", "[layout][filter]") {
+    DocLayoutFilterConfig cfg;
+    const int origW = 2800;
+    const int origH = 3900;
+
+    // 1. 用户真实文档：左侧页眉独立页码 (如第 2 页: [446, 445, 509, 512], type="number")
+    LayoutElement leftHeaderNum{1, LayoutElementType::Text, "number", 0.95f, 446, 445, 509, 512, 1};
+    CHECK(DocLayoutEngine::ShouldFilterElement(leftHeaderNum, origW, origH, cfg) == true);
+
+    // 2. 用户真实文档：右侧页眉独立页码 (如第 5 页: [2411, 456, 2466, 518], type="number")
+    LayoutElement rightHeaderNum{1, LayoutElementType::Text, "number", 0.96f, 2411, 456, 2466, 518, 1};
+    CHECK(DocLayoutEngine::ShouldFilterElement(rightHeaderNum, origW, origH, cfg) == true);
+
+    // 3. 底部页脚独立页码 (如居中: [1380, 3680, 1440, 3740], y ≈ 94%H)
+    LayoutElement footerNum{10, LayoutElementType::Text, "number", 0.92f, 1380, 3680, 1440, 3740, 10};
+    CHECK(DocLayoutEngine::ShouldFilterElement(footerNum, origW, origH, cfg) == true);
+
+    // 4. 几何兜底：被模型误判为 "text" 的左上角或右上角单行页码
+    LayoutElement misclassifiedCorner{1, LayoutElementType::Text, "text", 0.80f, 446, 445, 509, 512, 1};
+    CHECK(DocLayoutEngine::ShouldFilterElement(misclassifiedCorner, origW, origH, cfg) == true);
+
+    // 5. 显式模型页眉与页脚标签
+    LayoutElement modelHeader{1, LayoutElementType::Header, "header", 0.88f, 1000, 420, 1800, 480, 1};
+    CHECK(DocLayoutEngine::ShouldFilterElement(modelHeader, origW, origH, cfg) == true);
+
+    LayoutElement modelFooter{20, LayoutElementType::Footer, "footer", 0.85f, 800, 3650, 2000, 3720, 20};
+    CHECK(DocLayoutEngine::ShouldFilterElement(modelFooter, origW, origH, cfg) == true);
+
+    // 6. 反向校验：页面正文段落 (绝不能被误删)
+    LayoutElement bodyParagraph{2, LayoutElementType::Text, "text", 0.99f, 350, 800, 2450, 1800, 2};
+    CHECK(DocLayoutEngine::ShouldFilterElement(bodyParagraph, origW, origH, cfg) == false);
+
+    // 7. 反向校验：顶部文档主标题 (doc_title 绝不能被几何兜底误删)
+    LayoutElement docTitle{1, LayoutElementType::Title, "doc_title", 0.98f, 600, 450, 2200, 580, 1};
+    CHECK(DocLayoutEngine::ShouldFilterElement(docTitle, origW, origH, cfg) == false);
+}
+
+TEST_CASE("DocumentPipeline - Secondary Page Number Filtering", "[pipeline][filter]") {
+    const int pageW = 2800;
+    const int pageH = 3900;
+
+    // 1. 显式 number 标签在顶部/底部
+    CHECK(DocumentPipeline::IsHeaderOrFooterPageNumber("2", "number", 446, 445, 509, 512, pageW, pageH) == true);
+    CHECK(DocumentPipeline::IsHeaderOrFooterPageNumber("5", "number", 2411, 456, 2466, 518, pageW, pageH) == true);
+    CHECK(DocumentPipeline::IsHeaderOrFooterPageNumber("86", "number", 1380, 3680, 1440, 3740, pageW, pageH) == true);
+
+    // 2. 文本标签但在边角且文本为纯数字/装饰页码
+    CHECK(DocumentPipeline::IsHeaderOrFooterPageNumber("2", "text", 446, 445, 509, 512, pageW, pageH) == true);
+    CHECK(DocumentPipeline::IsHeaderOrFooterPageNumber("5", "text", 2411, 456, 2466, 518, pageW, pageH) == true);
+    CHECK(DocumentPipeline::IsHeaderOrFooterPageNumber("- 2 -", "text", 446, 445, 550, 512, pageW, pageH) == true);
+    CHECK(DocumentPipeline::IsHeaderOrFooterPageNumber("· 5 ·", "text", 2350, 456, 2466, 518, pageW, pageH) == true);
+    CHECK(DocumentPipeline::IsHeaderOrFooterPageNumber("第 5 页", "text", 1300, 3680, 1500, 3740, pageW, pageH) == true);
+    CHECK(DocumentPipeline::IsHeaderOrFooterPageNumber("Page 12", "text", 2300, 456, 2466, 518, pageW, pageH) == true);
+    CHECK(DocumentPipeline::IsHeaderOrFooterPageNumber("IV", "text", 446, 445, 509, 512, pageW, pageH) == true);
+
+    // 3. 反向校验：正文中包含数字的普通句子
+    CHECK(DocumentPipeline::IsHeaderOrFooterPageNumber("In 1984, George Orwell wrote 1984", "text", 350, 800, 2450, 1800, pageW, pageH) == false);
+
+    // 4. 反向校验：标题
+    CHECK(DocumentPipeline::IsHeaderOrFooterPageNumber("第一章 绪论", "paragraph_title", 500, 450, 2000, 550, pageW, pageH) == false);
+}
+
+

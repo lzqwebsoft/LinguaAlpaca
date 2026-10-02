@@ -89,7 +89,7 @@ namespace LinguaAlpaca {
         Save();
     }
 
-    void ConfigManager::SaveOcrConfig(const std::string& ocrModelPath, const std::string& ocrMmprojPath, int ocrGpuLayers, int port, int ctxSize, int threads, bool ocrMmprojOffload) {
+    void ConfigManager::SaveOcrConfig(const std::string& ocrModelPath, const std::string& ocrMmprojPath, int ocrGpuLayers, int port, int ctxSize, int threads, bool ocrMmprojOffload, int parallel) {
         {
             std::lock_guard<std::mutex> lock(m_mutex);
             m_config.ocrModelPath = ocrModelPath;
@@ -99,6 +99,7 @@ namespace LinguaAlpaca {
             m_config.ocrCtxSize = ctxSize;
             m_config.ocrThreads = threads;
             m_config.ocrMmprojOffload = ocrMmprojOffload;
+            m_config.ocrParallel = parallel;
         }
         Save();
     }
@@ -198,6 +199,7 @@ namespace LinguaAlpaca {
         m_config.ocrPort = fileConfig.ReadLong("/OCRModel/Port", 0);
         m_config.ocrCtxSize = fileConfig.ReadLong("/OCRModel/CtxSize", 4096);
         m_config.ocrThreads = fileConfig.ReadLong("/OCRModel/Threads", 0);
+        m_config.ocrParallel = fileConfig.ReadLong("/OCRModel/Parallel", 2);
 
         // 划词翻译配置
         m_config.selectionTranslateEnabled = fileConfig.ReadBool("/Selection/Enabled", true);
@@ -243,6 +245,7 @@ namespace LinguaAlpaca {
         fileConfig.Write("/OCRModel/Port", (long)m_config.ocrPort);
         fileConfig.Write("/OCRModel/CtxSize", (long)m_config.ocrCtxSize);
         fileConfig.Write("/OCRModel/Threads", (long)m_config.ocrThreads);
+        fileConfig.Write("/OCRModel/Parallel", (long)m_config.ocrParallel);
         fileConfig.Write("/LayoutModel/Path", wxString::FromUTF8(m_config.layoutModelPath));
         fileConfig.Write("/LayoutModel/ExecutionProvider", (long)m_config.layoutExecutionProvider);
         fileConfig.Write("/LayoutModel/Threads", (long)m_config.layoutThreads);

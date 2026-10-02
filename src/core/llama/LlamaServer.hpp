@@ -30,6 +30,7 @@ struct ServerConfig {
     int ngl = 99;
     int ctxSize = 2048;
     int threads = 0;
+    int parallel = 1; // 并发槽位数 (llama-server --parallel / -np)
 };
 
 class LlamaServer {

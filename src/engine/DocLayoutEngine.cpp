@@ -205,91 +205,6 @@ inline std::pair<LayoutElementType, std::string> MapDocLayoutClass(int classId) 
 }
 
 /**
- * @brief 判断当前候选版面元素是否属于应该被过滤的页眉/页脚/页码 (双重过滤策略)
- */
-bool ShouldFilterElement(const LayoutElement& elem,
-                         int origW,
-                         int origH,
-                         const DocLayoutFilterConfig& cfg) {
-    if (origH <= 0 || origW <= 0) return false;
-
-    const float boxH = static_cast<float>(elem.y2 - elem.y1);
-    const float boxHeightRatio = boxH / static_cast<float>(origH);
-    const float topRatio = static_cast<float>(elem.y1) / static_cast<float>(origH);
-    const float bottomRatio = static_cast<float>(elem.y2) / static_cast<float>(origH);
-
-    // ------------------------------------------------------------------------
-    // 第 1 重过滤：模型显式语义标签判定 (结合上下半区软边界防护)
-    // ------------------------------------------------------------------------
-    if (cfg.filterHeader && (elem.type == LayoutElementType::Header || 
-                             elem.labelName == "header" || 
-                             elem.labelName == "header_image")) {
-        // 防御性校验：页眉必须位于页面上半部分 (y1 在前 30% 范围内)，防止模型偶发中心区域分类漂移
-        if (topRatio <= 0.30f) {
-            LOG_DEBUG("DocLayoutEngine", 
-                wxString::Format("Filter: dropped model-classified header '%s' at y=[%d, %d]", 
-                                 elem.labelName.c_str(), elem.y1, elem.y2).ToStdString());
-            return true;
-        }
-    }
-
-    if (cfg.filterFooter && (elem.type == LayoutElementType::Footer || 
-                             elem.labelName == "footer" || 
-                             elem.labelName == "footer_image")) {
-        // 防御性校验：页脚必须位于页面下半部分 (y2 在后 30% 范围内)
-        if (bottomRatio >= 0.70f) {
-            LOG_DEBUG("DocLayoutEngine", 
-                wxString::Format("Filter: dropped model-classified footer '%s' at y=[%d, %d]", 
-                                 elem.labelName.c_str(), elem.y1, elem.y2).ToStdString());
-            return true;
-        }
-    }
-
-    // 独立页码标签 (number)
-    if (cfg.filterPageNumber && elem.labelName == "number") {
-        if (topRatio <= cfg.headerMarginRatio || bottomRatio >= (1.0f - cfg.footerMarginRatio)) {
-            LOG_DEBUG("DocLayoutEngine", 
-                wxString::Format("Filter: dropped page number '%s' at y=[%d, %d]", 
-                                 elem.labelName.c_str(), elem.y1, elem.y2).ToStdString());
-            return true;
-        }
-    }
-
-    // ------------------------------------------------------------------------
-    // 第 2 重过滤：几何空间坐标兜底 (针对被模型误判为 Text 或 Title 的漏检页眉页脚)
-    // ------------------------------------------------------------------------
-    if (cfg.enableGeometricFallback) {
-        // 仅对文本类元素做几何兜底 (表格、公式、图表等复杂结构不在此激进剔除)
-        bool isTextLike = (elem.type == LayoutElementType::Text || 
-                           elem.type == LayoutElementType::Title);
-
-        if (isTextLike) {
-            // A. 顶部页眉兜底：整个包围盒完全位于顶部敏感区内，且高度属于单行/短文本特征
-            if (cfg.filterHeader && bottomRatio <= cfg.headerMarginRatio) {
-                if (boxHeightRatio <= cfg.maxHeaderHeightRatio) {
-                    LOG_DEBUG("DocLayoutEngine", 
-                        wxString::Format("Geometric fallback: dropped misclassified header at y=[%d, %d]", 
-                                         elem.y1, elem.y2).ToStdString());
-                    return true;
-                }
-            }
-
-            // B. 底部页脚兜底：整个包围盒完全位于底部敏感区内，且高度属于单行/短文本特征
-            if (cfg.filterFooter && topRatio >= (1.0f - cfg.footerMarginRatio)) {
-                if (boxHeightRatio <= cfg.maxFooterHeightRatio) {
-                    LOG_DEBUG("DocLayoutEngine", 
-                        wxString::Format("Geometric fallback: dropped misclassified footer at y=[%d, %d]", 
-                                         elem.y1, elem.y2).ToStdString());
-                    return true;
-                }
-            }
-        }
-    }
-
-    return false;
-}
-
-/**
  * @brief 空间分栏拓扑排序算法 (对齐 PaddleX / XY-Cut++ 规范，作为模型缺少 read_order 时的兜底)
  * 
  * 核心原理：
@@ -467,6 +382,118 @@ void SortLayoutReadingOrderRobust(std::vector<LayoutElement>& elements, int orig
 }
 
 } // anonymous namespace
+
+/**
+ * @brief 判断当前候选版面元素是否属于应该被过滤的页眉/页脚/页码 (双重过滤策略)
+ */
+bool DocLayoutEngine::ShouldFilterElement(const LayoutElement& elem,
+                                          int origW,
+                                          int origH,
+                                          const DocLayoutFilterConfig& cfg) {
+    if (origH <= 0 || origW <= 0) return false;
+
+    const float boxH = static_cast<float>(elem.y2 - elem.y1);
+    const float boxW = static_cast<float>(elem.x2 - elem.x1);
+    const float boxHeightRatio = boxH / static_cast<float>(origH);
+    const float boxWidthRatio = boxW / static_cast<float>(origW);
+    const float topRatio = static_cast<float>(elem.y1) / static_cast<float>(origH);
+    const float bottomRatio = static_cast<float>(elem.y2) / static_cast<float>(origH);
+    const float leftRatio = static_cast<float>(elem.x1) / static_cast<float>(origW);
+    const float rightRatio = static_cast<float>(elem.x2) / static_cast<float>(origW);
+
+    const float effectiveHeaderMargin = (std::max)(cfg.headerMarginRatio, 0.18f);
+    const float effectiveFooterMargin = (std::max)(cfg.footerMarginRatio, 0.18f);
+
+    // ------------------------------------------------------------------------
+    // 第 1 重过滤：模型显式语义标签判定 (结合上下半区软边界防护)
+    // ------------------------------------------------------------------------
+    if (cfg.filterHeader && (elem.type == LayoutElementType::Header || 
+                             elem.labelName == "header" || 
+                             elem.labelName == "header_image")) {
+        // 防御性校验：页眉必须位于页面上半部分 (y1 在前 30% 范围内)，防止模型偶发中心区域分类漂移
+        if (topRatio <= 0.30f) {
+            LOG_DEBUG("DocLayoutEngine", 
+                wxString::Format("Filter: dropped model-classified header '%s' at y=[%d, %d]", 
+                                 elem.labelName.c_str(), elem.y1, elem.y2).ToStdString());
+            return true;
+        }
+    }
+
+    if (cfg.filterFooter && (elem.type == LayoutElementType::Footer || 
+                             elem.labelName == "footer" || 
+                             elem.labelName == "footer_image")) {
+        // 防御性校验：页脚必须位于页面下半部分 (y2 在后 30% 范围内)
+        if (bottomRatio >= 0.70f) {
+            LOG_DEBUG("DocLayoutEngine", 
+                wxString::Format("Filter: dropped model-classified footer '%s' at y=[%d, %d]", 
+                                 elem.labelName.c_str(), elem.y1, elem.y2).ToStdString());
+            return true;
+        }
+    }
+
+    // 独立页码标签 (number / formula_number)
+    // 过滤页眉区 (<= effectiveHeaderMargin 或 <= 20%) 或页脚区 (>= 1.0 - effectiveFooterMargin 或 >= 80%) 的独立页码
+    if (cfg.filterPageNumber && (elem.labelName == "number" || elem.labelName == "formula_number")) {
+        const float headerThresh = (std::max)(effectiveHeaderMargin, 0.20f);
+        const float footerThresh = (std::max)(effectiveFooterMargin, 0.20f);
+        if (topRatio <= headerThresh || bottomRatio >= (1.0f - footerThresh)) {
+            LOG_DEBUG("DocLayoutEngine", 
+                wxString::Format("Filter: dropped page number '%s' at x=[%d, %d], y=[%d, %d]", 
+                                 elem.labelName.c_str(), elem.x1, elem.x2, elem.y1, elem.y2).ToStdString());
+            return true;
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // 第 2 重过滤：几何空间坐标兜底 (针对被模型误判为 Text 或 Title 的漏检页眉页脚及边角页码)
+    // ------------------------------------------------------------------------
+    if (cfg.enableGeometricFallback) {
+        // 仅对文本类元素做几何兜底 (表格、公式、图表等复杂结构不在此激进剔除)
+        bool isTextLike = (elem.type == LayoutElementType::Text || 
+                           elem.type == LayoutElementType::Title ||
+                           elem.labelName == "aside_text" ||
+                           elem.labelName == "content");
+
+        if (isTextLike) {
+            // A. 页眉/页脚边角与居中独立页码兜底过滤 (Header / Footer Corner & Center Page Numbers)
+            // 典型特征：位于顶部或底部敏感区内，且靠左 (x2 <= 35%W) 或靠右 (x1 >= 65%W) 或居中狭窄单行，且宽高为短小单行
+            bool isCornerOrCenterPos = (rightRatio <= 0.35f || leftRatio >= 0.65f || 
+                                       (leftRatio >= 0.30f && rightRatio <= 0.70f && boxWidthRatio <= 0.15f));
+            bool isSmallBox = (boxHeightRatio <= cfg.maxHeaderHeightRatio && boxWidthRatio <= 0.20f);
+
+            if (cfg.filterPageNumber && isSmallBox && isCornerOrCenterPos) {
+                if (bottomRatio <= effectiveHeaderMargin || topRatio >= (1.0f - effectiveFooterMargin)) {
+                    LOG_DEBUG("DocLayoutEngine", 
+                        wxString::Format("Geometric fallback: dropped corner/center page number at x=[%d, %d], y=[%d, %d]", 
+                                         elem.x1, elem.x2, elem.y1, elem.y2).ToStdString());
+                    return true;
+                }
+            }
+
+            // B. 顶部页眉兜底：整个包围盒完全位于顶部敏感区内，且高度属于单行/短文本特征 (避开主文档标题 doc_title)
+            if (cfg.filterHeader && elem.labelName != "doc_title" && bottomRatio <= effectiveHeaderMargin) {
+                if (boxHeightRatio <= cfg.maxHeaderHeightRatio) {
+                    LOG_DEBUG("DocLayoutEngine", 
+                        wxString::Format("Geometric fallback: dropped misclassified header at y=[%d, %d]", 
+                                         elem.y1, elem.y2).ToStdString());
+                    return true;
+                }
+            }
+
+            // C. 底部页脚兜底：整个包围盒完全位于底部敏感区内，且高度属于单行/短文本特征
+            if (cfg.filterFooter && topRatio >= (1.0f - effectiveFooterMargin)) {
+                if (boxHeightRatio <= cfg.maxFooterHeightRatio) {
+                    LOG_DEBUG("DocLayoutEngine", 
+                        wxString::Format("Geometric fallback: dropped misclassified footer at y=[%d, %d]", 
+                                         elem.y1, elem.y2).ToStdString());
+                    return true;
+                }
+            }
+        }
+    }
+
+    return false;
+}
 
 void DocLayoutEngine::SuppressContainedOrDuplicateBoxes(std::vector<LayoutElement>& elements, const DocLayoutFilterConfig& cfg) {
     if (elements.size() <= 1) return;

@@ -14,6 +14,7 @@
 #include <future>
 #include <thread>
 #include <algorithm>
+#include <regex>
 
 using json = nlohmann::json;
 
@@ -23,13 +24,15 @@ namespace {
 
 std::string TrimString(const std::string& str) {
     size_t first = str.find_first_not_of(" \t\r\n");
-    if (first == std::string::npos) return "";
+    if (first == std::string::npos)
+        return "";
     size_t last = str.find_last_not_of(" \t\r\n");
     return str.substr(first, (last - first + 1));
 }
 
 bool IsPredominantlyEnglish(const std::string& text) {
-    if (text.empty()) return false;
+    if (text.empty())
+        return false;
     int latinCount = 0;
     int cjkCount = 0;
     for (size_t i = 0; i < text.size(); ++i) {
@@ -46,8 +49,10 @@ bool IsPredominantlyEnglish(const std::string& text) {
 
 // 严格判断两路径是否指向同一物理文件 (处理 Windows 大小写、正反斜杠及符号链接)
 bool IsSameFilePath(const std::string& path1, const std::string& path2) {
-    if (path1.empty() || path2.empty()) return false;
-    if (path1 == path2) return true;
+    if (path1.empty() || path2.empty())
+        return false;
+    if (path1 == path2)
+        return true;
     try {
         std::filesystem::path p1 = std::filesystem::u8path(path1);
         std::filesystem::path p2 = std::filesystem::u8path(path2);
@@ -65,7 +70,8 @@ bool IsSameFilePath(const std::string& path1, const std::string& path2) {
 
 // 安全回收临时文件：绝对不删除用户原始输入文件，且仅允许清理临时缓存目录内的文件
 void SafeRemoveTempFile(const std::string& pathToRemove, const std::string& originalInputFile, const wxString& tempDir) {
-    if (pathToRemove.empty()) return;
+    if (pathToRemove.empty())
+        return;
 
     // 1. 绝对防御：若目标路径与用户原始输入文档/图片相同，绝不删除
     if (IsSameFilePath(pathToRemove, originalInputFile)) {
@@ -96,6 +102,206 @@ void SafeRemoveTempFile(const std::string& pathToRemove, const std::string& orig
     }
 }
 
+// 预处理裁剪元素信息结构
+struct PreprocessedElement {
+    LayoutElement elem;
+    int x1{0};
+    int y1{0};
+    int x2{0};
+    int y2{0};
+    int cropW{0};
+    int cropH{0};
+    bool isImage{false};
+    std::string tempCropFile;
+    std::string figRelPath;
+    std::string imgTag;
+    std::string taskType{"ocr"};
+};
+
+// 单页预处理（阶段 1：光栅化 + PP-DocLayout 版面分析 + 元素裁剪与大图内存回收）数据包
+struct PreprocessedPage {
+    int pageIndex{0}; // 0-indexed
+    int pageWidth{0};
+    int pageHeight{0};
+    std::string pageImgPath;
+    DocumentLayoutResult layoutResult;
+    std::vector<PreprocessedElement> elements;
+    std::vector<std::string> tempCropFiles;
+    std::vector<std::string> figureFilesCreated;
+    bool success{false};
+    std::string error;
+
+    // 清理该预处理页尚未被消费的临时文件 (避免取消或异常时残留孤儿文件)
+    void CleanRemainingTempFiles(const std::string& originalInputFile, const wxString& tempDir, bool cleanFigures = false) {
+        for (const auto& f : tempCropFiles) {
+            SafeRemoveTempFile(f, originalInputFile, tempDir);
+        }
+        tempCropFiles.clear();
+        if (!pageImgPath.empty()) {
+            SafeRemoveTempFile(pageImgPath, originalInputFile, tempDir);
+            pageImgPath.clear();
+        }
+        if (cleanFigures) {
+            for (const auto& fig : figureFilesCreated) {
+                wxString wFig = wxString::FromUTF8(fig);
+                if (wxFileExists(wFig)) {
+                    wxRemoveFile(wFig);
+                }
+            }
+            figureFilesCreated.clear();
+        }
+    }
+};
+
+// 阶段 1：页面预处理 (支持后台异步线程并发执行，零等待衔接)
+std::shared_ptr<PreprocessedPage> PreprocessStageOne(int p, int totalPages, const std::string& inputFilePath, const wxString& tempCacheDir, const wxString& figuresDir,
+                                                     const std::shared_ptr<DocLayoutEngine>& layoutEngine, const std::shared_ptr<std::atomic<bool>>& aliveToken, const std::atomic<bool>& shouldStop,
+                                                     DocProgressCallback onProgress = nullptr, const std::string& currentFullMarkdown = "") {
+    if (shouldStop.load() || !aliveToken->load()) {
+        return nullptr;
+    }
+
+    auto pageData = std::make_shared<PreprocessedPage>();
+    pageData->pageIndex = p;
+
+    // 1. 光栅化当前单页
+    if (onProgress && aliveToken->load() && !shouldStop.load()) {
+        std::string status = "第 " + std::to_string(p + 1) + " / " + std::to_string(totalPages) + " 页: 正在光栅化...";
+        onProgress(p, totalPages, status, currentFullMarkdown);
+    }
+
+    std::string pageImgPath = PdfHelper::RenderPageToTempFile(inputFilePath, p, tempCacheDir.ToUTF8().data(), 1600);
+    if (pageImgPath.empty() || !wxFileExists(wxString::FromUTF8(pageImgPath))) {
+        LOG_ERROR("DocumentPipeline", "Failed to rasterize page: " + std::to_string(p + 1));
+        pageData->success = false;
+        pageData->error = "光栅化失败";
+        return pageData;
+    }
+    pageData->pageImgPath = pageImgPath;
+
+    if (shouldStop.load() || !aliveToken->load()) {
+        pageData->CleanRemainingTempFiles(inputFilePath, tempCacheDir, true);
+        return nullptr;
+    }
+
+    // 2. DocLayoutEngine 执行版面目标检测
+    if (onProgress && aliveToken->load() && !shouldStop.load()) {
+        std::string status = "第 " + std::to_string(p + 1) + " / " + std::to_string(totalPages) + " 页: 版面分析中 (检测标题/表格/公式/分栏)...";
+        onProgress(p, totalPages, status, currentFullMarkdown);
+    }
+
+    pageData->layoutResult.pageIndex = p + 1;
+    if (layoutEngine) {
+        layoutEngine->AnalyzeLayout(pageImgPath, pageData->layoutResult);
+    }
+
+    if (shouldStop.load() || !aliveToken->load()) {
+        pageData->CleanRemainingTempFiles(inputFilePath, tempCacheDir, true);
+        return nullptr;
+    }
+
+    // 3. 载入当前单页位图用于裁剪子图
+    wxImage pageImg;
+    if (!pageImg.LoadFile(wxString::FromUTF8(pageImgPath))) {
+        pageData->CleanRemainingTempFiles(inputFilePath, tempCacheDir, true);
+        pageData->success = false;
+        pageData->error = "加载光栅化图像失败";
+        return pageData;
+    }
+
+    int pImgW = pageImg.GetWidth();
+    int pImgH = pageImg.GetHeight();
+    pageData->pageWidth = pImgW;
+    pageData->pageHeight = pImgH;
+
+    for (size_t elIdx = 0; elIdx < pageData->layoutResult.elements.size(); ++elIdx) {
+        if (shouldStop.load() || !aliveToken->load()) {
+            break;
+        }
+
+        const auto& elem = pageData->layoutResult.elements[elIdx];
+        int x1 = (std::clamp)(elem.x1, 0, pImgW);
+        int y1 = (std::clamp)(elem.y1, 0, pImgH);
+        int x2 = (std::clamp)(elem.x2, 0, pImgW);
+        int y2 = (std::clamp)(elem.y2, 0, pImgH);
+        int cropW = (std::max)(1, x2 - x1);
+        int cropH = (std::max)(1, y2 - y1);
+        if (cropW < 6 || cropH < 6)
+            continue;
+
+        // 阶段 1 前置过滤保护：若元素被确认为页眉/页脚独立页码，无需裁剪子图或触发 OCR 视觉推理
+        if (elem.type != LayoutElementType::Table && elem.type != LayoutElementType::Formula) {
+            if (DocumentPipeline::IsHeaderOrFooterPageNumber("", elem.labelName, x1, y1, x2, y2, pImgW, pImgH)) {
+                LOG_DEBUG("DocumentPipeline", "Preprocess: skipped page number element '" + elem.labelName +
+                          "' at box [" + std::to_string(x1) + ", " + std::to_string(y1) + ", " +
+                          std::to_string(x2) + ", " + std::to_string(y2) + "]");
+                continue;
+            }
+        }
+
+        wxImage crop = pageImg.GetSubImage(wxRect(x1, y1, cropW, cropH));
+        PreprocessedElement pElem;
+        pElem.elem = elem;
+        pElem.x1 = x1;
+        pElem.y1 = y1;
+        pElem.x2 = x2;
+        pElem.y2 = y2;
+        pElem.cropW = cropW;
+        pElem.cropH = cropH;
+
+        if (elem.type == LayoutElementType::Image) {
+            pElem.isImage = true;
+            wxString figFileName = wxString::Format("img_p%d_box_%d_%d_%d_%d.jpg", p + 1, x1, y1, x2, y2);
+            wxString absFigPath = figuresDir + "/" + figFileName;
+            crop.SaveFile(absFigPath, wxBITMAP_TYPE_JPEG);
+            pageData->figureFilesCreated.push_back(absFigPath.ToUTF8().data());
+
+            std::string relPath = "imgs/" + std::string(figFileName.ToUTF8().data());
+            int widthPct = static_cast<int>(std::round(static_cast<double>(cropW) * 100.0 / pImgW));
+            if (widthPct >= 80) {
+                widthPct = 100;
+            } else if (widthPct < 25) {
+                widthPct = 25;
+            }
+
+            pElem.figRelPath = relPath;
+            pElem.imgTag = "<div style=\"text-align: center;\"><img src=\"" + relPath + "\" alt=\"Image\" width=\"" + std::to_string(widthPct) +
+                           "%\" style=\"max-width: 100%; max-height: 600px; object-fit: contain;\" /></div>";
+        } else {
+            pElem.isImage = false;
+            wxString tempCropFile = tempCacheDir + wxString::Format("/crop_p%d_e%d.png", p + 1, elem.id);
+            crop.SaveFile(tempCropFile, wxBITMAP_TYPE_PNG);
+            pElem.tempCropFile = tempCropFile.ToUTF8().data();
+            pageData->tempCropFiles.push_back(pElem.tempCropFile);
+
+            std::string taskType = "ocr";
+            if (elem.type == LayoutElementType::Table) {
+                taskType = "table";
+            } else if (elem.type == LayoutElementType::Formula) {
+                taskType = "formula";
+            } else if (elem.type == LayoutElementType::Chart) {
+                taskType = "chart";
+            }
+            pElem.taskType = taskType;
+        }
+
+        pageData->elements.push_back(pElem);
+    }
+
+    // 内存立即释放：整页高分辨率位图与临时光栅化文件在此处即刻回收 (O(1) 恒定内存)
+    pageImg.Destroy();
+    SafeRemoveTempFile(pageImgPath, inputFilePath, tempCacheDir);
+    pageData->pageImgPath.clear();
+
+    if (shouldStop.load() || !aliveToken->load()) {
+        pageData->CleanRemainingTempFiles(inputFilePath, tempCacheDir, true);
+        return nullptr;
+    }
+
+    pageData->success = true;
+    return pageData;
+}
+
 } // namespace
 
 // 将 PaddleOCR OTSL 结构化表格表示 (<fcel>, <lcel>, <ucel>, <nl>) 转换为标准 HTML 表格
@@ -118,7 +324,8 @@ std::string DocumentPipeline::ConvertOtslToHtml(const std::string& otslStr) {
         size_t nlPos = otslStr.find("<nl>", pos);
         if (nlPos == std::string::npos) {
             std::string row = otslStr.substr(pos);
-            if (!row.empty()) rowTokens.push_back(row);
+            if (!row.empty())
+                rowTokens.push_back(row);
             break;
         }
         rowTokens.push_back(otslStr.substr(pos, nlPos - pos));
@@ -131,9 +338,11 @@ std::string DocumentPipeline::ConvertOtslToHtml(const std::string& otslStr) {
         size_t i = 0;
         while (i < rowStr.size()) {
             size_t tagStart = rowStr.find('<', i);
-            if (tagStart == std::string::npos) break;
+            if (tagStart == std::string::npos)
+                break;
             size_t tagEnd = rowStr.find('>', tagStart);
-            if (tagEnd == std::string::npos) break;
+            if (tagEnd == std::string::npos)
+                break;
 
             std::string tag = rowStr.substr(tagStart + 1, tagEnd - tagStart - 1);
             std::transform(tag.begin(), tag.end(), tag.begin(), [](unsigned char c) { return static_cast<char>(::tolower(c)); });
@@ -165,7 +374,8 @@ std::string DocumentPipeline::ConvertOtslToHtml(const std::string& otslStr) {
         }
     }
 
-    if (grid.empty()) return otslStr;
+    if (grid.empty())
+        return otslStr;
 
     int maxCols = 0;
     for (const auto& row : grid) {
@@ -212,12 +422,18 @@ std::string DocumentPipeline::ConvertOtslToHtml(const std::string& otslStr) {
     auto escapeHtml = [](const std::string& str) -> std::string {
         std::string res;
         for (char ch : str) {
-            if (ch == '&') res += "&amp;";
-            else if (ch == '<') res += "&lt;";
-            else if (ch == '>') res += "&gt;";
-            else if (ch == '"') res += "&quot;";
-            else if (ch == '\'') res += "&#039;";
-            else res += ch;
+            if (ch == '&')
+                res += "&amp;";
+            else if (ch == '<')
+                res += "&lt;";
+            else if (ch == '>')
+                res += "&gt;";
+            else if (ch == '"')
+                res += "&quot;";
+            else if (ch == '\'')
+                res += "&#039;";
+            else
+                res += ch;
         }
         return res;
     };
@@ -264,13 +480,75 @@ std::string DocumentPipeline::ConvertOtslToHtml(const std::string& otslStr) {
     return tableHtml;
 }
 
-DocumentPipeline::DocumentPipeline(
-    std::shared_ptr<ModelManager> modelManager,
-    std::shared_ptr<DocLayoutEngine> layoutEngine)
+// 判定是否属于页眉/页脚区域的独立页码 (用于 Markdown 与 JSON 组装时的二次过滤防护)
+bool DocumentPipeline::IsHeaderOrFooterPageNumber(
+    const std::string& text,
+    const std::string& labelName,
+    int x1, int y1, int x2, int y2,
+    int pageW, int pageH
+) {
+    if (pageW <= 0 || pageH <= 0) {
+        if (labelName == "number" || labelName == "formula_number") {
+            return (y2 - y1 <= 120);
+        }
+        return false;
+    }
+
+    // 1. 垂直高度区域判定：必须位于顶部 22% 或底部 22% 敏感区内
+    const float topRatio = static_cast<float>(y1) / static_cast<float>(pageH);
+    const float bottomRatio = static_cast<float>(y2) / static_cast<float>(pageH);
+    const bool inHeaderZone = (bottomRatio <= 0.22f || topRatio <= 0.20f);
+    const bool inFooterZone = (topRatio >= 0.78f || bottomRatio >= 0.80f);
+
+    if (!inHeaderZone && !inFooterZone) {
+        return false;
+    }
+
+    // 2. 若模型原生显式标签即为 "number" 或 "formula_number"，且位于页眉页脚区，直接判定为页码
+    if (labelName == "number" || labelName == "formula_number") {
+        return true;
+    }
+
+    // 3. 水平位置与几何尺寸判定：
+    // - 左侧页码 (x2 <= 35%W)
+    // - 右侧页码 (x1 >= 65%W)
+    // - 居中狭窄单行页码 (x1 >= 30%W 且 x2 <= 70%W 且单框宽度 <= 18%W)
+    const int boxW = (std::max)(1, x2 - x1);
+    const int boxH = (std::max)(1, y2 - y1);
+    const float leftRatio = static_cast<float>(x1) / static_cast<float>(pageW);
+    const float rightRatio = static_cast<float>(x2) / static_cast<float>(pageW);
+    const float widthRatio = static_cast<float>(boxW) / static_cast<float>(pageW);
+    const float heightRatio = static_cast<float>(boxH) / static_cast<float>(pageH);
+
+    const bool isCornerOrCenter = (rightRatio <= 0.35f || leftRatio >= 0.65f ||
+                                  (leftRatio >= 0.30f && rightRatio <= 0.70f && widthRatio <= 0.18f));
+
+    if (!isCornerOrCenter || heightRatio > 0.08f) {
+        return false;
+    }
+
+    // 4. 文本模式匹配：纯数字、罗马数字、带装饰符或页码词缀的短文本 (例如: "2", "5", "- 2 -", "· 5 ·", "第 2 页", "Page 5", "IV")
+    std::string trimmed = TrimString(text);
+    if (trimmed.empty()) {
+        return true; // 空文本切片在页眉页脚区直接过滤
+    }
+
+    static const std::regex kPageNumPattern(
+        R"(^[\s\-\·\~\—\#\[\(第·\.]*(?:page|p\.|no\.)?[\s·\.]*(\d+|[IVXLCDMivxlcdm]+)[\s\-\·\~\—\#\]\)页\.]*(?:page|p\.)?[\s\.]*$)",
+        std::regex::icase
+    );
+
+    if (std::regex_match(trimmed, kPageNumPattern)) {
+        return true;
+    }
+
+    return false;
+}
+
+DocumentPipeline::DocumentPipeline(std::shared_ptr<ModelManager> modelManager, std::shared_ptr<DocLayoutEngine> layoutEngine)
     : m_modelManager(std::move(modelManager))
     , m_layoutEngine(std::move(layoutEngine))
-    , m_aliveToken(std::make_shared<std::atomic<bool>>(true)) {
-}
+    , m_aliveToken(std::make_shared<std::atomic<bool>>(true)) {}
 
 DocumentPipeline::~DocumentPipeline() {
     Cancel();
@@ -294,7 +572,8 @@ bool DocumentPipeline::SaveToMarkdown(const std::string& saveDir, const std::str
     }
     wxString filePath = dir + "/" + wxString::FromUTF8(baseName) + ".md";
     std::ofstream out(filePath.ToStdWstring(), std::ios::binary);
-    if (!out) return false;
+    if (!out)
+        return false;
     out.write(markdownContent.data(), markdownContent.size());
     out.close();
     return true;
@@ -307,7 +586,8 @@ bool DocumentPipeline::SaveToJson(const std::string& saveDir, const std::string&
     }
     wxString filePath = dir + "/" + wxString::FromUTF8(baseName) + ".json";
     std::ofstream out(filePath.ToStdWstring(), std::ios::binary);
-    if (!out) return false;
+    if (!out)
+        return false;
     out.write(jsonContent.data(), jsonContent.size());
     out.close();
     return true;
@@ -315,7 +595,8 @@ bool DocumentPipeline::SaveToJson(const std::string& saveDir, const std::string&
 
 DocumentPipeline::ResumeInfo DocumentPipeline::CheckResumeInfo(const std::string& inputFilePath, const std::string& outputDir) {
     ResumeInfo info;
-    if (inputFilePath.empty()) return info;
+    if (inputFilePath.empty())
+        return info;
 
     wxFileName inFn(wxString::FromUTF8(inputFilePath));
     std::string baseDocName = inFn.GetName().ToUTF8().data();
@@ -332,12 +613,14 @@ DocumentPipeline::ResumeInfo DocumentPipeline::CheckResumeInfo(const std::string
     }
 
     std::ifstream jsonFile(jsonPath.ToStdWstring(), std::ios::binary);
-    if (!jsonFile) return info;
+    if (!jsonFile)
+        return info;
     std::string jsonStr((std::istreambuf_iterator<char>(jsonFile)), std::istreambuf_iterator<char>());
     jsonFile.close();
 
     std::ifstream mdFile(mdPath.ToStdWstring(), std::ios::binary);
-    if (!mdFile) return info;
+    if (!mdFile)
+        return info;
     std::string mdStr((std::istreambuf_iterator<char>(mdFile)), std::istreambuf_iterator<char>());
     mdFile.close();
 
@@ -422,15 +705,8 @@ std::string DocumentPipeline::ExtractMarkdownUpToPage(const std::string& fullMd,
     return fullMd;
 }
 
-void DocumentPipeline::StartParseAsync(
-    const std::string& inputFilePath,
-    const std::string& outputDir,
-    bool translateEnglishToChinese,
-    DocProgressCallback onProgress,
-    DocCompleteCallback onComplete,
-    int startFromPage,
-    const std::string& initialMarkdown,
-    const std::string& initialJson) {
+void DocumentPipeline::StartParseAsync(const std::string& inputFilePath, const std::string& outputDir, bool translateEnglishToChinese, DocProgressCallback onProgress, DocCompleteCallback onComplete,
+                                       int startFromPage, const std::string& initialMarkdown, const std::string& initialJson) {
 
     Cancel();
     m_shouldStop.store(false);
@@ -439,7 +715,8 @@ void DocumentPipeline::StartParseAsync(
     auto aliveToken = m_aliveToken;
 
     std::thread([this, aliveToken, inputFilePath, outputDir, translateEnglishToChinese, onProgress, onComplete, startFromPage, initialMarkdown, initialJson]() {
-        if (!aliveToken->load()) return;
+        if (!aliveToken->load())
+            return;
 
         if (!wxFileExists(wxString::FromUTF8(inputFilePath))) {
             m_isRunning.store(false);
@@ -473,9 +750,12 @@ void DocumentPipeline::StartParseAsync(
             return;
         }
 
-        LOG_INFO("DocumentPipeline", "Start parsing document: " + inputFilePath + 
-                 " (Total pages: " + std::to_string(totalPages) + 
-                 ", Start from page: " + std::to_string(startFromPage) + ")");
+        LOG_INFO("DocumentPipeline", "Start parsing document: " + inputFilePath + " (Total pages: " + std::to_string(totalPages) + ", Start from page: " + std::to_string(startFromPage) + ")");
+
+        if (m_modelManager) {
+            m_modelManager->ResetCancelState(TargetModelType::Ocr);
+            m_modelManager->ResetCancelState(TargetModelType::Translation);
+        }
 
         // 建立临时工作缓存目录
         wxString tempCacheDir = wxStandardPaths::Get().GetTempDir() + "/LinguaAlpaca_doccache";
@@ -511,7 +791,7 @@ void DocumentPipeline::StartParseAsync(
         // 1. JSON：仅保留旧一页之前的完整页面 (page_index < actualStartPage + 1)
         if (fullDocJson.contains("pages") && fullDocJson["pages"].is_array()) {
             auto& pagesArr = fullDocJson["pages"];
-            for (auto it = pagesArr.begin(); it != pagesArr.end(); ) {
+            for (auto it = pagesArr.begin(); it != pagesArr.end();) {
                 int pIdx = it->value("page_index", 0);
                 if (pIdx >= actualStartPage + 1) {
                     it = pagesArr.erase(it);
@@ -546,6 +826,15 @@ void DocumentPipeline::StartParseAsync(
         bool hasError = false;
         std::string errorMessage;
 
+        // ★★★ 核心阶段流水线 (Staged Pipeline Overlapping)：
+        // 跨页预取异步 Future：当当前页 p 处于阶段 2 (耗时 VLM 识别) 时，后台异步线程并发执行下一页 p+1 的阶段 1 (光栅化+版面分析+切片)
+        std::future<std::shared_ptr<PreprocessedPage>> nextPageFuture;
+
+        // 为首个待解析页启动阶段 1 预处理
+        nextPageFuture = std::async(std::launch::async, [&, actualStartPage]() {
+            return PreprocessStageOne(actualStartPage, totalPages, inputFilePath, tempCacheDir, figuresDir, m_layoutEngine, aliveToken, m_shouldStop, onProgress, fullMarkdown);
+        });
+
         for (int p = actualStartPage; p < totalPages; ++p) {
             if (m_shouldStop.load() || !aliveToken->load()) {
                 hasError = true;
@@ -553,162 +842,246 @@ void DocumentPipeline::StartParseAsync(
                 break;
             }
 
-            std::string pagePromptStatus = "第 " + std::to_string(p + 1) + " / " + std::to_string(totalPages) + " 页: 正在光栅化...";
-            if (aliveToken->load() && onProgress) {
-                onProgress(p, totalPages, pagePromptStatus, fullMarkdown);
+            // 获取当前页阶段 1 预处理结果 (若上一页识别时间大于版面分析时间，此处早已准备就绪，0 毫秒等待)
+            std::shared_ptr<PreprocessedPage> curPageData = nullptr;
+            if (nextPageFuture.valid()) {
+                curPageData = nextPageFuture.get();
             }
 
-            // 1. 光栅化当前单页 (防止内存溢出：一次只保留一页高分辨率图)
-            std::string pageImgPath = PdfHelper::RenderPageToTempFile(inputFilePath, p, tempCacheDir.ToUTF8().data(), 1600);
-            if (pageImgPath.empty() || !wxFileExists(wxString::FromUTF8(pageImgPath))) {
-                LOG_ERROR("DocumentPipeline", "Failed to rasterize page: " + std::to_string(p + 1));
+            if (!curPageData || !curPageData->success) {
+                if (m_shouldStop.load() || !aliveToken->load()) {
+                    hasError = true;
+                    errorMessage = "用户已取消解析";
+                    break;
+                }
+                LOG_ERROR("DocumentPipeline", "Failed to preprocess stage 1 for page: " + std::to_string(p + 1));
+                // 若预处理失败但未取消，为下一页启动预处理并跳过异常页
+                if (p + 1 < totalPages && !m_shouldStop.load() && aliveToken->load()) {
+                    int nextP = p + 1;
+                    nextPageFuture = std::async(std::launch::async, [&, nextP]() {
+                        return PreprocessStageOne(nextP, totalPages, inputFilePath, tempCacheDir, figuresDir, m_layoutEngine, aliveToken, m_shouldStop, nullptr, fullMarkdown);
+                    });
+                }
                 continue;
             }
 
-            // 2. 阶段 1：DocLayoutEngine 执行版面目标检测 (PP-DocLayout ONNX Runtime)
-            if (aliveToken->load() && onProgress) {
-                onProgress(p, totalPages, "第 " + std::to_string(p + 1) + " / " + std::to_string(totalPages) + " 页: 版面分析中 (检测标题/表格/公式/分栏)...", fullMarkdown);
+            // ★★★ 核心提速重叠：在当前页 p 进入耗时的阶段 2 (VLM OCR) 之前，立刻在后台启动下一页 p+1 的阶段 1 预处理！
+            if (p + 1 < totalPages && !m_shouldStop.load() && aliveToken->load()) {
+                int nextP = p + 1;
+                nextPageFuture = std::async(std::launch::async, [&, nextP]() {
+                    // 后台预处理传入 nullptr 进度回调，避免干扰当前页 p 正在进行的切片识别实时进度展示
+                    return PreprocessStageOne(nextP, totalPages, inputFilePath, tempCacheDir, figuresDir, m_layoutEngine, aliveToken, m_shouldStop, nullptr, fullMarkdown);
+                });
             }
 
-            DocumentLayoutResult layoutResult;
-            layoutResult.pageIndex = p + 1;
-            if (m_layoutEngine) {
-                m_layoutEngine->AnalyzeLayout(pageImgPath, layoutResult);
-            }
-
-            // 载入当前单页位图用于裁剪子图
-            wxImage pageImg;
-            if (!pageImg.LoadFile(wxString::FromUTF8(pageImgPath))) {
-                SafeRemoveTempFile(pageImgPath, inputFilePath, tempCacheDir);
-                continue;
-            }
-
-            int pImgW = pageImg.GetWidth();
-            int pImgH = pageImg.GetHeight();
-
+            // 阶段 2：裁剪元素子图并进行 VLM 独立识别
             std::string pageMarkdown;
             json pageJson = json::object();
             pageJson["page_index"] = p + 1;
             pageJson["elements"] = json::array();
 
             bool pageInterrupted = false;
-            // 3. 阶段 2：裁剪元素子图并进行 VLM 独立识别
-            for (size_t elIdx = 0; elIdx < layoutResult.elements.size(); ++elIdx) {
-                if (m_shouldStop.load() || !aliveToken->load()) {
-                    pageInterrupted = true;
-                    break;
+
+            // 待识别文本/表格/公式/图表切片索引列表 (排除已在预处理阶段处理完毕的 Image 元素)
+            std::vector<size_t> ocrIndices;
+            for (size_t elIdx = 0; elIdx < curPageData->elements.size(); ++elIdx) {
+                if (!curPageData->elements[elIdx].isImage) {
+                    ocrIndices.push_back(elIdx);
+                }
+            }
+
+            // 记录各元素识别结果与成功状态 (按原始 elIdx 对齐，严格保证拓扑阅读顺序)
+            std::vector<std::string> recognizedResults(curPageData->elements.size());
+            std::vector<bool> elementSuccess(curPageData->elements.size(), false);
+
+            int maxParallel = 2;
+            if (m_modelManager && m_modelManager->GetConfigManager()) {
+                auto appCfg = m_modelManager->GetConfigManager()->GetConfig();
+                maxParallel = (std::clamp)(appCfg.ocrParallel, 1, 4);
+            }
+
+            std::atomic<bool> pageCancelled{false};
+            auto pageCancelToken = std::make_shared<std::atomic<bool>>(false);
+            std::atomic<size_t> nextOcrTaskIdx{0};
+            std::atomic<int> completedOcrCount{0};
+            std::mutex progressMutex;
+
+            int numWorkers = (std::min)(static_cast<int>(ocrIndices.size()), maxParallel);
+            if (numWorkers > 0) {
+                std::vector<std::thread> workers;
+                workers.reserve(numWorkers);
+
+                for (int w = 0; w < numWorkers; ++w) {
+                    workers.emplace_back([&]() {
+                        while (true) {
+                            if (m_shouldStop.load() || !aliveToken->load() || pageCancelled.load() || pageCancelToken->load()) {
+                                break;
+                            }
+
+                            size_t taskIdx = nextOcrTaskIdx.fetch_add(1);
+                            if (taskIdx >= ocrIndices.size()) {
+                                break;
+                            }
+
+                            size_t elIdx = ocrIndices[taskIdx];
+                            const auto& elem = curPageData->elements[elIdx];
+
+                            std::promise<std::pair<bool, std::string>> ocrPromise;
+                            auto ocrFuture = ocrPromise.get_future();
+
+                            std::string ocrErr;
+                            if (m_modelManager) {
+                                m_modelManager->ExecuteOcrStream(
+                                    elem.tempCropFile, elem.taskType, nullptr,
+                                    [&ocrPromise, &ocrErr, elIdx](const std::string& fullText, bool success, const std::string& err) {
+                                        if (!success && !err.empty()) {
+                                            ocrErr = err;
+                                            LOG_WARN("DocumentPipeline", "元素 " + std::to_string(elIdx) + " OCR 识别失败: " + err);
+                                        }
+                                        ocrPromise.set_value({success, fullText});
+                                    },
+                                    pageCancelToken);
+                            } else {
+                                ocrPromise.set_value({false, ""});
+                            }
+
+                            auto [ocrSuccess, recognizedText] = ocrFuture.get();
+                            // 识别完成后立即安全删除当前切片临时文件
+                            SafeRemoveTempFile(elem.tempCropFile, inputFilePath, tempCacheDir);
+
+                            if (m_shouldStop.load() || !aliveToken->load() || pageCancelToken->load()) {
+                                pageCancelled.store(true);
+                                break;
+                            }
+
+                            recognizedText = TrimString(recognizedText);
+                            if (recognizedText.rfind("```markdown", 0) == 0) {
+                                recognizedText = recognizedText.substr(11);
+                            } else if (recognizedText.rfind("```", 0) == 0) {
+                                recognizedText = recognizedText.substr(3);
+                            }
+                            if (recognizedText.size() >= 3 && recognizedText.substr(recognizedText.size() - 3) == "```") {
+                                recognizedText = recognizedText.substr(0, recognizedText.size() - 3);
+                            }
+                            recognizedText = TrimString(recognizedText);
+
+                            recognizedResults[elIdx] = recognizedText;
+                            elementSuccess[elIdx] = ocrSuccess;
+
+                            int doneCount = ++completedOcrCount;
+                            {
+                                std::lock_guard<std::mutex> pLock(progressMutex);
+                                if (aliveToken->load() && onProgress) {
+                                    std::string stageMsg = "第 " + std::to_string(p + 1) + " / " + std::to_string(totalPages) + " 页: 并发识别元素 (" + std::to_string(doneCount) + "/" +
+                                                           std::to_string(ocrIndices.size()) + ")...";
+
+                                    // 实时收集当前页已完成识别切片的临时预览，立即流式推送到前端，杜绝前端界面白屏停滞
+                                    std::string currentTempPageMd;
+                                    for (size_t idx = 0; idx < curPageData->elements.size(); ++idx) {
+                                        if (elementSuccess[idx] && !recognizedResults[idx].empty()) {
+                                            if (!currentTempPageMd.empty()) {
+                                                currentTempPageMd += "\n\n";
+                                            }
+                                            const auto& elemRef = curPageData->elements[idx];
+                                            if (elemRef.elem.type == LayoutElementType::Title) {
+                                                currentTempPageMd += (elemRef.elem.labelName == "doc_title" ? "# " : "## ") + recognizedResults[idx];
+                                            } else {
+                                                currentTempPageMd += recognizedResults[idx];
+                                            }
+                                        }
+                                    }
+
+                                    std::string streamedMarkdown = fullMarkdown;
+                                    if (!currentTempPageMd.empty()) {
+                                        if (!streamedMarkdown.empty()) {
+                                            streamedMarkdown += "\n\n---\n\n";
+                                        }
+                                        streamedMarkdown += currentTempPageMd;
+                                    }
+
+                                    onProgress(p, totalPages, stageMsg, streamedMarkdown);
+                                }
+                            }
+                        }
+                    });
                 }
 
-                const auto& elem = layoutResult.elements[elIdx];
-                int x1 = (std::clamp)(elem.x1, 0, pImgW);
-                int y1 = (std::clamp)(elem.y1, 0, pImgH);
-                int x2 = (std::clamp)(elem.x2, 0, pImgW);
-                int y2 = (std::clamp)(elem.y2, 0, pImgH);
-                int cropW = (std::max)(1, x2 - x1);
-                int cropH = (std::max)(1, y2 - y1);
-
-                if (cropW < 6 || cropH < 6) continue;
-
-                // 裁剪当前元素子图
-                wxImage crop = pageImg.GetSubImage(wxRect(x1, y1, cropW, cropH));
-
-                // 图像 / 图表元素处理：直接保存到 output_dir/imgs/ 并生成 PaddleOCR 标准 HTML/Markdown 引用
-                if (elem.type == LayoutElementType::Image) {
-                    wxString figFileName = wxString::Format("img_p%d_box_%d_%d_%d_%d.jpg", p + 1, x1, y1, x2, y2);
-                    wxString absFigPath = figuresDir + "/" + figFileName;
-                    crop.SaveFile(absFigPath, wxBITMAP_TYPE_JPEG);
-
-                    std::string relPath = "imgs/" + std::string(figFileName.ToUTF8().data());
-                    int widthPct = static_cast<int>(std::round(static_cast<double>(cropW) * 100.0 / pImgW));
-                    if (widthPct >= 80) {
-                        widthPct = 100;
-                    } else if (widthPct < 25) {
-                        widthPct = 25;
+                for (auto& t : workers) {
+                    if (t.joinable()) {
+                        t.join();
                     }
+                }
+            }
 
-                    std::string imgTag = "<div style=\"text-align: center;\"><img src=\"" + relPath + "\" alt=\"Image\" width=\"" + std::to_string(widthPct) + "%\" style=\"max-width: 100%; max-height: 600px; object-fit: contain;\" /></div>";
+            if (m_shouldStop.load() || !aliveToken->load() || pageCancelled.load() || pageCancelToken->load()) {
+                pageInterrupted = true;
+            }
+
+            // 健壮性检查：若本页包含待识别元素但全部识别失败且用户未主动取消，判定为推理引擎异常中断，避免写入空数据污染断点
+            int ocrSuccessCount = 0;
+            for (size_t elIdx : ocrIndices) {
+                if (elementSuccess[elIdx] && !recognizedResults[elIdx].empty()) {
+                    ocrSuccessCount++;
+                }
+            }
+            std::string pageFailureReason;
+            if (!ocrIndices.empty() && ocrSuccessCount == 0 && !pageInterrupted) {
+                LOG_ERROR("DocumentPipeline", "第 " + std::to_string(p + 1) + " 页所有切片识别均返回空或失败，中断解析以防止数据损坏");
+                pageInterrupted = true;
+                pageFailureReason = "第 " + std::to_string(p + 1) + " 页 OCR 识别失败 (嵌入推理服务异常或未响应)";
+            }
+
+            // 按严格拓扑阅读顺序组装 Markdown 与 JSON
+            for (size_t elIdx = 0; elIdx < curPageData->elements.size(); ++elIdx) {
+                const auto& elem = curPageData->elements[elIdx];
+
+                // 图像 / 图表元素处理：直接生成 PaddleOCR 标准 HTML/Markdown 引用并记入 JSON
+                if (elem.isImage) {
                     if (!pageMarkdown.empty()) {
                         while (!pageMarkdown.empty() && (pageMarkdown.back() == '\n' || pageMarkdown.back() == '\r')) {
                             pageMarkdown.pop_back();
                         }
                         pageMarkdown += "\n\n";
                     }
-                    pageMarkdown += imgTag;
+                    pageMarkdown += elem.imgTag;
 
-                    json elJson = {
-                        {"id", elem.id},
-                        {"type", elem.labelName},
-                        {"reading_order", elem.readingOrder},
-                        {"box", {x1, y1, x2, y2}},
-                        {"figure_path", relPath}
-                    };
+                    json elJson = {{"id", elem.elem.id},
+                                   {"type", elem.elem.labelName},
+                                   {"reading_order", elem.elem.readingOrder},
+                                   {"box", {elem.x1, elem.y1, elem.x2, elem.y2}},
+                                   {"figure_path", elem.figRelPath}};
                     pageJson["elements"].push_back(elJson);
                     continue;
                 }
 
-                // 文本、标题、表格、公式：调用 PaddleOCR-VL VLM 进行独立子图识别
-                wxString tempCropFile = tempCacheDir + wxString::Format("/crop_p%d_e%d.png", p + 1, elem.id);
-                crop.SaveFile(tempCropFile, wxBITMAP_TYPE_PNG);
-
-                std::string taskType = "ocr";
-                if (elem.type == LayoutElementType::Table) {
-                    taskType = "table";
-                } else if (elem.type == LayoutElementType::Formula) {
-                    taskType = "formula";
-                } else if (elem.type == LayoutElementType::Chart) {
-                    taskType = "chart";
+                // 若被中断且该元素尚未完成识别，则跳过
+                if (pageInterrupted && !elementSuccess[elIdx] && recognizedResults[elIdx].empty()) {
+                    continue;
                 }
 
-                std::string stageMsg = "第 " + std::to_string(p + 1) + " / " + std::to_string(totalPages) + 
-                    " 页: 识别 " + elem.labelName + " (" + std::to_string(elIdx + 1) + "/" + 
-                    std::to_string(layoutResult.elements.size()) + ")...";
+                std::string recognizedText = recognizedResults[elIdx];
 
-                if (aliveToken->load() && onProgress) {
-                    onProgress(p, totalPages, stageMsg, fullMarkdown + (!pageMarkdown.empty() ? "\n\n" + pageMarkdown : ""));
+                // 二次防护：过滤页眉左右两侧及页脚中的独立页码，防止污染正文 Markdown 与 JSON 结果
+                if (elem.elem.type != LayoutElementType::Table && elem.elem.type != LayoutElementType::Formula) {
+                    if (IsHeaderOrFooterPageNumber(recognizedText, elem.elem.labelName, elem.x1, elem.y1, elem.x2, elem.y2, curPageData->pageWidth, curPageData->pageHeight)) {
+                        LOG_DEBUG("DocumentPipeline", "Secondary filter: skipped page number '" + recognizedText +
+                                  "' at box [" + std::to_string(elem.x1) + ", " + std::to_string(elem.y1) + ", " +
+                                  std::to_string(elem.x2) + ", " + std::to_string(elem.y2) + "]");
+                        continue;
+                    }
                 }
 
-                // 同步等待当前子图推理完成
-                std::promise<std::pair<bool, std::string>> ocrPromise;
-                auto ocrFuture = ocrPromise.get_future();
-
-                if (m_modelManager) {
-                    m_modelManager->ExecuteOcrStream(
-                        tempCropFile.ToUTF8().data(),
-                        taskType,
-                        nullptr, // 批量流中只需完整结果
-                        [&ocrPromise](const std::string& fullText, bool success, const std::string& err) {
-                            ocrPromise.set_value({success, fullText});
-                        }
-                    );
-                } else {
-                    ocrPromise.set_value({false, ""});
-                }
-
-                auto [ocrSuccess, recognizedText] = ocrFuture.get();
-                SafeRemoveTempFile(tempCropFile.ToUTF8().data(), inputFilePath, tempCacheDir);
-
-                recognizedText = TrimString(recognizedText);
-                if (recognizedText.rfind("```markdown", 0) == 0) {
-                    recognizedText = recognizedText.substr(11);
-                } else if (recognizedText.rfind("```", 0) == 0) {
-                    recognizedText = recognizedText.substr(3);
-                }
-                if (recognizedText.size() >= 3 && recognizedText.substr(recognizedText.size() - 3) == "```") {
-                    recognizedText = recognizedText.substr(0, recognizedText.size() - 3);
-                }
-                recognizedText = TrimString(recognizedText);
-
-                // 结构化格式化输出
                 std::string formattedContent;
-                if (elem.type == LayoutElementType::Formula) {
+
+                if (elem.elem.type == LayoutElementType::Formula) {
                     formattedContent = "$$\n" + recognizedText + "\n$$";
-                } else if (elem.type == LayoutElementType::Title) {
-                    if (elem.labelName == "doc_title") {
+                } else if (elem.elem.type == LayoutElementType::Title) {
+                    if (elem.elem.labelName == "doc_title") {
                         formattedContent = "# " + recognizedText;
                     } else {
                         formattedContent = "## " + recognizedText;
                     }
-                } else if (elem.type == LayoutElementType::Table) {
+                } else if (elem.elem.type == LayoutElementType::Table) {
                     formattedContent = ConvertOtslToHtml(recognizedText);
                 } else {
                     // 若启用英文文档自动翻译，且段落为纯英文，调用 Hy-MT2 翻译引擎
@@ -717,13 +1090,8 @@ void DocumentPipeline::StartParseAsync(
                         std::promise<std::string> transPromise;
                         auto transFuture = transPromise.get_future();
 
-                        m_modelManager->ExecuteTranslationStream(
-                            transTask,
-                            nullptr,
-                            [&transPromise](bool success, const std::string& fullText, const std::string&) {
-                                transPromise.set_value(success ? fullText : "");
-                            }
-                        );
+                        m_modelManager->ExecuteTranslationStream(transTask, nullptr,
+                                                                 [&transPromise](bool success, const std::string& fullText, const std::string&) { transPromise.set_value(success ? fullText : ""); });
 
                         std::string transResult = transFuture.get();
                         formattedContent = transResult.empty() ? recognizedText : transResult;
@@ -743,20 +1111,16 @@ void DocumentPipeline::StartParseAsync(
                 }
 
                 json elJson = {
-                    {"id", elem.id},
-                    {"type", elem.labelName},
-                    {"reading_order", elem.readingOrder},
-                    {"box", {x1, y1, x2, y2}},
-                    {"content", recognizedText}
-                };
+                    {"id", elem.elem.id}, {"type", elem.elem.labelName}, {"reading_order", elem.elem.readingOrder}, {"box", {elem.x1, elem.y1, elem.x2, elem.y2}}, {"content", recognizedText}};
                 pageJson["elements"].push_back(elJson);
             }
 
-            // 4. 单页内存与临时文件即刻回收 (O(1) 恒定内存，绝对不删除用户原始输入文档/图片)
-            pageImg.Destroy();
-            SafeRemoveTempFile(pageImgPath, inputFilePath, tempCacheDir);
+            // 确保当前页所有临时文件均已清理完毕
+            curPageData->CleanRemainingTempFiles(inputFilePath, tempCacheDir, false);
 
             if (pageInterrupted) {
+                // 中断处理：
+                // 1. 实时保存当前中断页已经识别的部分
                 pageJson["markdown"] = pageMarkdown;
                 pageJson["is_page_completed"] = false;
                 if (!pageMarkdown.empty()) {
@@ -770,7 +1134,7 @@ void DocumentPipeline::StartParseAsync(
                 fullDocJson["last_interrupted_page"] = p + 1;
                 fullDocJson["is_completed"] = false;
 
-                // 实时落盘保存被中断时的进度与数据
+                // 实时落盘保存被中断时的进度与数据，保证随时可断点恢复
                 std::string interruptedJsonStr;
                 try {
                     interruptedJsonStr = fullDocJson.dump(2, ' ', false, json::error_handler_t::replace);
@@ -780,8 +1144,19 @@ void DocumentPipeline::StartParseAsync(
                 SaveToMarkdown(actualOutputDir, baseDocName, fullMarkdown);
                 SaveToJson(actualOutputDir, baseDocName, interruptedJsonStr);
 
+                // 2. 核心清理：立即安全回收后台预取的下一页临时数据（防止污染磁盘或残留未消费图片）
+                if (nextPageFuture.valid()) {
+                    try {
+                        auto nextData = nextPageFuture.get();
+                        if (nextData) {
+                            nextData->CleanRemainingTempFiles(inputFilePath, tempCacheDir, true);
+                        }
+                    } catch (...) {
+                    }
+                }
+
                 hasError = true;
-                errorMessage = "用户已取消解析";
+                errorMessage = pageFailureReason.empty() ? "用户已取消解析" : pageFailureReason;
                 break;
             }
 
@@ -812,6 +1187,17 @@ void DocumentPipeline::StartParseAsync(
             }
         }
 
+        // 循环退出后，若仍有未消费的 nextPageFuture，安全回收其临时文件
+        if (nextPageFuture.valid()) {
+            try {
+                auto nextData = nextPageFuture.get();
+                if (nextData) {
+                    nextData->CleanRemainingTempFiles(inputFilePath, tempCacheDir, true);
+                }
+            } catch (...) {
+            }
+        }
+
         // 5. 阶段 3：restructure_pages 页面重构与自动落盘
         std::string jsonDumpStr;
         try {
@@ -829,7 +1215,8 @@ void DocumentPipeline::StartParseAsync(
 
         m_isRunning.store(false);
 
-        if (!aliveToken->load()) return;
+        if (!aliveToken->load())
+            return;
 
         if (onComplete) {
             if (hasError) {

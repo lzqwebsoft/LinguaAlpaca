@@ -42,6 +42,9 @@ public:
     // 版块去重与包含性重叠抑制算法 (对齐 PaddleX merge_layout_blocks 与 IoS 规范)
     static void SuppressContainedOrDuplicateBoxes(std::vector<LayoutElement>& elements, const DocLayoutFilterConfig& cfg);
 
+    // 判断当前候选版面元素是否属于应该被过滤的页眉/页脚/页码 (双重过滤与几何兜底策略)
+    static bool ShouldFilterElement(const LayoutElement& elem, int origW, int origH, const DocLayoutFilterConfig& cfg);
+
     // 对整页文档图像进行版面分析与元素定位 (支持自定义过滤参数，默认使用引擎内嵌配置)
     bool AnalyzeLayout(const std::string& imagePath, DocumentLayoutResult& outResult, const DocLayoutFilterConfig& filterConfig);
     bool AnalyzeLayout(const std::string& imagePath, DocumentLayoutResult& outResult) {

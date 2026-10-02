@@ -26,10 +26,11 @@ public:
     void TranslateStreamAsync(const TranslationTask& task, StreamTokenCallback onToken, StreamCompleteCallback onComplete);
 
     void RecognizeStream(const std::string& imagePath, const std::string& taskType, const std::string& modelPath, const std::string& mmprojPath, OcrTokenCallback onToken,
-                         OcrCompleteCallback onComplete);
+                         OcrCompleteCallback onComplete, std::shared_ptr<std::atomic<bool>> taskCancelToken = nullptr);
 
     void CancelCurrentTask();
     void Cancel() { CancelCurrentTask(); }
+    void ResetCancelState() { m_shouldStop.store(false); }
     bool IsRunning() const;
 
     static std::string SanitizeOcrToken(const std::string& token);
@@ -42,6 +43,7 @@ private:
 
     std::shared_ptr<std::atomic<bool>> m_aliveToken;
     std::atomic<bool> m_shouldStop{false};
+    std::atomic<int> m_activeRequests{0};
     std::atomic<bool> m_isRunning{false};
     mutable std::mutex m_mutex;
 };

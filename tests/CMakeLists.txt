@@ -77,6 +77,7 @@ elseif(APPLE)
         ${CMAKE_SOURCE_DIR}/src/core/ClipboardHelper.cpp
         ${CMAKE_SOURCE_DIR}/src/core/WinUIAutomationHelper.cpp
         ${CMAKE_SOURCE_DIR}/src/core/AppVersion.cpp
+        ${CMAKE_SOURCE_DIR}/src/core/PlatformHelper.cpp
         PROPERTIES COMPILE_FLAGS "-x objective-c++"
     )
     set_source_files_properties(

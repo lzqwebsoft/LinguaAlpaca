@@ -7,6 +7,8 @@
 #include <mutex>
 #include "core/Types.hpp"
 
+class wxImage;
+
 namespace LinguaAlpaca {
 
 /**
@@ -22,6 +24,9 @@ public:
 
     DocLayoutEngine(const DocLayoutEngine&) = delete;
     DocLayoutEngine& operator=(const DocLayoutEngine&) = delete;
+
+    // 判定位图是否为空白内容（无有效笔墨或文字符号，自动过滤纯白/纯色纸张与微弱噪点）
+    static bool IsImageContentEmpty(const wxImage& img);
 
     // 校验并装载 ONNX 目标检测模型权重
     bool Initialize(const std::string& modelPath, int executionProvider = 0, int threads = 0);

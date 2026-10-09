@@ -30,6 +30,14 @@ std::string TrimString(const std::string& str) {
     return str.substr(first, (last - first + 1));
 }
 
+std::filesystem::path ToFsPath(const wxString& path) {
+#ifdef _WIN32
+    return std::filesystem::path(path.ToStdWstring());
+#else
+    return std::filesystem::path(path.ToUTF8().data());
+#endif
+}
+
 bool IsPredominantlyEnglish(const std::string& text) {
     if (text.empty())
         return false;
@@ -184,23 +192,7 @@ std::shared_ptr<PreprocessedPage> PreprocessStageOne(int p, int totalPages, cons
         return nullptr;
     }
 
-    // 2. DocLayoutEngine 执行版面目标检测
-    if (onProgress && aliveToken->load() && !shouldStop.load()) {
-        std::string status = "第 " + std::to_string(p + 1) + " / " + std::to_string(totalPages) + " 页: 版面分析中 (检测标题/表格/公式/分栏)...";
-        onProgress(p, totalPages, status, currentFullMarkdown);
-    }
-
-    pageData->layoutResult.pageIndex = p + 1;
-    if (layoutEngine) {
-        layoutEngine->AnalyzeLayout(pageImgPath, pageData->layoutResult);
-    }
-
-    if (shouldStop.load() || !aliveToken->load()) {
-        pageData->CleanRemainingTempFiles(inputFilePath, tempCacheDir, true);
-        return nullptr;
-    }
-
-    // 3. 载入当前单页位图用于裁剪子图
+    // 2. 载入当前单页位图用于空白页快速判定与子图裁剪
     wxImage pageImg;
     if (!pageImg.LoadFile(wxString::FromUTF8(pageImgPath))) {
         pageData->CleanRemainingTempFiles(inputFilePath, tempCacheDir, true);
@@ -213,6 +205,34 @@ std::shared_ptr<PreprocessedPage> PreprocessStageOne(int p, int totalPages, cons
     int pImgH = pageImg.GetHeight();
     pageData->pageWidth = pImgW;
     pageData->pageHeight = pImgH;
+
+    // 空页快速判定：若整页位图为纯空白（或仅有微弱噪点无有效笔墨内容），直接标记为空页完成预处理，0ms 跳过版面检测与 OCR
+    if (DocLayoutEngine::IsImageContentEmpty(pageImg)) {
+        LOG_INFO("DocumentPipeline", "第 " + std::to_string(p + 1) + " 页判定为空白页，跳过版面分析与 OCR 视觉推理");
+        pageData->elements.clear();
+        pageData->success = true;
+        pageImg.Destroy();
+        SafeRemoveTempFile(pageImgPath, inputFilePath, tempCacheDir);
+        pageData->pageImgPath.clear();
+        return pageData;
+    }
+
+    // 3. DocLayoutEngine 执行版面目标检测
+    if (onProgress && aliveToken->load() && !shouldStop.load()) {
+        std::string status = "第 " + std::to_string(p + 1) + " / " + std::to_string(totalPages) + " 页: 版面分析中 (检测标题/表格/公式/分栏)...";
+        onProgress(p, totalPages, status, currentFullMarkdown);
+    }
+
+    pageData->layoutResult.pageIndex = p + 1;
+    if (layoutEngine) {
+        layoutEngine->AnalyzeLayout(pageImgPath, pageData->layoutResult);
+    }
+
+    if (shouldStop.load() || !aliveToken->load()) {
+        pageImg.Destroy();
+        pageData->CleanRemainingTempFiles(inputFilePath, tempCacheDir, true);
+        return nullptr;
+    }
 
     for (size_t elIdx = 0; elIdx < pageData->layoutResult.elements.size(); ++elIdx) {
         if (shouldStop.load() || !aliveToken->load()) {
@@ -229,8 +249,9 @@ std::shared_ptr<PreprocessedPage> PreprocessStageOne(int p, int totalPages, cons
         if (cropW < 6 || cropH < 6)
             continue;
 
-        // 阶段 1 前置过滤保护：若元素被确认为页眉/页脚独立页码，无需裁剪子图或触发 OCR 视觉推理
-        if (elem.type != LayoutElementType::Table && elem.type != LayoutElementType::Formula) {
+        // 阶段 1 前置过滤保护：仅当元素被模型明确标记为独立页码 (number / formula_number) 时才在 OCR 前跳过
+        // 普通文本类元素 (Text / content / aside_text) 必须送交 OCR 视觉推理，以真实文本语义精准判别
+        if (elem.labelName == "number" || elem.labelName == "formula_number") {
             if (DocumentPipeline::IsHeaderOrFooterPageNumber("", elem.labelName, x1, y1, x2, y2, pImgW, pImgH)) {
                 LOG_DEBUG("DocumentPipeline", "Preprocess: skipped page number element '" + elem.labelName +
                           "' at box [" + std::to_string(x1) + ", " + std::to_string(y1) + ", " +
@@ -303,6 +324,10 @@ std::shared_ptr<PreprocessedPage> PreprocessStageOne(int p, int totalPages, cons
 }
 
 } // namespace
+
+bool DocumentPipeline::IsImageContentEmpty(const wxImage& img) {
+    return DocLayoutEngine::IsImageContentEmpty(img);
+}
 
 // 将 PaddleOCR OTSL 结构化表格表示 (<fcel>, <lcel>, <ucel>, <nl>) 转换为标准 HTML 表格
 std::string DocumentPipeline::ConvertOtslToHtml(const std::string& otslStr) {
@@ -487,6 +512,11 @@ bool DocumentPipeline::IsHeaderOrFooterPageNumber(
     int x1, int y1, int x2, int y2,
     int pageW, int pageH
 ) {
+    if (labelName == "footnote" || labelName == "vision_footnote" ||
+        labelName == "doc_title" || labelName == "paragraph_title") {
+        return false;
+    }
+
     if (pageW <= 0 || pageH <= 0) {
         if (labelName == "number" || labelName == "formula_number") {
             return (y2 - y1 <= 120);
@@ -509,6 +539,26 @@ bool DocumentPipeline::IsHeaderOrFooterPageNumber(
         return true;
     }
 
+    std::string trimmed = TrimString(text);
+    if (trimmed.empty()) {
+        return false; // 未执行 OCR 或纯空切片，若非明确 number 标签，绝不能盲目判定为页码
+    }
+
+    // 保护章节大标题与目录内容 (如 "目录", "Contents", "目录 Contents", "总序", "前言") 绝不误判为页码
+    if (trimmed.find("目录") != std::string::npos ||
+        trimmed.find("Contents") != std::string::npos ||
+        trimmed.find("contents") != std::string::npos ||
+        trimmed.find("序") != std::string::npos ||
+        trimmed.find("导言") != std::string::npos ||
+        trimmed.find("前言") != std::string::npos) {
+        return false;
+    }
+
+    // 若当前文本本身满足注解/脚注特征，绝不误判为页码
+    if (IsFootnoteOrAnnotation(trimmed, labelName, y1, y2, pageH, false)) {
+        return false;
+    }
+
     // 3. 水平位置与几何尺寸判定：
     // - 左侧页码 (x2 <= 35%W)
     // - 右侧页码 (x1 >= 65%W)
@@ -528,11 +578,6 @@ bool DocumentPipeline::IsHeaderOrFooterPageNumber(
     }
 
     // 4. 文本模式匹配：纯数字、罗马数字、带装饰符或页码词缀的短文本 (例如: "2", "5", "- 2 -", "· 5 ·", "第 2 页", "Page 5", "IV")
-    std::string trimmed = TrimString(text);
-    if (trimmed.empty()) {
-        return true; // 空文本切片在页眉页脚区直接过滤
-    }
-
     static const std::regex kPageNumPattern(
         R"(^[\s\-\·\~\—\#\[\(第·\.]*(?:page|p\.|no\.)?[\s·\.]*(\d+|[IVXLCDMivxlcdm]+)[\s\-\·\~\—\#\]\)页\.]*(?:page|p\.)?[\s\.]*$)",
         std::regex::icase
@@ -540,6 +585,116 @@ bool DocumentPipeline::IsHeaderOrFooterPageNumber(
 
     if (std::regex_match(trimmed, kPageNumPattern)) {
         return true;
+    }
+
+    return false;
+}
+
+// 判定文本中是否存在注解数字标记 (如 LaTeX \(^{[1]}\), [1], ①, 脚注星号等)
+bool DocumentPipeline::HasAnnotationMarkers(const std::string& text) {
+    if (text.empty()) return false;
+
+    // 1. 高速 UTF-8 字节扫描：带圈数字 (①-⑳, ⑴-⒇) 与 Unicode 上标字符 (¹²³⁴-⁹)
+    for (size_t i = 0; i < text.size(); ++i) {
+        unsigned char b1 = static_cast<unsigned char>(text[i]);
+        if (i + 1 < text.size()) {
+            unsigned char b2 = static_cast<unsigned char>(text[i + 1]);
+            if (b1 == 0xC2 && (b2 == 0xB9 || b2 == 0xB2 || b2 == 0xB3)) {
+                return true; // ¹, ², ³
+            }
+        }
+        if (i + 2 < text.size()) {
+            unsigned char b2 = static_cast<unsigned char>(text[i + 1]);
+            unsigned char b3 = static_cast<unsigned char>(text[i + 2]);
+            if (b1 == 0xE2) {
+                if (b2 == 0x91 && (b3 >= 0xA0 && b3 <= 0xB3)) return true; // ① - ⑳
+                if (b2 == 0x92 && (b3 >= 0x84 && b3 <= 0x97)) return true; // ⑴ - ⒇
+                if (b2 == 0x81 && (b3 >= 0xB0 && b3 <= 0xB9)) return true; // ⁰, ⁴ - ⁹
+            }
+        }
+    }
+
+    // 2. 正则匹配：LaTeX 上标 \(^{[1]}\), [1], [注1], 【注1】, [^1], <sup>
+    static const std::regex kMarkerRegexes[] = {
+        std::regex(R"(\\\(\^\{?[\*\d]+(?:\])?\}?\\\)|\\\(\^\[?\d+\]?\\\))"), // \(^{[1]}\), \(^1\)
+        std::regex(R"(\^\{?\[?\d+\]?\})"),                                    // ^{[1]}, ^1
+        std::regex(R"(\[\s*\d{1,3}\s*\])"),                                  // [1], [2]
+        std::regex(R"(\[[注\s\d]+\]|【[注\s\d]+】)"),                          // [注1], 【注】
+        std::regex(R"(\[\^[a-zA-Z0-9_\-]+\])"),                              // [^1]
+        std::regex(R"(<sup>.*?</sup>)", std::regex::icase)                    // <sup>...</sup>
+    };
+
+    for (const auto& re : kMarkerRegexes) {
+        if (std::regex_search(text, re)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+// 判定候选元素是否为底部注解/脚注 (结合模型标签、正文注解数字标记及文本形态综合研判)
+bool DocumentPipeline::IsFootnoteOrAnnotation(
+    const std::string& text,
+    const std::string& labelName,
+    int y1, int y2,
+    int pageH,
+    bool bodyHasMarkers
+) {
+    // 1. 模型原生显式语义标签判定
+    if (labelName == "footnote" || labelName == "vision_footnote") {
+        return true;
+    }
+
+    std::string trimmed = TrimString(text);
+    if (trimmed.empty()) {
+        return false;
+    }
+
+    // 2. 检查文本开头是否为典型注解/脚注前缀标识
+    // (1) 带圈数字开头：①、②...
+    if (trimmed.size() >= 3) {
+        unsigned char b1 = static_cast<unsigned char>(trimmed[0]);
+        unsigned char b2 = static_cast<unsigned char>(trimmed[1]);
+        unsigned char b3 = static_cast<unsigned char>(trimmed[2]);
+        if (b1 == 0xE2 && ((b2 == 0x91 && b3 >= 0xA0 && b3 <= 0xB3) ||
+                           (b2 == 0x92 && b3 >= 0x84 && b3 <= 0x97))) {
+            return true;
+        }
+    }
+
+    // (2) 常见注解前缀匹配：
+    // "[1] ...", "[注] ...", "【注】...", "[^1]: ...", "* ...", "** ...", "注：...", "附注：...", "Note: ...", "Footnote: ..."
+    static const std::regex kFootnotePrefixRegex(
+        R"(^(?:\[\s*\d+\s*\]|\[\s*注\s*\d*\s*\]|【\s*注\s*\d*\s*】|\[\^[a-zA-Z0-9_\-]+\](?:\:)?|\\\(\^\{?\[?\d+\]?\}?\\\)|\(?\^\{?\[?\d+\]?\}?\)?|\*{1,3}|注[\s：:]|附注[\s：:]|note[\s：:]|footnote[\s：:]).*$)",
+        std::regex::icase
+    );
+    if (std::regex_match(trimmed, kFootnotePrefixRegex)) {
+        return true;
+    }
+
+    // (3) 位于页面底部敏感区 (topRatio >= 0.72f 或 bottomRatio >= 0.78f) 时的结构判定
+    if (pageH > 0) {
+        float topRatio = static_cast<float>(y1) / static_cast<float>(pageH);
+        float bottomRatio = static_cast<float>(y2) / static_cast<float>(pageH);
+        if (topRatio >= 0.72f || bottomRatio >= 0.78f) {
+            static const std::regex kNumberedNoteRegex(R"(^(?:\d+[\.\、\)])\s*[\u4e00-\u9fa5a-zA-Z].*$)");
+            if (std::regex_match(trimmed, kNumberedNoteRegex)) {
+                return true;
+            }
+
+            // (4) 若当前页正文中已检测出注解标记 (bodyHasMarkers == true)，
+            // 且底部文本具有一定长度 (非纯页码)，则判定为该标记对应的底部注解
+            if (bodyHasMarkers && trimmed.size() >= 4) {
+                static const std::regex kPageNumPattern(
+                    R"(^[\s\-\·\~\—\#\[\(第·\.]*(?:page|p\.|no\.)?[\s·\.]*(\d+|[IVXLCDMivxlcdm]+)[\s\-\·\~\—\#\]\)页\.]*(?:page|p\.)?[\s\.]*$)",
+                    std::regex::icase
+                );
+                if (!std::regex_match(trimmed, kPageNumPattern)) {
+                    return true;
+                }
+            }
+        }
     }
 
     return false;
@@ -571,7 +726,7 @@ bool DocumentPipeline::SaveToMarkdown(const std::string& saveDir, const std::str
         wxFileName::Mkdir(dir, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
     }
     wxString filePath = dir + "/" + wxString::FromUTF8(baseName) + ".md";
-    std::ofstream out(filePath.ToStdWstring(), std::ios::binary);
+    std::ofstream out(ToFsPath(filePath), std::ios::binary);
     if (!out)
         return false;
     out.write(markdownContent.data(), markdownContent.size());
@@ -585,7 +740,7 @@ bool DocumentPipeline::SaveToJson(const std::string& saveDir, const std::string&
         wxFileName::Mkdir(dir, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
     }
     wxString filePath = dir + "/" + wxString::FromUTF8(baseName) + ".json";
-    std::ofstream out(filePath.ToStdWstring(), std::ios::binary);
+    std::ofstream out(ToFsPath(filePath), std::ios::binary);
     if (!out)
         return false;
     out.write(jsonContent.data(), jsonContent.size());
@@ -612,13 +767,13 @@ DocumentPipeline::ResumeInfo DocumentPipeline::CheckResumeInfo(const std::string
         return info;
     }
 
-    std::ifstream jsonFile(jsonPath.ToStdWstring(), std::ios::binary);
+    std::ifstream jsonFile(ToFsPath(jsonPath), std::ios::binary);
     if (!jsonFile)
         return info;
     std::string jsonStr((std::istreambuf_iterator<char>(jsonFile)), std::istreambuf_iterator<char>());
     jsonFile.close();
 
-    std::ifstream mdFile(mdPath.ToStdWstring(), std::ios::binary);
+    std::ifstream mdFile(ToFsPath(mdPath), std::ios::binary);
     if (!mdFile)
         return info;
     std::string mdStr((std::istreambuf_iterator<char>(mdFile)), std::istreambuf_iterator<char>());
@@ -904,7 +1059,11 @@ void DocumentPipeline::StartParseAsync(const std::string& inputFilePath, const s
             auto pageCancelToken = std::make_shared<std::atomic<bool>>(false);
             std::atomic<size_t> nextOcrTaskIdx{0};
             std::atomic<int> completedOcrCount{0};
+            std::atomic<int> httpSuccessCount{0};
+            std::atomic<int> httpFailCount{0};
+            std::string firstOcrError;
             std::mutex progressMutex;
+            std::mutex errorMutex;
 
             int numWorkers = (std::min)(static_cast<int>(ocrIndices.size()), maxParallel);
             if (numWorkers > 0) {
@@ -929,19 +1088,27 @@ void DocumentPipeline::StartParseAsync(const std::string& inputFilePath, const s
                             std::promise<std::pair<bool, std::string>> ocrPromise;
                             auto ocrFuture = ocrPromise.get_future();
 
-                            std::string ocrErr;
                             if (m_modelManager) {
                                 m_modelManager->ExecuteOcrStream(
                                     elem.tempCropFile, elem.taskType, nullptr,
-                                    [&ocrPromise, &ocrErr, elIdx](const std::string& fullText, bool success, const std::string& err) {
-                                        if (!success && !err.empty()) {
-                                            ocrErr = err;
-                                            LOG_WARN("DocumentPipeline", "元素 " + std::to_string(elIdx) + " OCR 识别失败: " + err);
+                                    [&ocrPromise, &firstOcrError, &errorMutex, &httpSuccessCount, &httpFailCount, elIdx](const std::string& fullText, bool success, const std::string& err) {
+                                        if (!success) {
+                                            httpFailCount.fetch_add(1);
+                                            if (!err.empty()) {
+                                                std::lock_guard<std::mutex> lk(errorMutex);
+                                                if (firstOcrError.empty()) {
+                                                    firstOcrError = err;
+                                                }
+                                                LOG_WARN("DocumentPipeline", "元素 " + std::to_string(elIdx) + " OCR 识别失败: " + err);
+                                            }
+                                        } else {
+                                            httpSuccessCount.fetch_add(1);
                                         }
                                         ocrPromise.set_value({success, fullText});
                                     },
                                     pageCancelToken);
                             } else {
+                                httpFailCount.fetch_add(1);
                                 ocrPromise.set_value({false, ""});
                             }
 
@@ -1017,19 +1184,50 @@ void DocumentPipeline::StartParseAsync(const std::string& inputFilePath, const s
                 pageInterrupted = true;
             }
 
-            // 健壮性检查：若本页包含待识别元素但全部识别失败且用户未主动取消，判定为推理引擎异常中断，避免写入空数据污染断点
-            int ocrSuccessCount = 0;
+            // 健壮性与异常区分检查：区分真实推理服务异常 vs 切片无文字内容 (空内容/空白切片)
+            int ocrValidTextCount = 0;
             for (size_t elIdx : ocrIndices) {
-                if (elementSuccess[elIdx] && !recognizedResults[elIdx].empty()) {
-                    ocrSuccessCount++;
+                if (!recognizedResults[elIdx].empty()) {
+                    ocrValidTextCount++;
                 }
             }
+
             std::string pageFailureReason;
-            if (!ocrIndices.empty() && ocrSuccessCount == 0 && !pageInterrupted) {
-                LOG_ERROR("DocumentPipeline", "第 " + std::to_string(p + 1) + " 页所有切片识别均返回空或失败，中断解析以防止数据损坏");
-                pageInterrupted = true;
-                pageFailureReason = "第 " + std::to_string(p + 1) + " 页 OCR 识别失败 (嵌入推理服务异常或未响应)";
+            if (!ocrIndices.empty() && !pageInterrupted) {
+                // 仅当所有切片均遭遇网络/HTTP服务错误 (httpFailCount > 0 且 httpSuccessCount == 0)
+                // 或者嵌入推理服务处于离线/非就绪状态时，判定为真实服务异常中断
+                bool isServerDown = false;
+                if (m_modelManager) {
+                    auto health = m_modelManager->GetHealthStatus(TargetModelType::Ocr);
+                    if (health.state != ServerHealthState::Ready && health.state != ServerHealthState::Loading) {
+                        isServerDown = true;
+                    }
+                }
+
+                if ((httpFailCount.load() > 0 && httpSuccessCount.load() == 0) || isServerDown) {
+                    std::string detailErr = firstOcrError.empty() ? (isServerDown ? "OCR 服务未处于就绪状态" : "嵌入推理服务异常或未响应") : firstOcrError;
+                    LOG_ERROR("DocumentPipeline", "第 " + std::to_string(p + 1) + " 页所有切片识别均因服务异常失败: " + detailErr);
+                    pageInterrupted = true;
+                    pageFailureReason = "第 " + std::to_string(p + 1) + " 页 OCR 识别失败 (" + detailErr + ")";
+                } else if (ocrValidTextCount == 0) {
+                    LOG_INFO("DocumentPipeline", "第 " + std::to_string(p + 1) + " 页所有切片推理成功完成，但未检测到文本内容 (空白页或非文字图形)，正常记录为空页");
+                }
             }
+
+            // 收集当前页正文主体内容 (非底部敏感区域的文本) 用于检测正文中是否存在注解数字标记
+            std::string pageBodyText;
+            if (curPageData->pageHeight > 0) {
+                for (size_t elIdx = 0; elIdx < curPageData->elements.size(); ++elIdx) {
+                    const auto& elem = curPageData->elements[elIdx];
+                    if (!elem.isImage && elem.elem.type != LayoutElementType::Table) {
+                        float bottomRatio = static_cast<float>(elem.y2) / static_cast<float>(curPageData->pageHeight);
+                        if (bottomRatio < 0.80f) {
+                            pageBodyText += " " + recognizedResults[elIdx];
+                        }
+                    }
+                }
+            }
+            const bool pageHasAnnotationMarkers = HasAnnotationMarkers(pageBodyText);
 
             // 按严格拓扑阅读顺序组装 Markdown 与 JSON
             for (size_t elIdx = 0; elIdx < curPageData->elements.size(); ++elIdx) {
@@ -1061,9 +1259,21 @@ void DocumentPipeline::StartParseAsync(const std::string& inputFilePath, const s
 
                 std::string recognizedText = recognizedResults[elIdx];
 
+                // 综合研判是否属于底部注解/脚注 (结合模型标签、正文注解数字标记及文本形态)
+                bool isFootnote = IsFootnoteOrAnnotation(
+                    recognizedText, elem.elem.labelName,
+                    elem.y1, elem.y2, curPageData->pageHeight,
+                    pageHasAnnotationMarkers
+                );
+
                 // 二次防护：过滤页眉左右两侧及页脚中的独立页码，防止污染正文 Markdown 与 JSON 结果
                 if (elem.elem.type != LayoutElementType::Table && elem.elem.type != LayoutElementType::Formula) {
-                    if (IsHeaderOrFooterPageNumber(recognizedText, elem.elem.labelName, elem.x1, elem.y1, elem.x2, elem.y2, curPageData->pageWidth, curPageData->pageHeight)) {
+                    if (isFootnote) {
+                        LOG_DEBUG("DocumentPipeline", "Preserved footnote at box [" +
+                                  std::to_string(elem.x1) + ", " + std::to_string(elem.y1) + ", " +
+                                  std::to_string(elem.x2) + ", " + std::to_string(elem.y2) +
+                                  "]: " + recognizedText);
+                    } else if (IsHeaderOrFooterPageNumber(recognizedText, elem.elem.labelName, elem.x1, elem.y1, elem.x2, elem.y2, curPageData->pageWidth, curPageData->pageHeight)) {
                         LOG_DEBUG("DocumentPipeline", "Secondary filter: skipped page number '" + recognizedText +
                                   "' at box [" + std::to_string(elem.x1) + ", " + std::to_string(elem.y1) + ", " +
                                   std::to_string(elem.x2) + ", " + std::to_string(elem.y2) + "]");
@@ -1074,8 +1284,43 @@ void DocumentPipeline::StartParseAsync(const std::string& inputFilePath, const s
                 std::string formattedContent;
 
                 if (elem.elem.type == LayoutElementType::Formula) {
-                    formattedContent = "$$\n" + recognizedText + "\n$$";
-                } else if (elem.elem.type == LayoutElementType::Title) {
+                    std::string cleanFormula = recognizedText;
+                    auto trimStr = [](std::string& s) {
+                        while (!s.empty() && (s.front() == ' ' || s.front() == '\t' || s.front() == '\r' || s.front() == '\n')) {
+                            s.erase(s.begin());
+                        }
+                        while (!s.empty() && (s.back() == ' ' || s.back() == '\t' || s.back() == '\r' || s.back() == '\n')) {
+                            s.pop_back();
+                        }
+                    };
+                    trimStr(cleanFormula);
+                    bool stripped = true;
+                    while (stripped && cleanFormula.size() >= 2) {
+                        stripped = false;
+                        if (cleanFormula.size() >= 4 && cleanFormula.rfind("$$", 0) == 0 && cleanFormula.compare(cleanFormula.size() - 2, 2, "$$") == 0) {
+                            cleanFormula = cleanFormula.substr(2, cleanFormula.size() - 4);
+                            trimStr(cleanFormula);
+                            stripped = true;
+                        } else if (cleanFormula.size() >= 4 && cleanFormula.rfind("\\[", 0) == 0 && cleanFormula.compare(cleanFormula.size() - 2, 2, "\\]") == 0) {
+                            cleanFormula = cleanFormula.substr(2, cleanFormula.size() - 4);
+                            trimStr(cleanFormula);
+                            stripped = true;
+                        } else if (cleanFormula.size() >= 4 && cleanFormula.rfind("\\(", 0) == 0 && cleanFormula.compare(cleanFormula.size() - 2, 2, "\\)") == 0) {
+                            cleanFormula = cleanFormula.substr(2, cleanFormula.size() - 4);
+                            trimStr(cleanFormula);
+                            stripped = true;
+                        } else if (cleanFormula.size() >= 2 && cleanFormula.front() == '$' && cleanFormula.back() == '$' && cleanFormula.size() > 2 && cleanFormula[1] != '$') {
+                            cleanFormula = cleanFormula.substr(1, cleanFormula.size() - 2);
+                            trimStr(cleanFormula);
+                            stripped = true;
+                        }
+                    }
+                    formattedContent = "$$\n" + cleanFormula + "\n$$";
+                    recognizedText = cleanFormula;
+                } else if (elem.elem.type == LayoutElementType::Title ||
+                           (elem.elem.type == LayoutElementType::Text && (recognizedText == "目录 Contents" ||
+                                                                          recognizedText == "目录" ||
+                                                                          recognizedText.rfind("目录 ", 0) == 0))) {
                     if (elem.elem.labelName == "doc_title") {
                         formattedContent = "# " + recognizedText;
                     } else {
@@ -1110,8 +1355,9 @@ void DocumentPipeline::StartParseAsync(const std::string& inputFilePath, const s
                     pageMarkdown += formattedContent;
                 }
 
+                std::string finalType = isFootnote ? "footnote" : elem.elem.labelName;
                 json elJson = {
-                    {"id", elem.elem.id}, {"type", elem.elem.labelName}, {"reading_order", elem.elem.readingOrder}, {"box", {elem.x1, elem.y1, elem.x2, elem.y2}}, {"content", recognizedText}};
+                    {"id", elem.elem.id}, {"type", finalType}, {"reading_order", elem.elem.readingOrder}, {"box", {elem.x1, elem.y1, elem.x2, elem.y2}}, {"content", recognizedText}};
                 pageJson["elements"].push_back(elJson);
             }
 
@@ -1164,10 +1410,12 @@ void DocumentPipeline::StartParseAsync(const std::string& inputFilePath, const s
             pageJson["is_page_completed"] = true;
             fullDocJson["pages"].push_back(pageJson);
 
-            if (!fullMarkdown.empty()) {
-                fullMarkdown += "\n\n---\n\n";
+            if (!pageMarkdown.empty()) {
+                if (!fullMarkdown.empty()) {
+                    fullMarkdown += "\n\n---\n\n";
+                }
+                fullMarkdown += pageMarkdown;
             }
-            fullMarkdown += pageMarkdown;
 
             fullDocJson["completed_pages"] = p + 1;
             fullDocJson["is_completed"] = (p + 1 == totalPages);

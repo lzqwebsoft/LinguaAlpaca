@@ -12,6 +12,8 @@
 #include "core/ModelManager.hpp"
 #include "engine/DocLayoutEngine.hpp"
 
+class wxImage;
+
 namespace LinguaAlpaca {
 
 struct PageElementResult {
@@ -99,12 +101,27 @@ public:
     // PaddleOCR OTSL 表格转标准 HTML 表格辅助方法
     static std::string ConvertOtslToHtml(const std::string& otslStr);
 
+    // 判定位图是否为空白内容（无有效笔墨或文字符号）
+    static bool IsImageContentEmpty(const wxImage& img);
+
     // 判定是否属于页眉/页脚区域的独立页码 (用于 Markdown 与 JSON 组装时的二次过滤防护)
     static bool IsHeaderOrFooterPageNumber(
         const std::string& text,
         const std::string& labelName,
         int x1, int y1, int x2, int y2,
         int pageW, int pageH
+    );
+
+    // 判定文本中是否存在注解数字标记 (如 LaTeX \(^{[1]}\), [1], ①, 脚注星号等)
+    static bool HasAnnotationMarkers(const std::string& text);
+
+    // 判定候选元素是否为底部注解/脚注 (结合模型标签、正文注解数字标记及文本形态综合研判)
+    static bool IsFootnoteOrAnnotation(
+        const std::string& text,
+        const std::string& labelName,
+        int y1, int y2,
+        int pageH,
+        bool bodyHasMarkers = false
     );
 
 private:

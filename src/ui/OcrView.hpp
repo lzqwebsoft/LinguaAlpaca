@@ -126,6 +126,7 @@ private:
     bool m_isPdfDoc{false};
     int m_pdfTotalPages{0};
     int m_pdfCurrentPage{0};
+    int m_pdfScrollY{0};
     wxString m_lastMarkdownResult;
     wxString m_lastJsonResult;
     wxString m_lastOutputDir;

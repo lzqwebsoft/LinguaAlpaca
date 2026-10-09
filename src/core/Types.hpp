@@ -290,9 +290,10 @@ struct DocLayoutFilterConfig {
     bool enableGeometricFallback{true};  // 是否启用几何空间兜底过滤
     float maxHeaderHeightRatio{0.06f};   // 允许认定为页眉/页码的最大单框高度比例 (超过 6% 的多行大段落不予误删)
     float maxFooterHeightRatio{0.06f};   // 允许认定为页脚/页码的最大单框高度比例
+    bool preserveFootnotes{true};        // 是否严格保护底部注解/脚注 (footnote / vision_footnote 及潜在注解)
 
     // 4. 置信度门限
-    float scoreThreshold{0.35f};         // 检测框置信度过滤门限
+    float scoreThreshold{0.30f};         // 检测框置信度过滤门限 (对齐 PaddleX 官方默认 0.30 规范)
 
     // 5. 版面块合并与包含性重叠抑制 (对齐 PaddleX merge_layout_blocks 与 IoS 规范)
     bool mergeLayoutBlocks{true};        // 是否启用包含性重叠与子框去重抑制

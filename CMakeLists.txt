@@ -278,6 +278,12 @@ elseif(APPLE)
         MACOSX_PACKAGE_LOCATION "Frameworks"
     )
     target_sources(${PROJECT_NAME} PRIVATE "${ORT_BIN}")
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E create_symlink
+            "libonnxruntime.dylib"
+            "$<TARGET_FILE_DIR:${PROJECT_NAME}>/../Frameworks/libonnxruntime.1.dylib"
+        COMMENT "[LinguaAlpaca] Created libonnxruntime.1.dylib symlink in Frameworks"
+    )
     set_target_properties(${PROJECT_NAME} PROPERTIES
         INSTALL_RPATH "@executable_path/../Frameworks"
         BUILD_WITH_INSTALL_RPATH TRUE

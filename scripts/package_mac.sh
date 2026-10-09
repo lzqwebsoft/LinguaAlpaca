@@ -78,6 +78,7 @@ chmod +x "${DEST_APP}/Contents/MacOS/llama-server"
 
 # 4. 创建 Frameworks 目录，执行依赖递归收集与 @rpath 重定位
 echo "[3/6] Resolving and bundling dynamic libraries (dylibs)..."
+rm -rf "${DEST_APP}/Contents/Frameworks"
 mkdir -p "${DEST_APP}/Contents/Frameworks"
 
 /usr/bin/python3 - <<PY_SCRIPT
@@ -88,12 +89,14 @@ import shutil
 
 build_dir = "${BUILD_DIR}"
 dest_app = "${DEST_APP}"
+project_root = "${PROJECT_ROOT}"
 frameworks_dir = os.path.join(dest_app, "Contents/Frameworks")
 macos_dir = os.path.join(dest_app, "Contents/MacOS")
 
 search_paths = [
     os.path.join(build_dir, "bin"),
     os.path.join(build_dir, "third_party/wxWidgets/lib"),
+    os.path.join(project_root, "third_party/onnxruntime/lib"),
     "/opt/homebrew/opt/openssl@3/lib",
     "/usr/local/opt/openssl@3/lib"
 ]
@@ -175,6 +178,13 @@ for dep_str, src_path in dep_mapping.items():
         if os.path.lexists(alias_link):
             os.remove(alias_link)
         os.symlink(real_bname, alias_link)
+
+# 确保 libonnxruntime.dylib 别名同样建立
+if os.path.lexists(os.path.join(frameworks_dir, "libonnxruntime.1.dylib")):
+    alias_ort = os.path.join(frameworks_dir, "libonnxruntime.dylib")
+    if os.path.lexists(alias_ort):
+        os.remove(alias_ort)
+    os.symlink("libonnxruntime.1.dylib", alias_ort)
 
 print(f"  Copied {len(copied_dylibs)} unique dylib binaries to Frameworks.")
 

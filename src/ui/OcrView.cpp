@@ -19,6 +19,7 @@
 #include <wx/filename.h>
 #include <wx/graphics.h>
 #include <wx/mstream.h>
+#include <wx/base64.h>
 #include <wx/stdpaths.h>
 #include <wx/utils.h>
 
@@ -149,15 +150,16 @@ void OcrView::InitUI() {
         gc->FillPath(path);
 
         if (m_loadedImage.IsOk() && !m_loadedImagePath.IsEmpty()) {
-            int pad = 6_dip;
+            int pad = 4_dip;
             int availW = size.x - pad * 2;
             int availH = size.y - pad * 2;
             if (availW > 0 && availH > 0) {
                 int imgW = m_loadedImage.GetWidth();
                 int imgH = m_loadedImage.GetHeight();
+                // 单页模式：按卡片尺寸计算能完整显示单页的最大等比缩放比例 (Fit Page)
                 double scale = std::min(static_cast<double>(availW) / imgW, static_cast<double>(availH) / imgH);
-                int drawW = static_cast<int>(imgW * scale);
-                int drawH = static_cast<int>(imgH * scale);
+                int drawW = static_cast<int>(std::round(imgW * scale));
+                int drawH = static_cast<int>(std::round(imgH * scale));
                 int drawX = pad + (availW - drawW) / 2;
                 int drawY = pad + (availH - drawH) / 2;
 
@@ -172,8 +174,22 @@ void OcrView::InitUI() {
                     m_cachedImagePath = m_loadedImagePath;
                 }
 
+                // 绘制纸张投影底衬，提升文档与背景卡片的对比度
+                if (m_isPdfDoc) {
+                    gc->SetBrush(gc->CreateBrush(wxBrush(wxColour(0, 0, 0, 16))));
+                    gc->SetPen(*wxTRANSPARENT_PEN);
+                    gc->DrawRoundedRectangle(drawX + 1_dip, drawY + 2_dip, drawW, drawH, 2.0_dip);
+                }
+
                 gc->Clip(4_dip, 4_dip, size.x - 8_dip, size.y - 8_dip);
                 gc->DrawBitmap(m_cachedDisplayBmp, drawX, drawY, drawW, drawH);
+
+                // 绘制纸张微细边框
+                if (m_isPdfDoc) {
+                    gc->SetBrush(*wxTRANSPARENT_BRUSH);
+                    gc->SetPen(gc->CreatePen(wxPen(wxColour(0, 0, 0, 24), 1)));
+                    gc->DrawRectangle(drawX, drawY, drawW, drawH);
+                }
 
                 // 悬浮在图片上时，绘制半透明暗色遮罩与交互按钮 (识别进行中仍支持预览与翻页查看)
                 if (m_isDropzoneHovered || m_isDraggingPdfSlider) {
@@ -354,16 +370,56 @@ void OcrView::InitUI() {
     if (m_resultCard->GetMarkdownView()) {
         m_resultCard->GetMarkdownView()->SetOnImageClickCallback([this](const wxString& imgSrc) {
             wxString localPath = imgSrc;
+            if (localPath.StartsWith("data:")) {
+                int commaPos = localPath.Find(',');
+                if (commaPos != wxNOT_FOUND) {
+                    wxString b64Data = localPath.Mid(commaPos + 1);
+                    wxMemoryBuffer buf = wxBase64Decode(b64Data);
+                    if (!buf.IsEmpty()) {
+                        wxMemoryInputStream memStream(buf.GetData(), buf.GetDataLen());
+                        wxImage img;
+                        if (img.LoadFile(memStream)) {
+                            ImagePreviewDialog dialog(this, img, L"插图预览");
+                            dialog.ShowModal();
+                            return;
+                        }
+                    }
+                }
+            }
+
             if (localPath.StartsWith("file:///")) {
                 localPath = localPath.Mid(8);
             }
 #ifdef _WIN32
             localPath.Replace("/", "\\");
 #endif
-            if (wxFileExists(localPath)) {
+            wxString targetFile = localPath;
+            if (!wxFileExists(targetFile)) {
+                if (!m_lastOutputDir.IsEmpty()) {
+                    wxString candidate = m_lastOutputDir + "/" + localPath;
+#ifdef _WIN32
+                    candidate.Replace("/", "\\");
+#endif
+                    if (wxFileExists(candidate)) {
+                        targetFile = candidate;
+                    }
+                }
+            }
+            if (!wxFileExists(targetFile) && !m_loadedImagePath.IsEmpty()) {
+                wxFileName docFn(m_loadedImagePath);
+                wxString candidate = docFn.GetPath() + "/" + docFn.GetName() + "/" + localPath;
+#ifdef _WIN32
+                candidate.Replace("/", "\\");
+#endif
+                if (wxFileExists(candidate)) {
+                    targetFile = candidate;
+                }
+            }
+
+            if (wxFileExists(targetFile)) {
                 wxImage img;
-                if (img.LoadFile(localPath)) {
-                    ImagePreviewDialog dialog(this, img, L"插图预览 - " + wxFileName(localPath).GetFullName());
+                if (img.LoadFile(targetFile)) {
+                    ImagePreviewDialog dialog(this, img, L"插图预览 - " + wxFileName(targetFile).GetFullName());
                     dialog.ShowModal();
                 }
             }
@@ -650,6 +706,7 @@ void OcrView::OnDropzoneMouseMove(wxMouseEvent& event) {
             double pagePerPixel = static_cast<double>(m_pdfTotalPages - 1) / availableH;
             int newPage = std::clamp(m_sliderDragStartPage + static_cast<int>(std::round(deltaY * pagePerPixel)), 0, m_pdfTotalPages - 1);
             if (newPage != m_pdfCurrentPage) {
+                m_pdfScrollY = 0;
                 m_pdfCurrentPage = newPage;
                 wxImage cached;
                 if (TryGetPageCache(newPage, cached)) {
@@ -731,6 +788,7 @@ void OcrView::OnDropzoneLeftDown(wxMouseEvent& event) {
                 int relativeY = pt.y - m_pdfSliderTrackRect.y;
                 double ratio = std::clamp(static_cast<double>(relativeY) / m_pdfSliderTrackRect.height, 0.0, 1.0);
                 int targetPage = std::clamp(static_cast<int>(std::round(ratio * (m_pdfTotalPages - 1))), 0, m_pdfTotalPages - 1);
+                m_pdfScrollY = 0;
                 SetPdfPage(targetPage);
                 m_isDraggingPdfSlider = true;
                 m_sliderDragStartMouseY = pt.y;
@@ -813,6 +871,7 @@ void OcrView::LoadImageFile(const wxString& filePath) {
     ClearPageCache();
     m_cachedDisplayBmp = wxNullBitmap;
     m_pdfDebounceTimer.Stop();
+    m_pdfScrollY = 0;
 
     if (m_isPdfDoc) {
         m_pdfTotalPages = PdfHelper::GetPageCount(filePath.ToUTF8().data());
@@ -884,6 +943,7 @@ bool OcrView::CheckAndPromptResume(const wxString& filePath) {
         );
         int answer = wxMessageBox(msg, L"发现历史解析结果", wxYES_NO | wxICON_QUESTION, this);
         if (answer == wxYES) {
+            m_lastOutputDir = wxString::FromUTF8(outDir);
             m_lastMarkdownResult = wxString::FromUTF8(resumeInfo.markdown);
             m_lastJsonResult = wxString::FromUTF8(resumeInfo.jsonStructured);
             if (m_resultCard) {
@@ -939,6 +999,7 @@ bool OcrView::CheckAndPromptResume(const wxString& filePath) {
         );
         int answer = wxMessageBox(msg, L"恢复解析进度提示", wxYES_NO | wxICON_QUESTION, this);
         if (answer == wxYES) {
+            m_lastOutputDir = wxString::FromUTF8(outDir);
             std::string cleanMd = DocumentPipeline::ExtractMarkdownUpToPage(resumeInfo.markdown, fullyDone);
             m_lastMarkdownResult = wxString::FromUTF8(cleanMd);
             m_lastJsonResult = wxString::FromUTF8(resumeInfo.jsonStructured);

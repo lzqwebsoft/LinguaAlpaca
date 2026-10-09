@@ -464,14 +464,54 @@
                 html = '<pre>' + text + '</pre>';
             }
 
+            // 0.8 清理和规范化 LaTeX 数学公式中的多余/嵌套定界符
+            function cleanMathFormula(f) {
+                if (!f) return "";
+                var s = f.trim();
+                var changed = true;
+                while (changed) {
+                    changed = false;
+                    // 剥离外层冗余的 $$ ... $$
+                    if (s.startsWith("$$") && s.endsWith("$$") && s.length >= 4) {
+                        s = s.substring(2, s.length - 2).trim();
+                        changed = true;
+                    }
+                    // 剥离外层冗余的 \[ ... \]
+                    else if (s.startsWith("\\[") && s.endsWith("\\]") && s.length >= 4) {
+                        s = s.substring(2, s.length - 2).trim();
+                        changed = true;
+                    }
+                    // 剥离外层冗余的 \( ... \)
+                    else if (s.startsWith("\\(") && s.endsWith("\\)") && s.length >= 4) {
+                        s = s.substring(2, s.length - 2).trim();
+                        changed = true;
+                    }
+                    // 剥离外层冗余的单美元符号 $ ... $
+                    else if (s.startsWith("$") && s.endsWith("$") && s.length >= 2 && !s.startsWith("$$")) {
+                        s = s.substring(1, s.length - 1).trim();
+                        changed = true;
+                    }
+                    // 剥离 \begin{equation} ... \end{equation}
+                    else if (s.startsWith("\\begin{equation}") && s.endsWith("\\end{equation}") && s.length >= 30) {
+                        s = s.substring(16, s.length - 14).trim();
+                        changed = true;
+                    } else if (s.startsWith("\\begin{equation*}") && s.endsWith("\\end{equation*}") && s.length >= 32) {
+                        s = s.substring(17, s.length - 15).trim();
+                        changed = true;
+                    }
+                }
+                return s;
+            }
+
             // 3. 还原数学公式并调用 KaTeX 高精度渲染 (并注入 ulem 宏增强)
             for (var i = 0; i < mathBlocks.length; i++) {
                 var item = mathBlocks[i];
                 var placeholder = item.isBlock ? "%%MATHBLOCK_" + i + "%%" : "%%MATHINLINE_" + i + "%%";
                 var renderedMath = "";
+                var formulaStr = cleanMathFormula(item.formula);
                 try {
                     if (typeof katex !== 'undefined') {
-                        renderedMath = katex.renderToString(item.formula.trim(), {
+                        renderedMath = katex.renderToString(formulaStr, {
                             displayMode: item.isBlock,
                             throwOnError: false,
                             trust: true,
@@ -486,10 +526,10 @@
                             }
                         });
                     } else {
-                        renderedMath = item.isBlock ? "$$" + item.formula + "$$" : "$" + item.formula + "$";
+                        renderedMath = item.isBlock ? "$$" + formulaStr + "$$" : "$" + formulaStr + "$";
                     }
                 } catch (e) {
-                    renderedMath = '<span class="katex-error">' + item.formula + '</span>';
+                    renderedMath = '<span class="katex-error">' + formulaStr + '</span>';
                 }
                 if (item.isBlock) {
                     html = html.replace(new RegExp('<p>\\s*' + placeholder + '\\s*<\\/p>', 'g'), renderedMath);
@@ -513,7 +553,8 @@
                 (function(img) {
                     img.addEventListener('click', function(e) {
                         e.stopPropagation();
-                        notifyImageClick(img.src);
+                        var originalSrc = img.getAttribute('data-original-src');
+                        notifyImageClick(originalSrc || img.src);
                     });
                 })(imgs[j]);
             }

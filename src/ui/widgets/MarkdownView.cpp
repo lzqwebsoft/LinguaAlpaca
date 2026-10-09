@@ -7,13 +7,263 @@
 #include <wx/stdpaths.h>
 #include <wx/filename.h>
 #include <wx/uri.h>
+#include <wx/file.h>
+#include <wx/base64.h>
 
 #include <nlohmann/json.hpp>
+#include <unordered_map>
+#include <cctype>
+#include <vector>
 
 #include "core/Logger.hpp"
 #include "../theme/Theme.hpp"
 
 namespace {
+
+std::string GetMimeTypeForExtension(const wxString& ext) {
+    wxString lower = ext.Lower();
+    if (lower == "png") return "image/png";
+    if (lower == "jpg" || lower == "jpeg") return "image/jpeg";
+    if (lower == "webp") return "image/webp";
+    if (lower == "gif") return "image/gif";
+    if (lower == "svg") return "image/svg+xml";
+    if (lower == "bmp") return "image/bmp";
+    return "image/jpeg";
+}
+
+std::string ResolveLocalImagePath(const std::string& rawPath, const std::string& baseDir) {
+    if (rawPath.empty()) return "";
+    if (rawPath.rfind("data:", 0) == 0 ||
+        rawPath.rfind("http://", 0) == 0 ||
+        rawPath.rfind("https://", 0) == 0) {
+        return ""; // 非本地文件
+    }
+
+    auto tryCandidate = [](const wxString& pathCandidate) -> std::string {
+        wxFileName fn(pathCandidate);
+        fn.Normalize();
+        if (wxFileExists(fn.GetFullPath())) {
+            return std::string(fn.GetFullPath().ToUTF8().data());
+        }
+        return "";
+    };
+
+    std::string path = rawPath;
+    if (path.rfind("file:///", 0) == 0) {
+        path = path.substr(8);
+#ifdef _WIN32
+        if (path.size() >= 3 && path[0] == '/' && path[2] == ':') {
+            path = path.substr(1);
+        }
+#endif
+    } else if (path.rfind("file://", 0) == 0) {
+        path = path.substr(7);
+    }
+
+    // 尝试解码 URL 编码 (如 %20 -> 空格)
+    wxString unescapedPath = wxURI::Unescape(wxString::FromUTF8(path));
+
+    // 1. 直接绝对路径检测
+    std::string found = tryCandidate(wxString::FromUTF8(path));
+    if (!found.empty()) return found;
+    found = tryCandidate(unescapedPath);
+    if (!found.empty()) return found;
+
+    // 2. 结合 baseDir 解析相对路径
+    if (!baseDir.empty()) {
+        wxString wxBase = wxString::FromUTF8(baseDir);
+        found = tryCandidate(wxBase + "/" + wxString::FromUTF8(path));
+        if (!found.empty()) return found;
+        found = tryCandidate(wxBase + "/" + unescapedPath);
+        if (!found.empty()) return found;
+
+        // 若 baseDir 是文件路径，尝试其所属同名子目录
+        if (wxFileExists(wxBase)) {
+            wxFileName docFn(wxBase);
+            wxString cand = docFn.GetPath() + "/" + docFn.GetName() + "/" + wxString::FromUTF8(path);
+            found = tryCandidate(cand);
+            if (!found.empty()) return found;
+            cand = docFn.GetPath() + "/" + docFn.GetName() + "/" + unescapedPath;
+            found = tryCandidate(cand);
+            if (!found.empty()) return found;
+        }
+    }
+
+    return "";
+}
+
+std::string LoadImageFileAsDataUrl(const std::string& fullPath) {
+    wxFile file(wxString::FromUTF8(fullPath), wxFile::read);
+    if (!file.IsOpened()) {
+        return "";
+    }
+    wxFileOffset length = file.Length();
+    if (length <= 0 || length > 30 * 1024 * 1024) { // 30MB 安全上限
+        return "";
+    }
+
+    std::vector<unsigned char> buffer(static_cast<size_t>(length));
+    if (file.Read(buffer.data(), length) != length) {
+        return "";
+    }
+
+    wxString b64 = wxBase64Encode(buffer.data(), buffer.size());
+    wxFileName fn(wxString::FromUTF8(fullPath));
+    std::string mime = GetMimeTypeForExtension(fn.GetExt());
+
+    return "data:" + mime + ";base64," + std::string(b64.ToUTF8().data());
+}
+
+std::string EmbedLocalImagesAsBase64(const std::string& md, const std::string& baseDir) {
+    if (md.empty()) return md;
+
+    std::unordered_map<std::string, std::pair<std::string, std::string>> cache;
+    auto getOrLoadDataUrl = [&](const std::string& rawSrc) -> std::pair<std::string, std::string> {
+        auto it = cache.find(rawSrc);
+        if (it != cache.end()) {
+            return it->second;
+        }
+        std::string fullPath = ResolveLocalImagePath(rawSrc, baseDir);
+        if (fullPath.empty()) {
+            cache[rawSrc] = {"", ""};
+            return {"", ""};
+        }
+        std::string dataUrl = LoadImageFileAsDataUrl(fullPath);
+        cache[rawSrc] = {fullPath, dataUrl};
+        return {fullPath, dataUrl};
+    };
+
+    std::string result;
+    result.reserve(md.size() + 2048);
+
+    size_t i = 0;
+    const size_t n = md.size();
+    bool inCodeFence = false;
+
+    while (i < n) {
+        // 判断代码块状态切换 (行首 ``` 或 ~~~)
+        if (i == 0 || md[i - 1] == '\n') {
+            if (i + 2 < n && ((md[i] == '`' && md[i+1] == '`' && md[i+2] == '`') ||
+                             (md[i] == '~' && md[i+1] == '~' && md[i+2] == '~'))) {
+                inCodeFence = !inCodeFence;
+                result += md[i];
+                i++;
+                continue;
+            }
+        }
+
+        if (inCodeFence) {
+            result += md[i];
+            i++;
+            continue;
+        }
+
+        // 检测 HTML <img ...>
+        if (md[i] == '<' && i + 4 < n &&
+            (md[i+1] == 'i' || md[i+1] == 'I') &&
+            (md[i+2] == 'm' || md[i+2] == 'M') &&
+            (md[i+3] == 'g' || md[i+3] == 'G') &&
+            (md[i+4] == ' ' || md[i+4] == '\t' || md[i+4] == '\n' || md[i+4] == '\r' || md[i+4] == '/')) {
+
+            size_t tagEnd = md.find('>', i + 4);
+            if (tagEnd != std::string::npos) {
+                std::string tagContent = md.substr(i, tagEnd - i + 1);
+
+                // 不区分大小写查找 "src="
+                size_t srcPos = std::string::npos;
+                for (size_t p = 0; p + 4 < tagContent.size(); ++p) {
+                    if ((tagContent[p] == 's' || tagContent[p] == 'S') &&
+                        (tagContent[p+1] == 'r' || tagContent[p+1] == 'R') &&
+                        (tagContent[p+2] == 'c' || tagContent[p+2] == 'C') &&
+                        tagContent[p+3] == '=') {
+                        if (p == 0 || isspace(static_cast<unsigned char>(tagContent[p-1]))) {
+                            srcPos = p;
+                            break;
+                        }
+                    }
+                }
+
+                if (srcPos != std::string::npos) {
+                    size_t quoteStart = srcPos + 4;
+                    while (quoteStart < tagContent.size() && isspace(static_cast<unsigned char>(tagContent[quoteStart]))) {
+                        quoteStart++;
+                    }
+                    if (quoteStart < tagContent.size() && (tagContent[quoteStart] == '"' || tagContent[quoteStart] == '\'')) {
+                        char quote = tagContent[quoteStart];
+                        size_t quoteEnd = tagContent.find(quote, quoteStart + 1);
+                        if (quoteEnd != std::string::npos) {
+                            std::string rawSrc = tagContent.substr(quoteStart + 1, quoteEnd - (quoteStart + 1));
+                            auto [fullPath, dataUrl] = getOrLoadDataUrl(rawSrc);
+                            if (!dataUrl.empty()) {
+                                std::string newTag = tagContent.substr(0, quoteStart + 1);
+                                newTag += dataUrl;
+                                newTag += quote;
+
+                                if (tagContent.find("data-original-src=") == std::string::npos) {
+                                    newTag += " data-original-src=\"" + rawSrc + "\"";
+                                }
+                                newTag += tagContent.substr(quoteEnd + 1);
+
+                                result += newTag;
+                                i = tagEnd + 1;
+                                continue;
+                            }
+                        }
+                    }
+                }
+
+                result += tagContent;
+                i = tagEnd + 1;
+                continue;
+            }
+        }
+
+        // 检测 Markdown ![alt](url)
+        if (md[i] == '!' && i + 1 < n && md[i+1] == '[') {
+            size_t closeBracket = md.find(']', i + 2);
+            if (closeBracket != std::string::npos && closeBracket + 1 < n && md[closeBracket + 1] == '(') {
+                size_t closeParen = md.find(')', closeBracket + 2);
+                if (closeParen != std::string::npos) {
+                    std::string altText = md.substr(i + 2, closeBracket - (i + 2));
+                    std::string insideParen = md.substr(closeBracket + 2, closeParen - (closeBracket + 2));
+
+                    std::string rawUrl = insideParen;
+                    std::string title;
+                    size_t spacePos = insideParen.find(' ');
+                    if (spacePos != std::string::npos) {
+                        rawUrl = insideParen.substr(0, spacePos);
+                        title = insideParen.substr(spacePos + 1);
+                        while (!title.empty() && isspace(static_cast<unsigned char>(title.front()))) title.erase(title.begin());
+                        while (!title.empty() && isspace(static_cast<unsigned char>(title.back()))) title.pop_back();
+                        if (title.size() >= 2 && ((title.front() == '"' && title.back() == '"') || (title.front() == '\'' && title.back() == '\''))) {
+                            title = title.substr(1, title.size() - 2);
+                        }
+                    }
+
+                    while (!rawUrl.empty() && isspace(static_cast<unsigned char>(rawUrl.front()))) rawUrl.erase(rawUrl.begin());
+                    while (!rawUrl.empty() && isspace(static_cast<unsigned char>(rawUrl.back()))) rawUrl.pop_back();
+
+                    auto [fullPath, dataUrl] = getOrLoadDataUrl(rawUrl);
+                    if (!dataUrl.empty()) {
+                        std::string htmlImg = "<img src=\"" + dataUrl + "\" alt=\"" + altText + "\"";
+                        if (!title.empty()) {
+                            htmlImg += " title=\"" + title + "\"";
+                        }
+                        htmlImg += " data-original-src=\"" + rawUrl + "\" style=\"max-width: 100%; object-fit: contain;\" />";
+                        result += htmlImg;
+                        i = closeParen + 1;
+                        continue;
+                    }
+                }
+            }
+        }
+
+        result += md[i];
+        i++;
+    }
+
+    return result;
+}
 
 #ifdef _WIN32
 void RemoveNativeWindowBorders(wxWindow* win) {
@@ -322,7 +572,9 @@ void MarkdownView::DoRenderMarkdown(bool preserveScroll) {
         return;
 
     try {
-        std::string jsonMd = nlohmann::json(m_rawMarkdown).dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
+        std::string processedMd = EmbedLocalImagesAsBase64(m_rawMarkdown, m_baseDir);
+
+        std::string jsonMd = nlohmann::json(processedMd).dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
         std::string jsonBase = nlohmann::json(m_baseDir).dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
 
         wxString jsCall = "renderMarkdown(" + wxString::FromUTF8(jsonMd) + ", "

@@ -428,10 +428,8 @@ void LlamaClient::RecognizeStream(const std::string& imagePath, const std::strin
         } else if (hasError) {
             if (onComplete)
                 onComplete(finalCleanText, false, errorMsg);
-        } else if (finalCleanText.empty()) {
-            if (onComplete)
-                onComplete("", false, "未识别到有效文本内容");
         } else {
+            // 正常完成（包含模型返回空文本/图像无文字等合法情况，非服务端异常）
             if (onComplete)
                 onComplete(finalCleanText, true, "");
         }

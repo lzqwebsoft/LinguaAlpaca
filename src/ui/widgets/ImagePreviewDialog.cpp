@@ -274,11 +274,6 @@ void ImagePreviewDialog::OnPaint(wxPaintEvent& WXUNUSED(event)) {
     wxRect imgRect = GetRenderedImageRect();
     if (imgRect.width <= 0 || imgRect.height <= 0) return;
 
-    // Draw shadow behind image
-    gc->SetPen(*wxTRANSPARENT_PEN);
-    gc->SetBrush(wxBrush(wxColour(0, 0, 0, 100)));
-    gc->DrawRectangle(imgRect.x + 4, imgRect.y + 4, imgRect.width, imgRect.height);
-
     // Render bitmap via native hardware/sub-pixel scaling (0 RAM allocation, 60fps performance)
     gc->DrawBitmap(m_cachedBitmap, imgRect.x, imgRect.y, imgRect.width, imgRect.height);
 }

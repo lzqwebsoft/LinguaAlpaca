@@ -14,7 +14,7 @@ if(NOT DEFINED ORT_PROXY)
     elseif(DEFINED ENV{http_proxy})
         set(ORT_PROXY "$ENV{http_proxy}")
     else()
-        set(ORT_PROXY "http://127.0.0.1:10808")
+        set(ORT_PROXY "http://127.0.0.1:7088")
     endif()
 endif()
 

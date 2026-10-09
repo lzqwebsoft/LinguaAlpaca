@@ -11,6 +11,7 @@
 #include <chrono>
 #include <cmath>
 #include <filesystem>
+#include <fstream>
 
 namespace LinguaAlpaca {
 
@@ -77,6 +78,26 @@ bool DocLayoutEngine::Initialize(const std::string& modelPath, int executionProv
         return false;
     }
 
+    // 检查文件有效性与 Git LFS 占位指针防护
+    try {
+        std::error_code ec;
+        auto fsize = std::filesystem::file_size(actualPath, ec);
+        if (!ec) {
+            if (fsize < 1024) {
+                std::ifstream checkFile(actualPath);
+                std::string firstLine;
+                if (std::getline(checkFile, firstLine) && firstLine.find("version https://git-lfs") != std::string::npos) {
+                    m_lastError = "模型文件为 Git LFS 占位指针 (134字节)，未包含真实权重。请在模型目录运行 git lfs pull 或重新下载完整 .onnx 文件: " + actualPath;
+                    LOG_ERROR("DocLayoutEngine", m_lastError);
+                    return false;
+                }
+                m_lastError = "模型文件过小 (" + std::to_string(fsize) + " 字节)，并非有效的 ONNX 模型: " + actualPath;
+                LOG_ERROR("DocLayoutEngine", m_lastError);
+                return false;
+            }
+        }
+    } catch (...) {}
+
     try {
         Ort::SessionOptions sessionOptions;
         if (threads > 0) {
@@ -123,7 +144,12 @@ bool DocLayoutEngine::Initialize(const std::string& modelPath, int executionProv
         LOG_INFO("DocLayoutEngine", "Loaded ONNX model successfully: " + actualPath);
         return true;
     } catch (const Ort::Exception& e) {
-        m_lastError = std::string("ONNX Runtime 异常: ") + e.what();
+        std::string whatStr = e.what();
+        if (whatStr.find("Protobuf parsing failed") != std::string::npos || whatStr.find("INVALID_PROTOBUF") != std::string::npos) {
+            m_lastError = "ONNX 模型解析失败 (Protobuf parsing failed): 权重文件损坏或不完整。若通过 Git 下载，请确认已安装 git-lfs 并拉取了真实权重: " + actualPath;
+        } else {
+            m_lastError = std::string("ONNX Runtime 异常: ") + whatStr;
+        }
         LOG_ERROR("DocLayoutEngine", "Failed to load model: " + m_lastError);
         return false;
     } catch (const std::exception& e) {
@@ -405,6 +431,19 @@ bool DocLayoutEngine::ShouldFilterElement(const LayoutElement& elem,
     const float effectiveFooterMargin = (std::max)(cfg.footerMarginRatio, 0.18f);
 
     // ------------------------------------------------------------------------
+    // 第 0 重保护：标题保护与注解/脚注保护 (绝对不作为页眉/页脚/页码过滤)
+    // ------------------------------------------------------------------------
+    if (elem.type == LayoutElementType::Title || 
+        elem.labelName == "doc_title" || 
+        elem.labelName == "paragraph_title") {
+        return false;
+    }
+
+    if (cfg.preserveFootnotes && (elem.labelName == "footnote" || elem.labelName == "vision_footnote")) {
+        return false;
+    }
+
+    // ------------------------------------------------------------------------
     // 第 1 重过滤：模型显式语义标签判定 (结合上下半区软边界防护)
     // ------------------------------------------------------------------------
     if (cfg.filterHeader && (elem.type == LayoutElementType::Header || 
@@ -448,21 +487,24 @@ bool DocLayoutEngine::ShouldFilterElement(const LayoutElement& elem,
     // 第 2 重过滤：几何空间坐标兜底 (针对被模型误判为 Text 或 Title 的漏检页眉页脚及边角页码)
     // ------------------------------------------------------------------------
     if (cfg.enableGeometricFallback) {
-        // 仅对文本类元素做几何兜底 (表格、公式、图表等复杂结构不在此激进剔除)
+        // 仅对普通文本类元素做几何兜底 (标题、表格、公式、图表等复杂结构不在此激进剔除)
         bool isTextLike = (elem.type == LayoutElementType::Text || 
-                           elem.type == LayoutElementType::Title ||
-                           elem.labelName == "aside_text" ||
+                           elem.labelName == "aside_text" || 
                            elem.labelName == "content");
 
         if (isTextLike) {
             // A. 页眉/页脚边角与居中独立页码兜底过滤 (Header / Footer Corner & Center Page Numbers)
-            // 典型特征：位于顶部或底部敏感区内，且靠左 (x2 <= 35%W) 或靠右 (x1 >= 65%W) 或居中狭窄单行，且宽高为短小单行
-            bool isCornerOrCenterPos = (rightRatio <= 0.35f || leftRatio >= 0.65f || 
-                                       (leftRatio >= 0.30f && rightRatio <= 0.70f && boxWidthRatio <= 0.15f));
-            bool isSmallBox = (boxHeightRatio <= cfg.maxHeaderHeightRatio && boxWidthRatio <= 0.20f);
+            // 典型特征：真实页码框非常狭小 (通常单数字或罗马数字，宽度不超过页面 8%，高度不超过 4%)
+            // - 边角独立页码：位于最边缘极角区 (靠左 x2 <= 20%W 或靠右 x1 >= 80%W)
+            // - 底部居中独立页码：居中 (x1 >= 30%W 且 x2 <= 70%W 且 boxWidthRatio <= 8%W)。
+            // 注意：顶部区域 (尤其是 8%~18% 区域) 以及文本列起始处 (如 x1 >= 10%W) 通常为篇章标题 (如"总 序"、"目 录 Contents") 或章节条目，绝不能作为页码过滤！
+            bool isCornerPageNum = (rightRatio <= 0.20f || leftRatio >= 0.80f);
+            bool isBottomCenterPageNum = (topRatio >= (1.0f - effectiveFooterMargin) &&
+                                          leftRatio >= 0.30f && rightRatio <= 0.70f && boxWidthRatio <= 0.08f);
+            bool isSmallBox = (boxHeightRatio <= 0.04f && boxWidthRatio <= 0.08f);
 
-            if (cfg.filterPageNumber && isSmallBox && isCornerOrCenterPos) {
-                if (bottomRatio <= effectiveHeaderMargin || topRatio >= (1.0f - effectiveFooterMargin)) {
+            if (cfg.filterPageNumber && isSmallBox && (isCornerPageNum || isBottomCenterPageNum)) {
+                if (bottomRatio <= 0.14f || topRatio >= (1.0f - effectiveFooterMargin)) {
                     LOG_DEBUG("DocLayoutEngine", 
                         wxString::Format("Geometric fallback: dropped corner/center page number at x=[%d, %d], y=[%d, %d]", 
                                          elem.x1, elem.x2, elem.y1, elem.y2).ToStdString());
@@ -470,8 +512,14 @@ bool DocLayoutEngine::ShouldFilterElement(const LayoutElement& elem,
                 }
             }
 
-            // B. 顶部页眉兜底：整个包围盒完全位于顶部敏感区内，且高度属于单行/短文本特征 (避开主文档标题 doc_title)
-            if (cfg.filterHeader && elem.labelName != "doc_title" && bottomRatio <= effectiveHeaderMargin) {
+            // B. 顶部页眉兜底：仅针对极靠近页面顶缘的漏检单行页眉 (bottomRatio <= 0.08f)，避开顶部标题区与正文
+            // 注意：8%~20% 范围通常是章节大标题 (如"目录 Contents"、"总 序")、副标题或首行正文，绝不能仅凭几何位置误删！
+            const float strictHeaderThreshold = (std::min)(effectiveHeaderMargin, 0.08f);
+            if (cfg.filterHeader && 
+                elem.labelName != "doc_title" && 
+                elem.labelName != "paragraph_title" && 
+                elem.type != LayoutElementType::Title && 
+                bottomRatio <= strictHeaderThreshold) {
                 if (boxHeightRatio <= cfg.maxHeaderHeightRatio) {
                     LOG_DEBUG("DocLayoutEngine", 
                         wxString::Format("Geometric fallback: dropped misclassified header at y=[%d, %d]", 
@@ -480,9 +528,19 @@ bool DocLayoutEngine::ShouldFilterElement(const LayoutElement& elem,
                 }
             }
 
-            // C. 底部页脚兜底：整个包围盒完全位于底部敏感区内，且高度属于单行/短文本特征
-            if (cfg.filterFooter && topRatio >= (1.0f - effectiveFooterMargin)) {
-                if (boxHeightRatio <= cfg.maxFooterHeightRatio) {
+            // C. 底部页脚兜底：仅针对极靠近页面底缘的漏检单行页脚 (topRatio >= 0.92f)，避开正文末尾与目录条目
+            // 注意：80%~92% 范围通常是正文最后几行、目录末尾小项 (如"水利 ...... 071") 或底部注解，绝不能粗暴误删！
+            const float strictFooterThreshold = (std::max)(1.0f - effectiveFooterMargin, 0.92f);
+            if (cfg.filterFooter && elem.labelName != "footnote" && elem.labelName != "vision_footnote" &&
+                topRatio >= strictFooterThreshold) {
+                bool shouldDrop = false;
+                if (cfg.preserveFootnotes) {
+                    // 仅当宽度很小 (<= 20% 页面宽度) 时才作为无用页脚过滤；宽文本框放行给 OCR 提取注解
+                    shouldDrop = (boxHeightRatio <= cfg.maxFooterHeightRatio && boxWidthRatio <= 0.20f);
+                } else {
+                    shouldDrop = (boxHeightRatio <= cfg.maxFooterHeightRatio);
+                }
+                if (shouldDrop) {
                     LOG_DEBUG("DocLayoutEngine", 
                         wxString::Format("Geometric fallback: dropped misclassified footer at y=[%d, %d]", 
                                          elem.y1, elem.y2).ToStdString());
@@ -527,17 +585,17 @@ void DocLayoutEngine::SuppressContainedOrDuplicateBoxes(std::vector<LayoutElemen
             float ios = static_cast<float>(interArea) / minArea;
             float iou = (unionArea > 0) ? (static_cast<float>(interArea) / unionArea) : 0.0f;
 
-            // A. 处理落在 Image 区域内部的文字碎片 (IoS >= 0.80)，非独立图注
+            // A. 处理落在 Image 区域内部的文字碎片 (IoS >= 0.80)，非独立图注/脚注
             if (boxA.type == LayoutElementType::Image && 
                 (boxB.type == LayoutElementType::Text || boxB.type == LayoutElementType::Title) &&
-                boxB.labelName != "vision_footnote" && boxB.labelName != "figure_title") {
+                boxB.labelName != "vision_footnote" && boxB.labelName != "footnote" && boxB.labelName != "figure_title") {
                 if (ios >= 0.80f) {
                     suppressed[j] = true;
                     continue;
                 }
             } else if (boxB.type == LayoutElementType::Image && 
                 (boxA.type == LayoutElementType::Text || boxA.type == LayoutElementType::Title) &&
-                boxA.labelName != "vision_footnote" && boxA.labelName != "figure_title") {
+                boxA.labelName != "vision_footnote" && boxA.labelName != "footnote" && boxA.labelName != "figure_title") {
                 if (ios >= 0.80f) {
                     suppressed[i] = true;
                     break;
@@ -608,6 +666,82 @@ void DocLayoutEngine::SuppressContainedOrDuplicateBoxes(std::vector<LayoutElemen
         }
     }
     elements = std::move(filtered);
+}
+
+bool DocLayoutEngine::IsImageContentEmpty(const wxImage& img) {
+    if (!img.IsOk()) return true;
+    int w = img.GetWidth();
+    int h = img.GetHeight();
+    if (w <= 0 || h <= 0) return true;
+    const unsigned char* data = img.GetData();
+    if (!data) return true;
+
+    // 1. 采样四角及边缘中点估算背景基准色
+    std::vector<std::pair<int, int>> samplePoints = {
+        {(std::min)(5, w - 1), (std::min)(5, h - 1)},
+        {(std::max)(0, w - 6), (std::min)(5, h - 1)},
+        {(std::min)(5, w - 1), (std::max)(0, h - 6)},
+        {(std::max)(0, w - 6), (std::max)(0, h - 6)},
+        {w / 2, (std::min)(5, h - 1)},
+        {w / 2, (std::max)(0, h - 6)},
+        {(std::min)(5, w - 1), h / 2},
+        {(std::max)(0, w - 6), h / 2}
+    };
+
+    int sumR = 0, sumG = 0, sumB = 0;
+    for (const auto& pt : samplePoints) {
+        size_t idx = (static_cast<size_t>(pt.second) * w + pt.first) * 3;
+        sumR += data[idx];
+        sumG += data[idx + 1];
+        sumB += data[idx + 2];
+    }
+    int bgR = sumR / static_cast<int>(samplePoints.size());
+    int bgG = sumG / static_cast<int>(samplePoints.size());
+    int bgB = sumB / static_cast<int>(samplePoints.size());
+    int bgGray = (bgR * 299 + bgG * 587 + bgB * 114) / 1000;
+
+    // 2. 步长采样统计前景有效笔墨像素
+    const int step = 2;
+    int fgCount = 0;
+    int totalSampled = 0;
+    for (int y = 0; y < h; y += step) {
+        size_t rowOffset = static_cast<size_t>(y) * w * 3;
+        for (int x = 0; x < w; x += step) {
+            totalSampled++;
+            size_t idx = rowOffset + static_cast<size_t>(x) * 3;
+            int r = data[idx];
+            int g = data[idx + 1];
+            int b = data[idx + 2];
+
+            int diff = std::abs(r - bgR) + std::abs(g - bgG) + std::abs(b - bgB);
+            int gray = (r * 299 + g * 587 + b * 114) / 1000;
+
+            bool isForeground = false;
+            if (bgGray >= 128) {
+                if (diff > 40 && gray < 225) {
+                    isForeground = true;
+                }
+            } else {
+                if (diff > 40 && gray > 50) {
+                    isForeground = true;
+                }
+            }
+
+            if (isForeground) {
+                fgCount++;
+            }
+        }
+    }
+
+    if (totalSampled == 0) return true;
+    double fgRatio = static_cast<double>(fgCount) / static_cast<double>(totalSampled);
+
+    // 对于极小尺寸子图 (<500 个采样点)，要求至多 2 个笔墨点或占比低于 1%
+    if (totalSampled < 500) {
+        return (fgCount <= 2 || fgRatio < 0.01);
+    }
+    // 对于整页大图，要求笔墨像素少于 60 个或占比低于 0.02% (排除偶发细微噪点或扫描仪边框污渍)
+    return (fgCount < 60 || fgRatio < 0.0002);
 }
 
 bool DocLayoutEngine::AnalyzeLayout(const std::string& imagePath, DocumentLayoutResult& outResult, const DocLayoutFilterConfig& filterConfig) {
@@ -846,7 +980,7 @@ bool DocLayoutEngine::AnalyzeLayout(const std::string& imagePath, DocumentLayout
             outResult.elements[i].readingOrder = static_cast<int>(i + 1);
         }
 
-        if (outResult.elements.empty()) {
+        if (outResult.elements.empty() && !IsImageContentEmpty(img)) {
             LayoutElement elem;
             elem.id = 1;
             elem.type = LayoutElementType::Text;

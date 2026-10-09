@@ -422,17 +422,19 @@ void LlamaClient::RecognizeStream(const std::string& imagePath, const std::strin
         }
 
         bool isCancelled = taskCancelToken ? taskCancelToken->load() : m_shouldStop.load();
-        if (isCancelled) {
-            if (onComplete)
-                onComplete(finalCleanText, false, "已手动取消");
-        } else if (hasError) {
-            if (onComplete)
-                onComplete(finalCleanText, false, errorMsg);
-        } else {
-            // 正常完成（包含模型返回空文本/图像无文字等合法情况，非服务端异常）
-            if (onComplete)
-                onComplete(finalCleanText, true, "");
-        }
+        try {
+            if (isCancelled) {
+                if (onComplete)
+                    onComplete(finalCleanText, false, "已手动取消");
+            } else if (hasError) {
+                if (onComplete)
+                    onComplete(finalCleanText, false, errorMsg);
+            } else {
+                // 正常完成（包含模型返回空文本/图像无文字等合法情况，非服务端异常）
+                if (onComplete)
+                    onComplete(finalCleanText, true, "");
+            }
+        } catch (...) {}
     }).detach();
 }
 

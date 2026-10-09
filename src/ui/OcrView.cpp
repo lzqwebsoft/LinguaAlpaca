@@ -1055,6 +1055,7 @@ bool OcrView::CheckAndPromptResume(const wxString& filePath) {
 void OcrView::PutPageCache(int page, const wxImage& img) {
     if (!img.IsOk())
         return;
+    std::lock_guard<std::mutex> lock(m_pageCacheMutex);
     auto it = m_pdfPageCache.find(page);
     if (it != m_pdfPageCache.end()) {
         m_pdfPageCacheOrder.remove(page);
@@ -1072,6 +1073,7 @@ void OcrView::PutPageCache(int page, const wxImage& img) {
 }
 
 bool OcrView::TryGetPageCache(int page, wxImage& outImg) {
+    std::lock_guard<std::mutex> lock(m_pageCacheMutex);
     auto it = m_pdfPageCache.find(page);
     if (it != m_pdfPageCache.end()) {
         m_pdfPageCacheOrder.remove(page);
@@ -1087,6 +1089,7 @@ void OcrView::ClearPageCache() {
         std::lock_guard<std::mutex> lock(m_workerMutex);
         m_pendingTask.reset();
     }
+    std::lock_guard<std::mutex> lock(m_pageCacheMutex);
     m_pdfPageCache.clear();
     m_pdfPageCacheOrder.clear();
 }
@@ -1137,7 +1140,12 @@ void OcrView::StartRenderWorker() {
                 std::lock_guard<std::mutex> lock(m_workerMutex);
                 if (!m_workerStop && !m_pendingTask.has_value() && !task.isPrefetch) {
                     int nextP = task.pageIndex + 1;
-                    if (nextP < m_pdfTotalPages && m_pdfPageCache.find(nextP) == m_pdfPageCache.end()) {
+                    bool alreadyCached = false;
+                    if (nextP < m_pdfTotalPages) {
+                        std::lock_guard<std::mutex> cLock(m_pageCacheMutex);
+                        alreadyCached = (m_pdfPageCache.find(nextP) != m_pdfPageCache.end());
+                    }
+                    if (nextP < m_pdfTotalPages && !alreadyCached) {
                         m_pendingTask = WorkerTask{
                             task.filePath,
                             nextP,
@@ -1587,10 +1595,17 @@ void OcrView::DoExecuteDocumentPipeline(const std::string& docPath) {
                                                                                        shouldRender = true;
                                                                                    }
                                                                                 } else {
-                                                                                   // 多页 PDF 模式：单页完成时立刻刷新，单页内部识别若耗时较长（超过 2.5 秒）按需流式刷新
-                                                                                   if (isPageDone || curPage != m_lastRenderedPage || (nowMs - m_lastRenderTimestamp >= 2500)) {
-                                                                                       shouldRender = true;
-                                                                                   }
+                                                                                    // 多页 PDF 模式：
+                                                                                    // 对于百页超长文档 (> 30000 字符)，切片中间识别不触发昂贵的全量 WebView 重绘，单页完成时或长达 10 秒以上才按需刷新
+                                                                                    if (currentMarkdown.size() > 30000) {
+                                                                                        if (isPageDone || (nowMs - m_lastRenderTimestamp >= 10000)) {
+                                                                                            shouldRender = true;
+                                                                                        }
+                                                                                    } else {
+                                                                                        if (isPageDone || curPage != m_lastRenderedPage || (nowMs - m_lastRenderTimestamp >= 2500)) {
+                                                                                            shouldRender = true;
+                                                                                        }
+                                                                                    }
                                                                                 }
 
                                                                                 if (shouldRender && m_resultCard && !currentMarkdown.empty()) {

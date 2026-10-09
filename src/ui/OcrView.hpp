@@ -106,6 +106,7 @@ private:
     std::optional<WorkerTask> m_pendingTask;
 
     // PDF 页面 LRU 缓存与快速预览 (最大缓存 20 页，保证滑动和翻页 0ms 瞬间响应)
+    std::mutex m_pageCacheMutex;
     std::unordered_map<int, wxImage> m_pdfPageCache;
     std::list<int> m_pdfPageCacheOrder;
     static constexpr size_t MAX_PDF_PAGE_CACHE = 20;

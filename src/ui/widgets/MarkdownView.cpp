@@ -114,22 +114,59 @@ std::string LoadImageFileAsDataUrl(const std::string& fullPath) {
     return "data:" + mime + ";base64," + std::string(b64.ToUTF8().data());
 }
 
+namespace {
+struct CachedImageDataUrl {
+    wxLongLong mtimeTicks{0};
+    wxULongLong size{0};
+    std::string dataUrl;
+};
+
+static std::mutex s_imageDataUrlMutex;
+static std::unordered_map<std::string, CachedImageDataUrl> s_imageDataUrlCache;
+constexpr size_t MAX_IMAGE_DATA_URL_CACHE_SIZE = 2000;
+} // namespace
+
 std::string EmbedLocalImagesAsBase64(const std::string& md, const std::string& baseDir) {
     if (md.empty()) return md;
 
-    std::unordered_map<std::string, std::pair<std::string, std::string>> cache;
+    std::unordered_map<std::string, std::pair<std::string, std::string>> localPathCache;
     auto getOrLoadDataUrl = [&](const std::string& rawSrc) -> std::pair<std::string, std::string> {
-        auto it = cache.find(rawSrc);
-        if (it != cache.end()) {
-            return it->second;
+        auto itLocal = localPathCache.find(rawSrc);
+        if (itLocal != localPathCache.end()) {
+            return itLocal->second;
         }
+
         std::string fullPath = ResolveLocalImagePath(rawSrc, baseDir);
         if (fullPath.empty()) {
-            cache[rawSrc] = {"", ""};
+            localPathCache[rawSrc] = {"", ""};
             return {"", ""};
         }
+
+        wxFileName fn(wxString::FromUTF8(fullPath));
+        wxDateTime mtime = fn.GetModificationTime();
+        wxULongLong sz = fn.GetSize();
+        wxLongLong ticks = mtime.IsValid() ? mtime.GetValue() : wxLongLong(0);
+
+        {
+            std::lock_guard<std::mutex> lock(s_imageDataUrlMutex);
+            auto it = s_imageDataUrlCache.find(fullPath);
+            if (it != s_imageDataUrlCache.end()) {
+                if (it->second.mtimeTicks == ticks && it->second.size == sz) {
+                    localPathCache[rawSrc] = {fullPath, it->second.dataUrl};
+                    return {fullPath, it->second.dataUrl};
+                }
+            }
+        }
+
         std::string dataUrl = LoadImageFileAsDataUrl(fullPath);
-        cache[rawSrc] = {fullPath, dataUrl};
+        if (!dataUrl.empty()) {
+            std::lock_guard<std::mutex> lock(s_imageDataUrlMutex);
+            if (s_imageDataUrlCache.size() >= MAX_IMAGE_DATA_URL_CACHE_SIZE) {
+                s_imageDataUrlCache.clear();
+            }
+            s_imageDataUrlCache[fullPath] = CachedImageDataUrl{ticks, sz, dataUrl};
+        }
+        localPathCache[rawSrc] = {fullPath, dataUrl};
         return {fullPath, dataUrl};
     };
 

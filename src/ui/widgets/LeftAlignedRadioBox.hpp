@@ -550,19 +550,19 @@ private:
             // 2. 绘制卡片背景与边框
             if (!isEnabled) {
                 gc->SetBrush(gc->CreateBrush(wxBrush(parentBg)));
-                gc->SetPen(gc->CreatePen(wxPen(palette.cardBorder, 1.0)));
+                gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(palette.cardBorder).Width(1.0)));
             } else if (isSelected) {
                 // 选中态：极具现代感的柔和强调色填充 + 醒目的品牌主色描边
                 gc->SetBrush(gc->CreateBrush(wxBrush(palette.bannerBg)));
-                gc->SetPen(gc->CreatePen(wxPen(palette.accentPrimary, 1.8)));
+                gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(palette.accentPrimary).Width(1.8)));
             } else if (isHovered) {
                 // 悬停态：微光交互反馈
                 gc->SetBrush(gc->CreateBrush(wxBrush(palette.bannerBg)));
-                gc->SetPen(gc->CreatePen(wxPen(palette.accentHover, 1.2)));
+                gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(palette.accentHover).Width(1.2)));
             } else {
                 // 常态：内嵌底色 + 极细雅致卡片边框
                 gc->SetBrush(gc->CreateBrush(wxBrush(unselectedCardBg)));
-                gc->SetPen(gc->CreatePen(wxPen(palette.cardBorder, 1.0)));
+                gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(palette.cardBorder).Width(1.0)));
             }
             gc->DrawRoundedRectangle(rect.x + 0.5, rect.y + 0.5, rect.width - 1.0, rect.height - 1.0, cardRadius);
 
@@ -618,12 +618,12 @@ private:
             outerPath.AddCircle(radioCenterX, centerY, outerRadius);
 
             if (!isEnabled) {
-                gc->SetPen(gc->CreatePen(wxPen(palette.textSecondary, 1.2)));
+                gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(palette.textSecondary).Width(1.2)));
                 gc->SetBrush(gc->CreateBrush(wxBrush(parentBg)));
                 gc->DrawPath(outerPath);
             } else if (isSelected) {
                 // 外圈主色光环
-                gc->SetPen(gc->CreatePen(wxPen(palette.accentPrimary, 1.8)));
+                gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(palette.accentPrimary).Width(1.8)));
                 gc->SetBrush(gc->CreateBrush(wxBrush(palette.cardBg)));
                 gc->DrawPath(outerPath);
 
@@ -633,11 +633,11 @@ private:
                 gc->SetBrush(gc->CreateBrush(wxBrush(palette.accentPrimary)));
                 gc->FillPath(innerPath);
             } else if (isHovered) {
-                gc->SetPen(gc->CreatePen(wxPen(palette.accentPrimary, 1.4)));
+                gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(palette.accentPrimary).Width(1.4)));
                 gc->SetBrush(gc->CreateBrush(wxBrush(palette.cardBg)));
                 gc->DrawPath(outerPath);
             } else {
-                gc->SetPen(gc->CreatePen(wxPen(palette.cardBorder, 1.4)));
+                gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(palette.cardBorder).Width(1.4)));
                 gc->SetBrush(gc->CreateBrush(wxBrush(palette.cardBg)));
                 gc->DrawPath(outerPath);
             }

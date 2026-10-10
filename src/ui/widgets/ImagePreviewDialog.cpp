@@ -1,4 +1,9 @@
 #include "ImagePreviewDialog.hpp"
+#include <wx/display.h>
+
+#if defined(__APPLE__)
+#import <Cocoa/Cocoa.h>
+#endif
 
 namespace LinguaAlpaca::UI {
 
@@ -15,6 +20,17 @@ ImagePreviewDialog::ImagePreviewDialog(wxWindow* parent, const wxImage& image, c
                       std::min(900_dip, std::max(500_dip, static_cast<int>(parentSize.y * 0.85))));
     SetClientSize(dialogSize);
     CentreOnParent();
+
+#if defined(__APPLE__)
+    NSView* nsview = (NSView*)GetHandle();
+    if (nsview) {
+        NSWindow* nswin = [nsview window];
+        if (nswin) {
+            // 启用原生 Miniaturizable 掩码，允许无边框弹窗在 Mac 上最小化进 Dock
+            [nswin setStyleMask:[nswin styleMask] | NSWindowStyleMaskMiniaturizable];
+        }
+    }
+#endif
 
     InitUI();
 }
@@ -45,29 +61,32 @@ void ImagePreviewDialog::InitUI() {
     m_infoText->SetForegroundColour(palette.textSecondary);
     m_infoText->SetBackgroundColour(palette.sidebarBg);
 
-    m_resetBtn = new CustomButton(m_topBar, wxID_ANY, L"1:1 重置", ButtonStyle::Secondary, wxDefaultPosition, dip(76, 28));
+    m_resetBtn = new CustomButton(m_topBar, wxID_ANY, L"1:1 重置", ButtonStyle::Secondary, wxDefaultPosition, dip(80, 28));
+    m_resetBtn->SetMinSize(dip(80, 28));
+    m_resetBtn->SetMaxSize(dip(80, 28));
+    m_resetBtn->SetToolTip(L"恢复原始缩放与居中显示");
 
-    // Window control buttons: Minimize, Maximize/Restore, Close
-    m_minBtn = new CustomButton(m_topBar, wxID_ANY, L"", ButtonStyle::Secondary, wxDefaultPosition, dip(32, 28));
-    m_minBtn->SetIcon(SVG::MINIMIZE, dip(14, 14), palette.textPrimary);
+    // 优雅小巧的窗口控制按钮: 最小化, 最大化/还原, 关闭
+    m_minBtn = new CustomButton(m_topBar, wxID_ANY, L"", ButtonStyle::Secondary, wxDefaultPosition, dip(30, 28));
+    m_minBtn->SetIcon(SVG::MINIMIZE, dip(13, 13), palette.textSecondary);
     m_minBtn->SetToolTip(L"最小化");
 
-    m_maxBtn = new CustomButton(m_topBar, wxID_ANY, L"", ButtonStyle::Secondary, wxDefaultPosition, dip(32, 28));
-    m_maxBtn->SetIcon(SVG::MAXIMIZE, dip(14, 14), palette.textPrimary);
+    m_maxBtn = new CustomButton(m_topBar, wxID_ANY, L"", ButtonStyle::Secondary, wxDefaultPosition, dip(30, 28));
+    m_maxBtn->SetIcon(SVG::MAXIMIZE, dip(13, 13), palette.textSecondary);
     m_maxBtn->SetToolTip(L"最大化 / 还原");
 
-    m_closeBtn = new CustomButton(m_topBar, wxID_ANY, L"", ButtonStyle::Danger, wxDefaultPosition, dip(34, 28));
-    m_closeBtn->SetIcon(SVG::CLOSE, dip(14, 14), *wxWHITE);
-    m_closeBtn->SetToolTip(L"关闭窗口");
+    m_closeBtn = new CustomButton(m_topBar, wxID_ANY, L"", ButtonStyle::Close, wxDefaultPosition, dip(32, 28));
+    m_closeBtn->SetIcon(SVG::CLOSE, dip(13, 13), palette.textSecondary);
+    m_closeBtn->SetToolTip(L"关闭窗口 (Esc)");
 
     topSizer->Add(titleIcon, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 16_dip);
     topSizer->Add(titleText, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 8_dip);
     topSizer->Add(m_infoText, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 12_dip);
     topSizer->AddStretchSpacer(1);
-    topSizer->Add(m_resetBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 12_dip);
+    topSizer->Add(m_resetBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 14_dip);
     topSizer->Add(m_minBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4_dip);
     topSizer->Add(m_maxBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4_dip);
-    topSizer->Add(m_closeBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10_dip);
+    topSizer->Add(m_closeBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 12_dip);
 
     m_topBar->SetSizer(topSizer);
     mainSizer->Add(m_topBar, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, 1);
@@ -131,11 +150,21 @@ void ImagePreviewDialog::InitUI() {
 
     // Button Events
     m_resetBtn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { ResetZoom(); });
-    m_minBtn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { Iconize(true); });
+    m_minBtn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+#if defined(__APPLE__)
+        NSView* nsview = (NSView*)GetHandle();
+        if (nsview) {
+            NSWindow* nswin = [nsview window];
+            if (nswin) {
+                [nswin miniaturize:nil];
+                return;
+            }
+        }
+#endif
+        Iconize(true);
+    });
     m_maxBtn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
-        Maximize(!IsMaximized());
-        UpdateMaxButtonState();
-        ResetZoom();
+        ToggleMaximize();
     });
     m_closeBtn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { EndModal(wxID_CANCEL); });
 
@@ -151,20 +180,62 @@ void ImagePreviewDialog::InitUI() {
     wxTheApp->CallAfter([this]() { ResetZoom(); });
 }
 
+bool ImagePreviewDialog::IsCustomMaximized() const {
+#ifdef __WXMSW__
+    return IsMaximized();
+#else
+    return m_isMaximizedMac;
+#endif
+}
+
+void ImagePreviewDialog::ToggleMaximize() {
+#ifdef __WXMSW__
+    Maximize(!IsMaximized());
+    UpdateMaxButtonState();
+    ResetZoom();
+#else
+    if (m_isMaximizedMac) {
+        // 还原窗口到上一次正常尺寸与居中位置
+        if (!m_savedRestoreRect.IsEmpty() && m_savedRestoreRect.width > 0) {
+            SetSize(m_savedRestoreRect);
+        } else {
+            wxSize parentSize = GetParent() ? GetParent()->GetSize() : dip(1024, 720);
+            wxSize dialogSize(std::min(1280_dip, std::max(700_dip, static_cast<int>(parentSize.x * 0.85))),
+                              std::min(900_dip, std::max(500_dip, static_cast<int>(parentSize.y * 0.85))));
+            SetClientSize(dialogSize);
+            CentreOnParent();
+        }
+        m_isMaximizedMac = false;
+    } else {
+        // 最大化窗口至当前显示器的可用工作区（避开顶部 macOS 菜单栏与 Dock）
+        m_savedRestoreRect = GetRect();
+        int displayIdx = wxDisplay::GetFromWindow(this);
+        if (displayIdx == wxNOT_FOUND) {
+            displayIdx = 0;
+        }
+        wxDisplay display(displayIdx);
+        wxRect clientArea = display.GetClientArea();
+        SetSize(clientArea);
+        m_isMaximizedMac = true;
+    }
+    Layout();
+    UpdateMaxButtonState();
+    ResetZoom();
+#endif
+}
+
 void ImagePreviewDialog::UpdateMaxButtonState() {
     if (!m_maxBtn) return;
     auto palette = ThemeColors::GetCurrentPalette();
-    bool max = IsMaximized();
-    m_maxBtn->SetIcon(max ? SVG::RESTORE : SVG::MAXIMIZE, dip(14, 14), palette.textPrimary);
+    bool max = IsCustomMaximized();
+    m_maxBtn->SetIcon(max ? SVG::RESTORE : SVG::MAXIMIZE, dip(13, 13), palette.textSecondary);
     m_maxBtn->SetToolTip(max ? L"还原" : L"最大化 / 还原");
     m_maxBtn->Refresh();
 }
 
 void ImagePreviewDialog::OnTopBarMouseDown(wxMouseEvent& event) {
     if (event.LeftDClick()) {
-        Maximize(!IsMaximized());
-        UpdateMaxButtonState();
-        ResetZoom();
+        ToggleMaximize();
         return;
     }
 #ifdef __WXMSW__
@@ -182,6 +253,20 @@ void ImagePreviewDialog::OnTopBarMouseDown(wxMouseEvent& event) {
 
 void ImagePreviewDialog::OnTopBarMouseMotion(wxMouseEvent& event) {
     if (m_isDraggingWindow && event.Dragging() && event.LeftIsDown()) {
+#ifndef __WXMSW__
+        if (m_isMaximizedMac) {
+            // 从最大化状态拖拽时，退出最大化状态并按比例恢复大小与位置
+            wxPoint mouseScreen = wxGetMousePosition();
+            m_isMaximizedMac = false;
+            UpdateMaxButtonState();
+            int restoreW = m_savedRestoreRect.width > 0 ? m_savedRestoreRect.width : 900_dip;
+            int restoreH = m_savedRestoreRect.height > 0 ? m_savedRestoreRect.height : 600_dip;
+            SetSize(mouseScreen.x - restoreW / 2, mouseScreen.y - 20_dip, restoreW, restoreH);
+            m_windowDragStartPos = wxPoint(restoreW / 2, 20_dip);
+            ResetZoom();
+            return;
+        }
+#endif
         wxPoint currentScreenPos = wxGetMousePosition();
         SetPosition(currentScreenPos - m_windowDragStartPos);
     }

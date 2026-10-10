@@ -2242,14 +2242,14 @@ void SettingsView::UpdateDictListSummary() {
             bottomRow->Add(folderIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4_dip);
 
             wxStaticText* pathText = new wxStaticText(itemCard, wxID_ANY, shortPath, wxDefaultPosition, wxDefaultSize, wxST_ELLIPSIZE_MIDDLE);
-            pathText->SetFont(wxFont(7.5, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Consolas, Microsoft YaHei"));
+            pathText->SetFont(wxFont(wxFontInfo(8).Family(wxFONTFAMILY_SWISS).FaceName("Consolas, Microsoft YaHei")));
             pathText->SetForegroundColour(palette.textSecondary);
             pathText->SetBackgroundColour(palette.windowBg);
             bottomRow->Add(pathText, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6_dip);
 
             // 格式文本标签 (无背景色，自然融入卡片)
             wxStaticText* formatLabel = new wxStaticText(itemCard, wxID_ANY, d.isDz ? L"DZ" : L"纯文本");
-            formatLabel->SetFont(wxFont(7.5, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+            formatLabel->SetFont(ThemeFont::GetFont(FontRole::Caption));
             formatLabel->SetForegroundColour(palette.textSecondary);
             formatLabel->SetBackgroundColour(palette.windowBg);
             bottomRow->Add(formatLabel, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, (d.version.empty() ? 0 : 5_dip));
@@ -2258,7 +2258,7 @@ void SettingsView::UpdateDictListSummary() {
             wxStaticText* verLabel = nullptr;
             if (!d.version.empty()) {
                 verLabel = new wxStaticText(itemCard, wxID_ANY, "v" + wxString::FromUTF8(d.version));
-                verLabel->SetFont(wxFont(7.5, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Consolas, Microsoft YaHei"));
+                verLabel->SetFont(wxFont(wxFontInfo(8).Family(wxFONTFAMILY_SWISS).FaceName("Consolas, Microsoft YaHei")));
                 verLabel->SetForegroundColour(palette.textSecondary);
                 verLabel->SetBackgroundColour(palette.windowBg);
                 bottomRow->Add(verLabel, 0, wxALIGN_CENTER_VERTICAL);

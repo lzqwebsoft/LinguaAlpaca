@@ -310,6 +310,7 @@ elseif(APPLE)
         src/ui/theme/IconManager.cpp
         src/ui/theme/PlatformThemeHelper.cpp
         src/ui/widgets/CustomInputBox.cpp
+        src/ui/widgets/ImagePreviewDialog.cpp
         src/ui/MainFrame.cpp
         PROPERTIES COMPILE_FLAGS "-x objective-c++"
     )

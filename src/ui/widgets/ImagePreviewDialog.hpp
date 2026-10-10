@@ -27,6 +27,8 @@ private:
     void OnTopBarMouseDown(wxMouseEvent& event);
     void OnTopBarMouseMotion(wxMouseEvent& event);
     void OnTopBarMouseUp(wxMouseEvent& event);
+    void ToggleMaximize();
+    bool IsCustomMaximized() const;
     void UpdateMaxButtonState();
 
 #ifdef __WXMSW__
@@ -45,6 +47,9 @@ private:
 
     bool m_isDraggingWindow{false};
     wxPoint m_windowDragStartPos;
+
+    bool m_isMaximizedMac{false};
+    wxRect m_savedRestoreRect;
 
     wxPanel* m_topBar{nullptr};
     wxPanel* m_canvasPanel{nullptr};

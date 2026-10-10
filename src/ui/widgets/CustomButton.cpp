@@ -10,9 +10,16 @@ CustomButton::CustomButton(wxWindow *parent, wxWindowID id,
                            const wxString &label, ButtonStyle style,
                            const wxPoint &pos, const wxSize &size)
     : wxControl(parent, id, pos, size, wxBORDER_NONE | wxFULL_REPAINT_ON_RESIZE), m_label(label),
-      m_buttonStyle(style) {
+      m_buttonStyle(style), m_explicitSize(size) {
 
   SetBackgroundStyle(wxBG_STYLE_PAINT);
+  SetCursor(wxCursor(wxCURSOR_HAND));
+
+  if (size.x > 0 && size.y > 0) {
+    SetMinSize(size);
+    SetMaxSize(size);
+    SetSize(size);
+  }
 
   Bind(wxEVT_PAINT, &CustomButton::OnPaint, this);
   Bind(wxEVT_SIZE, [this](wxSizeEvent& event) {
@@ -28,9 +35,11 @@ CustomButton::CustomButton(wxWindow *parent, wxWindowID id,
 void CustomButton::SetLabel(const wxString &label) {
   m_label = label;
   InvalidateBestSize();
-  wxSize best = DoGetBestSize();
-  SetMinSize(best);
-  SetSize(best);
+  if (m_explicitSize.x <= 0 || m_explicitSize.y <= 0) {
+    wxSize best = DoGetBestSize();
+    SetMinSize(best);
+    SetSize(best);
+  }
   if (GetParent()) {
     GetParent()->Layout();
   }
@@ -39,12 +48,17 @@ void CustomButton::SetLabel(const wxString &label) {
 
 void CustomButton::SetIcon(const char *svgContent, const wxSize &iconSize,
                            const wxColour &tintColor) {
+  m_svgContent = svgContent;
+  m_iconReqSize = iconSize;
+  m_tintColor = tintColor;
   m_iconBundle =
       IconManager::GetIconBundle(svgContent, iconSize, tintColor);
   InvalidateBestSize();
-  wxSize best = DoGetBestSize();
-  SetMinSize(best);
-  SetSize(best);
+  if (m_explicitSize.x <= 0 || m_explicitSize.y <= 0) {
+    wxSize best = DoGetBestSize();
+    SetMinSize(best);
+    SetSize(best);
+  }
   if (GetParent()) {
     GetParent()->Layout();
   }
@@ -52,8 +66,15 @@ void CustomButton::SetIcon(const char *svgContent, const wxSize &iconSize,
 }
 
 wxSize CustomButton::DoGetBestSize() const {
+  if (m_explicitSize.x > 0 && m_explicitSize.y > 0) {
+    return m_explicitSize;
+  }
+  if (m_label.IsEmpty()) {
+    int s = 28_dip;
+    return wxSize(s, s);
+  }
   wxClientDC dc(const_cast<CustomButton *>(this));
-  wxFont font = ThemeFont::GetFont(FontRole::Control, true);
+  wxFont font = GetFont().IsOk() ? GetFont() : ThemeFont::GetFont(FontRole::Control, true);
   dc.SetFont(font);
   wxSize extent = dc.GetTextExtent(m_label);
   int iconW = m_iconBundle.IsOk() ? (16_dip + 8_dip) : 0;
@@ -97,30 +118,58 @@ void CustomButton::OnPaint(wxPaintEvent &WXUNUSED(event)) {
                              : wxColour(239, 68, 68); // 鲜艳警示红
       textColour = *wxWHITE;
       break;
-    case ButtonStyle::Secondary:
+    case ButtonStyle::Close:
+      // 关闭按钮常态极简隐蔽，悬停时呈现圆角警示红
       bgColour = m_isHovered
-                     ? (palette.sidebarBg == *wxWHITE ? wxColour(241, 245, 249)
-                                                      : wxColour(51, 65, 85))
-                     : palette.cardBg;
-      textColour = palette.textPrimary;
-      borderColour = palette.cardBorder;
+                     ? (m_isPressed ? wxColour(220, 38, 38) : wxColour(239, 68, 68))
+                     : palette.sidebarBg;
+      textColour = m_isHovered ? *wxWHITE : palette.textSecondary;
+      borderColour = wxNullColour;
+      break;
+    case ButtonStyle::Secondary:
+      bool isIconOnly = m_label.IsEmpty();
+      if (isIconOnly) {
+        // 无文字纯图标控制按钮（如最小化/最大化），常态融入底色，悬停呈现轻柔遮罩
+        bool isLight = (palette.sidebarBg.Red() > 128);
+        bgColour = m_isHovered
+                       ? (isLight ? wxColour(0, 0, 0, m_isPressed ? 35 : 18)
+                                  : wxColour(255, 255, 255, m_isPressed ? 45 : 24))
+                       : palette.sidebarBg;
+        textColour = m_isHovered ? palette.textPrimary : palette.textSecondary;
+        borderColour = wxNullColour;
+      } else {
+        bool isLight = (palette.sidebarBg.Red() > 128);
+        if (m_isHovered) {
+          bgColour = m_isPressed
+                         ? (isLight ? wxColour(226, 232, 240) : wxColour(71, 85, 105))
+                         : (isLight ? wxColour(241, 245, 249) : wxColour(51, 65, 85));
+          borderColour = palette.cardBorderActive;
+          textColour = palette.textPrimary;
+        } else {
+          bgColour = palette.cardBg;
+          borderColour = palette.cardBorder;
+          textColour = palette.textPrimary;
+        }
+      }
       break;
     }
   }
 
-  // 圆角矩形绘制
-  double radius = 10.0_dip;
+  // 圆角矩形绘制 (小尺寸控件自动调整圆角半径，边框内嵌 halfPen 避免右/下边缘被裁切)
+  double radius = (size.y < 32_dip) ? 6.0_dip : 10.0_dip;
   gc->SetBrush(gc->CreateBrush(wxBrush(bgColour)));
   if (borderColour.IsOk()) {
-    gc->SetPen(gc->CreatePen(wxPen(borderColour, 1)));
+    double penWidth = 1.0;
+    double halfPen = penWidth / 2.0;
+    gc->SetPen(gc->CreatePen(wxPen(borderColour, penWidth)));
+    gc->DrawRoundedRectangle(halfPen, halfPen, size.x - penWidth, size.y - penWidth, radius);
   } else {
     gc->SetPen(*wxTRANSPARENT_PEN);
+    gc->DrawRoundedRectangle(0, 0, size.x, size.y, radius);
   }
 
-  gc->DrawRoundedRectangle(1, 1, size.x - 2, size.y - 2, radius);
-
   // 绘制 SVG 图标与文字
-  wxFont font = ThemeFont::GetFont(FontRole::Control, true);
+  wxFont font = GetFont().IsOk() ? GetFont() : ThemeFont::GetFont(FontRole::Control, true);
   gc->SetFont(font, textColour);
 
   double tw = 0, th = 0;
@@ -130,8 +179,24 @@ void CustomButton::OnPaint(wxPaintEvent &WXUNUSED(event)) {
 
   double iconW = 0, iconH = 0;
   wxBitmap bmp;
-  if (m_iconBundle.IsOk()) {
-    wxSize reqIconSize = dip(16, 16);
+  if (m_svgContent) {
+    wxSize reqSize = (size.y <= 30_dip) ? dip(13, 13) : m_iconReqSize;
+    wxColour effectiveIconColor = m_tintColor;
+    if (m_buttonStyle == ButtonStyle::Close) {
+      effectiveIconColor = m_isHovered ? *wxWHITE : (m_tintColor.IsOk() ? m_tintColor : palette.textSecondary);
+    } else if (m_buttonStyle == ButtonStyle::Secondary && m_label.IsEmpty()) {
+      effectiveIconColor = m_isHovered ? palette.textPrimary : (m_tintColor.IsOk() ? m_tintColor : palette.textSecondary);
+    } else if (!effectiveIconColor.IsOk()) {
+      effectiveIconColor = textColour;
+    }
+    wxBitmapBundle bundle = IconManager::GetIconBundle(m_svgContent, reqSize, effectiveIconColor);
+    bmp = bundle.GetBitmap(reqSize);
+    if (bmp.IsOk()) {
+      iconW = bmp.GetWidth();
+      iconH = bmp.GetHeight();
+    }
+  } else if (m_iconBundle.IsOk()) {
+    wxSize reqIconSize = (size.y <= 30_dip) ? dip(13, 13) : dip(16, 16);
     bmp = m_iconBundle.GetBitmap(reqIconSize);
     if (bmp.IsOk()) {
       iconW = bmp.GetWidth();
@@ -141,9 +206,7 @@ void CustomButton::OnPaint(wxPaintEvent &WXUNUSED(event)) {
 
   double spacing = (iconW > 0 && tw > 0) ? 6.0_dip : 0.0;
   double totalW = iconW + spacing + tw;
-  double startX = (size.x - totalW) / 2.0;
-  if (startX < 6.0_dip)
-    startX = 6.0_dip;
+  double startX = std::max(0.0, (size.x - totalW) / 2.0);
 
   if (bmp.IsOk()) {
     double iconY = (size.y - iconH) / 2.0;

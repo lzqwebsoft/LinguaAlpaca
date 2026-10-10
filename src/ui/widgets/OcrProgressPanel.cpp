@@ -172,7 +172,7 @@ void OcrProgressPanel::OnPaint(wxPaintEvent&) {
 
             // 未达到 100% 时，在进度色块右端绘制一条精致的高光分界线增加科技动感
             if (fillRatio < 1.0 && fillW >= 2_dip) {
-                gc->SetPen(gc->CreatePen(wxPen(edgeCol, 1.5)));
+                gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(edgeCol).Width(1.5)));
                 gc->StrokeLine(cardX + fillW, cardY, cardX + fillW, cardY + cardH);
             }
             gc->PopState();

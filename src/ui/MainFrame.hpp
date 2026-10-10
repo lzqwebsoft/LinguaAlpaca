@@ -6,6 +6,7 @@
 #include "core/ModelManager.hpp"
 #include "theme/Theme.hpp"
 #include "widgets/SidebarNav.hpp"
+#include "widgets/CustomButton.hpp"
 #include "TextView.hpp"
 #include "OcrView.hpp"
 #include "DictView.hpp"
@@ -74,10 +75,10 @@ private:
 
     wxStaticBitmap* m_logoIcon{nullptr};
     wxStaticText* m_appNameText{nullptr};
-    wxButton* m_themeBtn{nullptr};
-    wxButton* m_minBtn{nullptr};
-    wxButton* m_maxBtn{nullptr};
-    wxButton* m_closeBtn{nullptr};
+    CustomButton* m_themeBtn{nullptr};
+    CustomButton* m_minBtn{nullptr};
+    CustomButton* m_maxBtn{nullptr};
+    CustomButton* m_closeBtn{nullptr};
 
     bool m_isDragging{false};
     wxPoint m_dragStartPos;

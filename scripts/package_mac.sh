@@ -304,7 +304,7 @@ if [ -f "${ICON_FILE}" ]; then
         -format UDRW \
         -volname "${APP_NAME}" \
         -ov \
-        "${TMP_RW_DMG}" > /dev/null
+        "${TMP_RW_DMG}" > /dev/null 2>&1
 
     # 挂载临时镜像，标记 Finder 卷宗自定义图标属性 (SetFile -a C)
     hdiutil attach "${TMP_RW_DMG}" -mountpoint "${TMP_MOUNT}" -nobrowse -quiet
@@ -314,7 +314,7 @@ if [ -f "${ICON_FILE}" ]; then
     hdiutil detach "${TMP_MOUNT}" -quiet
 
     # 转换为高度压缩的只读 UDZO 格式最终发布镜像
-    hdiutil convert "${TMP_RW_DMG}" -format UDZO -o "${DMG_PATH}" -ov > /dev/null
+    hdiutil convert "${TMP_RW_DMG}" -format UDZO -o "${DMG_PATH}" -ov > /dev/null 2>&1
     rm -f "${TMP_RW_DMG}"
 else
     hdiutil create \
@@ -322,7 +322,7 @@ else
         -srcfolder "${DMG_STAGING}" \
         -ov \
         -format UDZO \
-        "${DMG_PATH}" > /dev/null
+        "${DMG_PATH}" > /dev/null 2>&1
 fi
 
 rm -rf "${DMG_STAGING}" "${TMP_MOUNT}"

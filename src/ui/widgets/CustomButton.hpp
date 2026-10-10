@@ -8,7 +8,8 @@ enum class ButtonStyle {
     Primary,
     Secondary,
     Green,
-    Danger
+    Danger,
+    Close
 };
 
 class CustomButton : public wxControl {
@@ -35,6 +36,10 @@ private:
 
     wxString m_label;
     ButtonStyle m_buttonStyle;
+    wxSize m_explicitSize{wxDefaultSize};
+    const char* m_svgContent{nullptr};
+    wxSize m_iconReqSize{16, 16};
+    wxColour m_tintColor{wxNullColour};
     wxBitmapBundle m_iconBundle;
     bool m_isHovered{false};
     bool m_isPressed{false};

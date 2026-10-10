@@ -452,8 +452,8 @@ bool DocLayoutEngine::ShouldFilterElement(const LayoutElement& elem,
         // 防御性校验：页眉必须位于页面上半部分 (y1 在前 30% 范围内)，防止模型偶发中心区域分类漂移
         if (topRatio <= 0.30f) {
             LOG_DEBUG("DocLayoutEngine", 
-                wxString::Format("Filter: dropped model-classified header '%s' at y=[%d, %d]", 
-                                 elem.labelName.c_str(), elem.y1, elem.y2).ToStdString());
+                wxString::Format("Filter: dropped model-classified header '%s' at x=[%d, %d], y=[%d, %d]", 
+                                 elem.labelName.c_str(), elem.x1, elem.x2, elem.y1, elem.y2).ToStdString());
             return true;
         }
     }
@@ -470,9 +470,9 @@ bool DocLayoutEngine::ShouldFilterElement(const LayoutElement& elem,
         }
     }
 
-    // 独立页码标签 (number / formula_number)
+    // 独立页码标签 (number)
     // 过滤页眉区 (<= effectiveHeaderMargin 或 <= 20%) 或页脚区 (>= 1.0 - effectiveFooterMargin 或 >= 80%) 的独立页码
-    if (cfg.filterPageNumber && (elem.labelName == "number" || elem.labelName == "formula_number")) {
+    if (cfg.filterPageNumber && elem.labelName == "number") {
         const float headerThresh = (std::max)(effectiveHeaderMargin, 0.20f);
         const float footerThresh = (std::max)(effectiveFooterMargin, 0.20f);
         if (topRatio <= headerThresh || bottomRatio >= (1.0f - footerThresh)) {
@@ -511,23 +511,27 @@ bool DocLayoutEngine::ShouldFilterElement(const LayoutElement& elem,
                     return true;
                 }
             }
+        }
 
-            // B. 顶部页眉兜底：仅针对极靠近页面顶缘的漏检单行页眉 (bottomRatio <= 0.08f)，避开顶部标题区与正文
-            // 注意：8%~20% 范围通常是章节大标题 (如"目录 Contents"、"总 序")、副标题或首行正文，绝不能仅凭几何位置误删！
-            const float strictHeaderThreshold = (std::min)(effectiveHeaderMargin, 0.08f);
-            if (cfg.filterHeader && 
-                elem.labelName != "doc_title" && 
-                elem.labelName != "paragraph_title" && 
-                elem.type != LayoutElementType::Title && 
-                bottomRatio <= strictHeaderThreshold) {
-                if (boxHeightRatio <= cfg.maxHeaderHeightRatio) {
-                    LOG_DEBUG("DocLayoutEngine", 
-                        wxString::Format("Geometric fallback: dropped misclassified header at y=[%d, %d]", 
-                                         elem.y1, elem.y2).ToStdString());
-                    return true;
-                }
-            }
+        // B. 顶部页眉兜底：针对极靠近页面顶缘的单行短文本或误判标题 (bottomRatio <= 0.065f)
+        // 典型特征：高度极低 (boxHeightRatio <= 0.04f)，位于极顶部敏感区内
+        // 注意：若模型将其误判为 text、content、aside_text 甚至 paragraph_title (常见于以书名/篇名作为页眉的图书，如《数学之美》)，在此一律作为页眉过滤。
+        // 避开真正的主文档大标题 doc_title (如报纸顶栏报头，通常宽度 > 50% 页面宽度)。
+        // 避开位于 8%~20% 范围的章节目录大标题 (如"总 序"、"目录 Contents"，高度与底距均大于此门限)。
+        bool isHeaderCandidate = (isTextLike || elem.labelName == "paragraph_title");
+        if (cfg.filterHeader && 
+            isHeaderCandidate &&
+            elem.labelName != "doc_title" && 
+            bottomRatio <= 0.065f && 
+            boxHeightRatio <= 0.04f && 
+            boxWidthRatio <= 0.60f) {
+            LOG_DEBUG("DocLayoutEngine", 
+                wxString::Format("Geometric fallback: dropped misclassified header '%s' at x=[%d, %d], y=[%d, %d]", 
+                                 elem.labelName.c_str(), elem.x1, elem.x2, elem.y1, elem.y2).ToStdString());
+            return true;
+        }
 
+        if (isTextLike) {
             // C. 底部页脚兜底：仅针对极靠近页面底缘的漏检单行页脚 (topRatio >= 0.92f)，避开正文末尾与目录条目
             // 注意：80%~92% 范围通常是正文最后几行、目录末尾小项 (如"水利 ...... 071") 或底部注解，绝不能粗暴误删！
             const float strictFooterThreshold = (std::max)(1.0f - effectiveFooterMargin, 0.92f);
@@ -585,16 +589,16 @@ void DocLayoutEngine::SuppressContainedOrDuplicateBoxes(std::vector<LayoutElemen
             float ios = static_cast<float>(interArea) / minArea;
             float iou = (unionArea > 0) ? (static_cast<float>(interArea) / unionArea) : 0.0f;
 
-            // A. 处理落在 Image 区域内部的文字碎片 (IoS >= 0.80)，非独立图注/脚注
-            if (boxA.type == LayoutElementType::Image && 
-                (boxB.type == LayoutElementType::Text || boxB.type == LayoutElementType::Title) &&
+            // A. 处理落在 Image / Chart 区域内部的文字、公式或切片碎片 (IoS >= 0.80)，非独立图注/脚注
+            bool isGraphicA = (boxA.type == LayoutElementType::Image || boxA.type == LayoutElementType::Chart || boxA.labelName == "image" || boxA.labelName == "chart");
+            bool isGraphicB = (boxB.type == LayoutElementType::Image || boxB.type == LayoutElementType::Chart || boxB.labelName == "image" || boxB.labelName == "chart");
+            if (isGraphicA && !isGraphicB && areaA >= areaB &&
                 boxB.labelName != "vision_footnote" && boxB.labelName != "footnote" && boxB.labelName != "figure_title") {
                 if (ios >= 0.80f) {
                     suppressed[j] = true;
                     continue;
                 }
-            } else if (boxB.type == LayoutElementType::Image && 
-                (boxA.type == LayoutElementType::Text || boxA.type == LayoutElementType::Title) &&
+            } else if (isGraphicB && !isGraphicA && areaB >= areaA &&
                 boxA.labelName != "vision_footnote" && boxA.labelName != "footnote" && boxA.labelName != "figure_title") {
                 if (ios >= 0.80f) {
                     suppressed[i] = true;
@@ -606,16 +610,31 @@ void DocLayoutEngine::SuppressContainedOrDuplicateBoxes(std::vector<LayoutElemen
             bool bothTextLike = (boxA.type == LayoutElementType::Text || boxA.type == LayoutElementType::Title) &&
                                 (boxB.type == LayoutElementType::Text || boxB.type == LayoutElementType::Title);
 
-            // B. 包含性抑制 (IoS >= cfg.containmentIosThreshold)
-            if (ios >= cfg.containmentIosThreshold && (sameLabel || bothTextLike)) {
-                size_t largeIdx = (areaA >= areaB) ? i : j;
-                size_t smallIdx = (areaA >= areaB) ? j : i;
-                auto& largeBox = elements[largeIdx];
-                auto& smallBox = elements[smallIdx];
+            bool isFormulaA = (boxA.type == LayoutElementType::Formula || boxA.labelName == "inline_formula" || boxA.labelName == "display_formula" || boxA.labelName == "formula");
+            bool isFormulaB = (boxB.type == LayoutElementType::Formula || boxB.labelName == "inline_formula" || boxB.labelName == "display_formula" || boxB.labelName == "formula");
+            bool textContainsFormula = 
+                (areaA >= areaB && (boxA.type == LayoutElementType::Text || boxA.type == LayoutElementType::Title) && isFormulaB) ||
+                (areaB >= areaA && (boxB.type == LayoutElementType::Text || boxB.type == LayoutElementType::Title) && isFormulaA);
 
-                // 如果两框面积高度接近 (IoU >= 0.70)，按置信度择优
+            bool isTableA = (boxA.type == LayoutElementType::Table || boxA.labelName == "table");
+            bool isTableB = (boxB.type == LayoutElementType::Table || boxB.labelName == "table");
+            bool tableContainsSubBox = 
+                (areaA >= areaB && isTableA && !isTableB &&
+                 boxB.labelName != "vision_footnote" && boxB.labelName != "footnote" && boxB.labelName != "figure_title") ||
+                (areaB >= areaA && isTableB && !isTableA &&
+                 boxA.labelName != "vision_footnote" && boxA.labelName != "footnote" && boxA.labelName != "figure_title");
+
+            // B. 包含性抑制 (IoS >= cfg.containmentIosThreshold)
+            // 支持同类合并、文本类元素包含合并、段落文本包含行内/块级公式、以及表格包含内部公式/文本/数字子块的抑制
+            if (ios >= cfg.containmentIosThreshold && (sameLabel || bothTextLike || textContainsFormula || tableContainsSubBox)) {
+                // 如果两框面积高度接近 (IoU >= 0.70)，按结构特异性或置信度择优
                 if (iou >= 0.70f) {
-                    if (boxA.score >= boxB.score) {
+                    if (isTableA && !isTableB) {
+                        suppressed[j] = true;
+                    } else if (isTableB && !isTableA) {
+                        suppressed[i] = true;
+                        break;
+                    } else if (boxA.score >= boxB.score) {
                         suppressed[j] = true;
                     } else {
                         suppressed[i] = true;
@@ -623,6 +642,11 @@ void DocLayoutEngine::SuppressContainedOrDuplicateBoxes(std::vector<LayoutElemen
                     }
                     continue;
                 }
+
+                size_t largeIdx = (areaA >= areaB) ? i : j;
+                size_t smallIdx = (areaA >= areaB) ? j : i;
+                auto& largeBox = elements[largeIdx];
+                auto& smallBox = elements[smallIdx];
 
                 // 吸收合并外包络，保留大块，抑制小切片
                 largeBox.x1 = (std::min)(largeBox.x1, smallBox.x1);
@@ -873,6 +897,8 @@ bool DocLayoutEngine::AnalyzeLayout(const std::string& imagePath, DocumentLayout
                 int64_t featDim = shape.back();
 
                 int elemId = 1;
+                std::vector<LayoutElement> rawCandidates;
+                std::vector<LayoutElement> filteredHeaderFooterBoxes;
                 for (int64_t i = 0; i < numBoxes; ++i) {
                     const float* box = outData + i * featDim;
                     
@@ -929,8 +955,48 @@ bool DocLayoutEngine::AnalyzeLayout(const std::string& imagePath, DocumentLayout
                     elem.type = mappedType;
                     elem.labelName = mappedLabel;
 
-                    // 执行语义与几何双重过滤 (页眉/页脚/独立页码)
+                    LOG_DEBUG("DocLayoutEngine", 
+                        wxString::Format("Candidate box %d: %s (score=%.4f) bbox=[%d, %d, %d, %d]", 
+                                         elem.id, elem.labelName.c_str(), elem.score, elem.x1, elem.y1, elem.x2, elem.y2).ToStdString());
+
+                    rawCandidates.push_back(elem);
                     if (ShouldFilterElement(elem, origW, origH, filterConfig)) {
+                        filteredHeaderFooterBoxes.push_back(elem);
+                    }
+                }
+
+                for (const auto& elem : rawCandidates) {
+                    if (ShouldFilterElement(elem, origW, origH, filterConfig)) {
+                        continue;
+                    }
+
+                    // 重影抑制：若当前候选框与已被模型标签或几何过滤的页眉/页脚/页码候选框高度重叠 (IoU >= 0.50 或 IoS >= 0.70)，
+                    // 说明是模型多类别输出导致的同区域重影副标签（例如同一页眉同时输出了 header 与 paragraph_title），予以同步过滤
+                    bool isDuplicateOfFiltered = false;
+                    int areaA = (elem.x2 - elem.x1) * (elem.y2 - elem.y1);
+                    for (const auto& hfBox : filteredHeaderFooterBoxes) {
+                        int areaB = (hfBox.x2 - hfBox.x1) * (hfBox.y2 - hfBox.y1);
+                        int ix1 = (std::max)(elem.x1, hfBox.x1);
+                        int iy1 = (std::max)(elem.y1, hfBox.y1);
+                        int ix2 = (std::min)(elem.x2, hfBox.x2);
+                        int iy2 = (std::min)(elem.y2, hfBox.y2);
+                        int iw = (std::max)(0, ix2 - ix1);
+                        int ih = (std::max)(0, iy2 - iy1);
+                        int interArea = iw * ih;
+                        if (interArea > 0 && areaA > 0 && areaB > 0) {
+                            float ios = static_cast<float>(interArea) / (std::min)(areaA, areaB);
+                            float iou = static_cast<float>(interArea) / static_cast<float>(areaA + areaB - interArea);
+                            if (iou >= 0.50f || ios >= 0.70f) {
+                                isDuplicateOfFiltered = true;
+                                LOG_DEBUG("DocLayoutEngine", 
+                                    wxString::Format("Filter: dropped duplicate of filtered header/footer [%s score=%.2f] matching [%s score=%.2f], IoU=%.2f, IoS=%.2f",
+                                                     elem.labelName.c_str(), elem.score, hfBox.labelName.c_str(), hfBox.score, iou, ios).ToStdString());
+                                break;
+                            }
+                        }
+                    }
+
+                    if (isDuplicateOfFiltered) {
                         continue;
                     }
 

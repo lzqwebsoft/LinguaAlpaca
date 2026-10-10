@@ -157,6 +157,85 @@ TEST_CASE("DocLayoutEngine - Test with User Newspaper Image", "[layout]") {
                  << " (score=" << elem.score << ") bbox=[" 
                  << elem.x1 << ", " << elem.y1 << ", " << elem.x2 << ", " << elem.y2 << "]\n";
         }
+
+        // 验证数学之美第 18 页页眉 "II || 数学之美" 必须被正确识别过滤，不得误入正文
+        // 图片固定存放在 tests/ 目录中，脱离对外部 PDF 路径的依赖
+        std::string sxzm18Path = "tests/test_sxzm_page18.png";
+        if (!wxFileExists(sxzm18Path)) { sxzm18Path = "../tests/test_sxzm_page18.png"; }
+        if (!wxFileExists(sxzm18Path)) { sxzm18Path = "../../tests/test_sxzm_page18.png"; }
+
+        REQUIRE(wxFileExists(sxzm18Path));
+        {
+            DocumentLayoutResult resSxzm;
+            bool okSxzm = engine.AnalyzeLayout(sxzm18Path, resSxzm);
+            REQUIRE(okSxzm == true);
+            CHECK(resSxzm.elements.size() >= 10);
+            std::cout << "\n--- 数学之美 Page 18 (W=" << resSxzm.imageWidth << ", H=" << resSxzm.imageHeight << ") detected " << resSxzm.elements.size() << " elements:\n";
+            bool foundLeakedHeader = false;
+            for (const auto& elem : resSxzm.elements) {
+                std::cout << "  [" << elem.readingOrder << "] " << elem.labelName 
+                     << " (score=" << elem.score << ") bbox=[" 
+                     << elem.x1 << ", " << elem.y1 << ", " << elem.x2 << ", " << elem.y2 << "]\n";
+                // 页眉位于顶部 y <= 150 (真实页眉 bbox ~ [300, 79, 497, 121])
+                if (elem.y2 <= 150) {
+                    foundLeakedHeader = true;
+                }
+            }
+            CHECK(foundLeakedHeader == false);
+        }
+
+        // 验证数学之美第 56 页行内公式 (10^-20, 10^-70 等) 落在段落内部时必须被抑制，不得重复生成独立公式块
+        std::string sxzm56Path = "tests/test_sxzm_page56.png";
+        if (!wxFileExists(sxzm56Path)) { sxzm56Path = "../tests/test_sxzm_page56.png"; }
+        if (!wxFileExists(sxzm56Path)) { sxzm56Path = "../../tests/test_sxzm_page56.png"; }
+
+        REQUIRE(wxFileExists(sxzm56Path));
+        {
+            DocumentLayoutResult res56;
+            bool ok56 = engine.AnalyzeLayout(sxzm56Path, res56);
+            REQUIRE(ok56 == true);
+            std::cout << "\n--- 数学之美 Page 56 (W=" << res56.imageWidth << ", H=" << res56.imageHeight << ") detected " << res56.elements.size() << " elements:\n";
+            bool foundDuplicateInlineFormula = false;
+            for (const auto& elem : res56.elements) {
+                std::cout << "  [" << elem.readingOrder << "] " << elem.labelName 
+                     << " (score=" << elem.score << ") bbox=[" 
+                     << elem.x1 << ", " << elem.y1 << ", " << elem.x2 << ", " << elem.y2 << "]\n";
+                // 落在段落 [325, 1345, 1444, 1645] 内部的 10^-20 与 10^-70 行内公式必须被抑制
+                if (elem.labelName == "inline_formula" && elem.y1 >= 1345 && elem.y2 <= 1645) {
+                    foundDuplicateInlineFormula = true;
+                }
+                // 落在段落 [324, 1699, 1448, 2063] 内部的行内公式也必须被抑制
+                if (elem.labelName == "inline_formula" && elem.y1 >= 1699 && elem.y2 <= 2063) {
+                    foundDuplicateInlineFormula = true;
+                }
+            }
+            CHECK(foundDuplicateInlineFormula == false);
+        }
+
+        // 验证数学之美第 236 页表格内部的公式 (k=1, k=2, k=5, k=6, k=7 等) 落在表格内部时必须被抑制，不得重复生成独立公式块
+        std::string sxzm236Path = "tests/test_sxzm_page236.png";
+        if (!wxFileExists(sxzm236Path)) { sxzm236Path = "../tests/test_sxzm_page236.png"; }
+        if (!wxFileExists(sxzm236Path)) { sxzm236Path = "../../tests/test_sxzm_page236.png"; }
+
+        REQUIRE(wxFileExists(sxzm236Path));
+        {
+            DocumentLayoutResult res236;
+            bool ok236 = engine.AnalyzeLayout(sxzm236Path, res236);
+            REQUIRE(ok236 == true);
+            std::cout << "\n--- 数学之美 Page 236 (W=" << res236.imageWidth << ", H=" << res236.imageHeight << ") detected " << res236.elements.size() << " elements:\n";
+            bool foundDuplicateFormulaInTable = false;
+            for (const auto& elem : res236.elements) {
+                std::cout << "  [" << elem.readingOrder << "] " << elem.labelName 
+                     << " (score=" << elem.score << ") bbox=[" 
+                     << elem.x1 << ", " << elem.y1 << ", " << elem.x2 << ", " << elem.y2 << "]\n";
+                // 检查是否有落在表格内部的公式块 (y >= 1600)
+                if ((elem.type == LayoutElementType::Formula || elem.labelName == "inline_formula" || elem.labelName == "display_formula") && elem.y1 >= 1600) {
+                    foundDuplicateFormulaInTable = true;
+                }
+            }
+            CHECK(foundDuplicateFormulaInTable == false);
+        }
+
         // 验证用户真实图书第 5 页 (篇章标题 "总  序") 与 第 8 页 (目录 "目录 Contents") 必须被正确保留
         // 图片固定存放在 tests/ 目录中，脱离对外部网络共享 PDF 路径的依赖
         std::string page5Path = "tests/test_book_page5.png";
@@ -165,24 +244,6 @@ TEST_CASE("DocLayoutEngine - Test with User Newspaper Image", "[layout]") {
         if (!wxFileExists(page5Path)) { page5Path = "../../tests/test_book_page5.png"; }
         if (!wxFileExists(page8Path)) { page8Path = "../tests/test_book_page8.png"; }
         if (!wxFileExists(page8Path)) { page8Path = "../../tests/test_book_page8.png"; }
-
-        // 若本地图片尚未生成且外部 PDF 存在，自动提取渲染并固化至 tests 目录
-        std::string pdfUserPath = "/Volumes/SHARE FILES/马戛尔尼使团使华观感 ([英] 乔治•马戛尔尼  [英] 约翰•巴罗 著 何高济  何毓宁 译) (Z-Library).pdf";
-        if ((!wxFileExists(page5Path) || !wxFileExists(page8Path)) && wxFileExists(pdfUserPath)) {
-            std::string targetDir = "tests";
-            if (!wxDirExists(targetDir)) { targetDir = "../tests"; }
-            if (!wxDirExists(targetDir)) { targetDir = "../../tests"; }
-
-            wxImage img5, img8;
-            if (!wxFileExists(page5Path) && PdfHelper::RenderPage(pdfUserPath, 4, img5, 1600)) {
-                img5.SaveFile(targetDir + "/test_book_page5.png", wxBITMAP_TYPE_PNG);
-                page5Path = targetDir + "/test_book_page5.png";
-            }
-            if (!wxFileExists(page8Path) && PdfHelper::RenderPage(pdfUserPath, 7, img8, 1600)) {
-                img8.SaveFile(targetDir + "/test_book_page8.png", wxBITMAP_TYPE_PNG);
-                page8Path = targetDir + "/test_book_page8.png";
-            }
-        }
 
         // 验证第 5 页 (总序)
         REQUIRE(wxFileExists(page5Path));
@@ -280,6 +341,47 @@ TEST_CASE("DocLayoutEngine - Suppress Contained and Duplicate Footnote Boxes", "
     CHECK(elements[0].y1 <= 702);
     CHECK(elements[0].x2 >= 1486);
     CHECK(elements[0].y2 >= 750);
+}
+
+TEST_CASE("DocLayoutEngine - Suppress Contained Formula and Text Boxes in Table", "[layout]") {
+    // 模拟表格区域及内部单元格误检为公式、文本、数字切片的候选框
+    // 框 1: 表格全图大框 (score=0.9105)
+    // 框 2: 表格首行单元格公式 k=1 (score=0.3102, y 落在表格内)
+    // 框 3: 表格首行单元格公式 k=5 (score=0.3432, y 落在表格内)
+    // 框 4: 表格首行单元格公式 k=6 (score=0.4055, y 落在表格内)
+    // 框 5: 单元格数字/文本碎片 (score=0.5200, 落在表格内)
+    // 框 6: 表格上方的独立图表标题 (score=0.5532, y 落在表格外，必须保留)
+    std::vector<LayoutElement> elements = {
+        LayoutElement{1, LayoutElementType::Table, "table", 0.9105f, 330, 1680, 1444, 2052, 0},
+        LayoutElement{2, LayoutElementType::Formula, "inline_formula", 0.3102f, 604, 1688, 674, 1721, 0},
+        LayoutElement{3, LayoutElementType::Formula, "inline_formula", 0.3432f, 982, 1687, 1054, 1722, 0},
+        LayoutElement{4, LayoutElementType::Formula, "inline_formula", 0.4055f, 1111, 1687, 1183, 1722, 0},
+        LayoutElement{5, LayoutElementType::Text, "text", 0.5200f, 400, 1750, 500, 1790, 0},
+        LayoutElement{6, LayoutElementType::Title, "figure_title", 0.5532f, 321, 1595, 1052, 1633, 0}
+    };
+
+    DocLayoutFilterConfig cfg;
+    cfg.mergeLayoutBlocks = true;
+    cfg.containmentIosThreshold = 0.70f;
+
+    DocLayoutEngine::SuppressContainedOrDuplicateBoxes(elements, cfg);
+
+    // 核心断言：落在表格内部的所有公式与文本切片必须全部被抑制！仅保留表格和表头标题！
+    REQUIRE(elements.size() == 2);
+    bool foundTable = false;
+    bool foundFigureTitle = false;
+    for (const auto& elem : elements) {
+        if (elem.type == LayoutElementType::Table || elem.labelName == "table") {
+            foundTable = true;
+            CHECK(elem.score >= 0.9105f);
+        }
+        if (elem.type == LayoutElementType::Title || elem.labelName == "figure_title") {
+            foundFigureTitle = true;
+            CHECK(elem.y2 <= 1633);
+        }
+    }
+    CHECK(foundTable == true);
+    CHECK(foundFigureTitle == true);
 }
 
 TEST_CASE("DocumentPipeline - Never delete original input image or document file", "[pipeline]") {

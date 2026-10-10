@@ -242,15 +242,18 @@ PY_SCRIPT
 echo "[4/6] Verifying resources and Info.plist..."
 mkdir -p "${DEST_APP}/Contents/Resources"
 if [ -d "${PROJECT_ROOT}/resources" ]; then
+    rm -rf "${DEST_APP}/Contents/Resources/resources"
     cp -R "${PROJECT_ROOT}/resources" "${DEST_APP}/Contents/Resources/resources"
 fi
 if [ -f "${PROJECT_ROOT}/resources/app_icon.icns" ]; then
     cp -f "${PROJECT_ROOT}/resources/app_icon.icns" "${DEST_APP}/Contents/Resources/app_icon.icns"
 fi
 if [ -d "${PROJECT_ROOT}/resources/zh_CN.lproj" ]; then
+    rm -rf "${DEST_APP}/Contents/Resources/zh_CN.lproj"
     cp -R "${PROJECT_ROOT}/resources/zh_CN.lproj" "${DEST_APP}/Contents/Resources/"
 fi
 if [ -d "${PROJECT_ROOT}/resources/en.lproj" ]; then
+    rm -rf "${DEST_APP}/Contents/Resources/en.lproj"
     cp -R "${PROJECT_ROOT}/resources/en.lproj" "${DEST_APP}/Contents/Resources/"
 fi
 

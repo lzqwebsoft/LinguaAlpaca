@@ -133,6 +133,16 @@
                 return;
             }
 
+            function escapeHtmlText(str) {
+                if (!str) return "";
+                return str
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;")
+                    .replace(/"/g, "&quot;")
+                    .replace(/'/g, "&#039;");
+            }
+
             // 0. 预处理 LaTeX 专名与排版修饰 (波浪下划线 \uwave, 普通下划线 \uline 等)
             function extractBalancedBraces(str, startIdx) {
                 if (startIdx >= str.length || str[startIdx] !== '{') return null;
@@ -355,15 +365,7 @@
                     }
                 }
 
-                function escapeHtmlText(str) {
-                    if (!str) return "";
-                    return str
-                        .replace(/&/g, "&amp;")
-                        .replace(/</g, "&lt;")
-                        .replace(/>/g, "&gt;")
-                        .replace(/"/g, "&quot;")
-                        .replace(/'/g, "&#039;");
-                }
+
 
                 // 6. 构造标准 HTML 表格代码
                 var theadHtml = "";
@@ -424,11 +426,24 @@
             var processedMarkdown = preprocessOtslTables(rawMarkdown);
             processedMarkdown = preprocessLatexDecorations(processedMarkdown);
 
+            // 0.9 保护多行代码块与行内代码免受伪标签实体转义
+            var codeBlocks = [];
+            var text = processedMarkdown.replace(/(```[\s\S]*?```|~~~[\s\S]*?~~~)/g, function(match) {
+                var key = "%%CODEBLOCK_" + codeBlocks.length + "%%";
+                codeBlocks.push(match);
+                return key;
+            });
+            text = text.replace(/(`[^`\n]+?`)/g, function(match) {
+                var key = "%%CODEINLINE_" + codeBlocks.length + "%%";
+                codeBlocks.push(match);
+                return key;
+            });
+
             // 1. 保护数学公式免受 marked 转义
             var mathBlocks = [];
 
             // 块级公式: $$ ... $$ 或 \[ ... \] 或 \begin{...} ... \end{...}
-            var text = processedMarkdown.replace(/\$\$([\s\S]*?)\$\$/g, function(match, formula) {
+            text = text.replace(/\$\$([\s\S]*?)\$\$/g, function(match, formula) {
                 var key = "%%MATHBLOCK_" + mathBlocks.length + "%%";
                 mathBlocks.push({ isBlock: true, formula: formula });
                 return key;
@@ -455,6 +470,40 @@
                 mathBlocks.push({ isBlock: false, formula: formula });
                 return key;
             });
+
+            // 1.5 预处理与转义伪 HTML 标签与 NLP 专用标记 (如 <s>, </s>, <\s>, <unk>, <pad>, <eos> 等)，
+            // 绝不能将 <s> (NLP 句子起始符 / 状态标记) 作为 HTML 删除线标签解析，否则会导致后续整篇文档被渲染为删除线
+            function sanitizeNlpTokensAndPseudoTags(str) {
+                if (!str) return "";
+
+                // A. 专门处理 <s>, </s>, <\s>, 以及常见 NLP/LLM 特殊标记
+                var nlpTokenRegex = /<\/?(?:s|unk|pad|sos|eos|bos|bot|eot|cls|sep|mask|start|end|num|url|id|blank)\b[^>]*>|<\\[sS]>/gi;
+                var sanitized = str.replace(nlpTokenRegex, function(match) {
+                    return match.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                });
+
+                // B. 对非合法 HTML 标签的任意未知伪标签进行实体转义，防止在 HTML 中被静默吞噬或破坏排版
+                var validHtmlTags = /^(?:\/?(?:a|b|i|u|em|strong|small|sub|sup|span|br|hr|p|div|table|thead|tbody|tr|th|td|ul|ol|li|dl|dt|dd|blockquote|pre|code|kbd|del|details|summary|img|h[1-6]))$/i;
+
+                sanitized = sanitized.replace(/<\/?([a-zA-Z][a-zA-Z0-9_-]*)\b([^>]*)>/g, function(fullMatch, tagName) {
+                    if (!validHtmlTags.test(tagName.toLowerCase())) {
+                        return fullMatch.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                    }
+                    return fullMatch;
+                });
+
+                return sanitized;
+            }
+
+            text = sanitizeNlpTokensAndPseudoTags(text);
+
+            // 还原受保护的代码块供 marked 解析
+            for (var k = 0; k < codeBlocks.length; k++) {
+                var cKey = (codeBlocks[k].startsWith("`") && !codeBlocks[k].startsWith("```"))
+                    ? "%%CODEINLINE_" + k + "%%"
+                    : "%%CODEBLOCK_" + k + "%%";
+                text = text.split(cKey).join(codeBlocks[k]);
+            }
 
             // 2. 调用 marked 进行基础 Markdown 与 HTML 解析
             var html = '';
@@ -529,7 +578,7 @@
                         renderedMath = item.isBlock ? "$$" + formulaStr + "$$" : "$" + formulaStr + "$";
                     }
                 } catch (e) {
-                    renderedMath = '<span class="katex-error">' + formulaStr + '</span>';
+                    renderedMath = '<span class="katex-error">' + escapeHtmlText(formulaStr) + '</span>';
                 }
                 if (item.isBlock) {
                     html = html.replace(new RegExp('<p>\\s*' + placeholder + '\\s*<\\/p>', 'g'), renderedMath);

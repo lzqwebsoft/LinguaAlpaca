@@ -365,9 +365,11 @@ bool LlamaServer::Start(const ServerConfig& config) {
         "--no-webui",
         "--jinja"
     };
-    if (config.ctxSize > 0) {
-        args.push_back("-c");
-        args.push_back(std::to_string(config.ctxSize));
+    args.push_back("-c");
+    args.push_back(std::to_string(totalCtx));
+    if (parallel > 1) {
+        args.push_back("-np");
+        args.push_back(std::to_string(parallel));
     }
     if (config.threads > 0) {
         args.push_back("-t");

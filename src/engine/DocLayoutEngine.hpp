@@ -56,6 +56,11 @@ public:
         return AnalyzeLayout(imagePath, outResult, m_filterConfig);
     }
 
+    bool AnalyzeLayout(const wxImage& img, DocumentLayoutResult& outResult, const DocLayoutFilterConfig& filterConfig);
+    bool AnalyzeLayout(const wxImage& img, DocumentLayoutResult& outResult) {
+        return AnalyzeLayout(img, outResult, m_filterConfig);
+    }
+
 private:
     std::string m_modelPath;
     std::string m_lastError;

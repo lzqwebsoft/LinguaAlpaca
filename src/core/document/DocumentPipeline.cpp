@@ -282,33 +282,24 @@ std::shared_ptr<PreprocessedPage> PreprocessStageOne(int p, int totalPages, cons
     auto pageData = std::make_shared<PreprocessedPage>();
     pageData->pageIndex = p;
 
-    // 1. 光栅化当前单页
+    // 1. 光栅化当前单页 (纯内存直通渲染，杜绝临时 PNG 磁盘反复编解码 I/O)
     if (onProgress && aliveToken->load() && !shouldStop.load()) {
         std::string status = "第 " + std::to_string(p + 1) + " / " + std::to_string(totalPages) + " 页: 正在光栅化...";
         onProgress(p, totalPages, status, currentFullMarkdown);
     }
 
-    std::string pageImgPath = PdfHelper::RenderPageToTempFile(inputFilePath, p, tempCacheDir.ToUTF8().data(), 1600);
-    if (pageImgPath.empty() || !wxFileExists(wxString::FromUTF8(pageImgPath))) {
+    wxImage pageImg;
+    if (!PdfHelper::RenderPage(inputFilePath, p, pageImg, 1600) || !pageImg.IsOk()) {
         LOG_ERROR("DocumentPipeline", "Failed to rasterize page: " + std::to_string(p + 1));
         pageData->success = false;
         pageData->error = "光栅化失败";
         return pageData;
     }
-    pageData->pageImgPath = pageImgPath;
 
     if (shouldStop.load() || !aliveToken->load()) {
+        pageImg.Destroy();
         pageData->CleanRemainingTempFiles(inputFilePath, tempCacheDir, true);
         return nullptr;
-    }
-
-    // 2. 载入当前单页位图用于空白页快速判定与子图裁剪
-    wxImage pageImg;
-    if (!pageImg.LoadFile(wxString::FromUTF8(pageImgPath))) {
-        pageData->CleanRemainingTempFiles(inputFilePath, tempCacheDir, true);
-        pageData->success = false;
-        pageData->error = "加载光栅化图像失败";
-        return pageData;
     }
 
     int pImgW = pageImg.GetWidth();
@@ -322,12 +313,10 @@ std::shared_ptr<PreprocessedPage> PreprocessStageOne(int p, int totalPages, cons
         pageData->elements.clear();
         pageData->success = true;
         pageImg.Destroy();
-        SafeRemoveTempFile(pageImgPath, inputFilePath, tempCacheDir);
-        pageData->pageImgPath.clear();
         return pageData;
     }
 
-    // 3. DocLayoutEngine 执行版面目标检测
+    // 2. DocLayoutEngine 执行版面目标检测 (内存直通，零磁盘 I/O)
     if (onProgress && aliveToken->load() && !shouldStop.load()) {
         std::string status = "第 " + std::to_string(p + 1) + " / " + std::to_string(totalPages) + " 页: 版面分析中 (检测标题/表格/公式/分栏)...";
         onProgress(p, totalPages, status, currentFullMarkdown);
@@ -335,7 +324,7 @@ std::shared_ptr<PreprocessedPage> PreprocessStageOne(int p, int totalPages, cons
 
     pageData->layoutResult.pageIndex = p + 1;
     if (layoutEngine) {
-        layoutEngine->AnalyzeLayout(pageImgPath, pageData->layoutResult);
+        layoutEngine->AnalyzeLayout(pageImg, pageData->layoutResult);
     }
 
     if (shouldStop.load() || !aliveToken->load()) {
@@ -385,10 +374,8 @@ std::shared_ptr<PreprocessedPage> PreprocessStageOne(int p, int totalPages, cons
         CropAndSaveElement(pageImg, elem, elIdx, p, x1, y1, x2, y2, cropW, cropH, pImgW, figuresDir, tempCacheDir, *pageData);
     }
 
-    // 内存立即释放：整页高分辨率位图与临时光栅化文件在此处即刻回收 (O(1) 恒定内存)
+    // 内存立即释放：整页高分辨率位图在此处即刻回收 (O(1) 恒定内存)
     pageImg.Destroy();
-    SafeRemoveTempFile(pageImgPath, inputFilePath, tempCacheDir);
-    pageData->pageImgPath.clear();
 
     if (shouldStop.load() || !aliveToken->load()) {
         pageData->CleanRemainingTempFiles(inputFilePath, tempCacheDir, true);
@@ -1124,6 +1111,12 @@ void DocumentPipeline::StartParseAsync(const std::string& inputFilePath, const s
             // 获取当前页阶段 1 预处理结果 (若上一页识别时间大于版面分析时间，此处早已准备就绪，0 毫秒等待)
             std::shared_ptr<PreprocessedPage> curPageData = nullptr;
             if (nextPageFuture.valid()) {
+                if (nextPageFuture.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready) {
+                    if (aliveToken->load() && onProgress) {
+                        std::string stageMsg = "第 " + std::to_string(p + 1) + " / " + std::to_string(totalPages) + " 页: 正在完成版面分析与切片...";
+                        onProgress(p, totalPages, stageMsg, fullMarkdown);
+                    }
+                }
                 try {
                     curPageData = nextPageFuture.get();
                 } catch (const std::exception& e) {
@@ -1192,6 +1185,13 @@ void DocumentPipeline::StartParseAsync(const std::string& inputFilePath, const s
 
             int numWorkers = (std::min)(static_cast<int>(ocrIndices.size()), maxParallel);
             if (numWorkers > 0) {
+                // ★★★ 核心修复：即时状态跃迁！切片准备就绪后立刻主动通知 UI，彻底消灭前一页霸屏停顿感
+                if (aliveToken->load() && onProgress) {
+                    std::string stageMsg = "第 " + std::to_string(p + 1) + " / " + std::to_string(totalPages) + " 页: 开始并发识别 (0/" +
+                                           std::to_string(ocrIndices.size()) + ")...";
+                    onProgress(p, totalPages, stageMsg, fullMarkdown);
+                }
+
                 std::vector<std::thread> workers;
                 workers.reserve(numWorkers);
 
@@ -1588,8 +1588,8 @@ void DocumentPipeline::StartParseAsync(const std::string& inputFilePath, const s
             fullDocJson["completed_pages"] = p + 1;
             fullDocJson["is_completed"] = (p + 1 == totalPages);
 
-            // ★★★ 核心要求 1：每页完成识别后实时落盘保存 Markdown 与 JSON，杜绝中断时数据丢失
-            std::string currentJsonDump = SafeDumpJson(fullDocJson);
+            // ★★★ 核心要求 1：每页完成识别后实时落盘保存 Markdown 与 JSON，杜绝中断时数据丢失 (中间态采用紧凑 -1 缩进极速序列化)
+            std::string currentJsonDump = SafeDumpJson(fullDocJson, -1);
             SaveToMarkdown(actualOutputDir, baseDocName, fullMarkdown);
             SaveToJson(actualOutputDir, baseDocName, currentJsonDump);
 

@@ -781,6 +781,15 @@ bool DocLayoutEngine::AnalyzeLayout(const std::string& imagePath, DocumentLayout
         return false;
     }
 
+    return AnalyzeLayout(img, outResult, filterConfig);
+}
+
+bool DocLayoutEngine::AnalyzeLayout(const wxImage& img, DocumentLayoutResult& outResult, const DocLayoutFilterConfig& filterConfig) {
+    if (!img.IsOk()) {
+        m_lastError = "目标图像数据无效";
+        return false;
+    }
+
     int origW = img.GetWidth();
     int origH = img.GetHeight();
     outResult.imageWidth = origW;

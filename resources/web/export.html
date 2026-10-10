@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>{{TITLE}}</title>
     <!-- KaTeX 数学公式矢量渲染样式 (内联) -->
     <style id="katex-style">
@@ -39,6 +39,11 @@
   --accent: #2e694c;
 }
 
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
@@ -47,9 +52,14 @@ body {
   color: var(--ink);
   line-height: 1.75;
   padding: 32px 20px 80px;
+  padding-left: max(env(safe-area-inset-left, 0px), 20px);
+  padding-right: max(env(safe-area-inset-right, 0px), 20px);
+  padding-bottom: max(env(safe-area-inset-bottom, 20px), 80px);
   max-width: 1180px;
   margin: 0 auto;
   transition: background 0.2s ease;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 header {
@@ -104,7 +114,7 @@ h1 {
 .filter {
   font-family: inherit;
   font-size: 13px;
-  padding: 4px 13px;
+  padding: 5px 14px;
   border-radius: 14px;
   border: 1px solid var(--line);
   background: transparent;
@@ -115,6 +125,10 @@ h1 {
   align-items: center;
   gap: 6px;
   line-height: 1.4;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .filter:hover {
@@ -362,6 +376,7 @@ h1 {
 .table-wrapper {
   width: 100%;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   margin: 20px 0;
   border-radius: 8px;
   border: 1px solid var(--line);
@@ -370,6 +385,7 @@ h1 {
 
 table {
   width: 100%;
+  min-width: 100%;
   border-collapse: collapse;
   font-size: 14px;
 }
@@ -419,6 +435,7 @@ code:not(pre code) {
   border-radius: 4px;
   font-family: "Fira Code", Consolas, "Courier New", monospace;
   font-size: 13px;
+  word-break: break-word;
 }
 
 pre {
@@ -427,9 +444,11 @@ pre {
   padding: 16px 20px;
   border-radius: 8px;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   margin: 18px 0;
   border: 1px solid #4a4035;
   line-height: 1.6;
+  max-width: 100%;
 }
 
 pre code {
@@ -438,6 +457,23 @@ pre code {
   padding: 0;
   font-family: "Fira Code", Consolas, "Courier New", monospace;
   font-size: 13px;
+}
+
+/* KaTeX 数学公式移动端自适应与平滑横向滚动 */
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
+  padding: 8px 0;
+  margin: 16px 0;
+}
+.katex-display > .katex {
+  max-width: 100%;
+  text-align: center;
+}
+.katex {
+  max-width: 100%;
 }
 
 /* 图片居中与投影 */
@@ -487,6 +523,7 @@ hr {
 .toast {
   position: fixed;
   bottom: 30px;
+  bottom: max(env(safe-area-inset-bottom, 20px), 30px);
   left: 50%;
   transform: translateX(-50%);
   background: rgba(42, 37, 32, 0.92);
@@ -500,18 +537,28 @@ hr {
   pointer-events: none;
   transition: opacity 0.25s ease;
   z-index: 9999;
+  max-width: 90vw;
+  text-align: center;
+  box-sizing: border-box;
 }
 .toast.show {
   opacity: 1;
 }
 
-/* 响应式排版适配 */
+/* 响应式排版适配 (平板 & 中屏设备) */
 @media (max-width: 768px) {
   body {
-    padding: 18px 12px 60px;
+    padding: 20px 14px max(env(safe-area-inset-bottom, 20px), 64px);
+    padding-left: max(env(safe-area-inset-left, 0px), 14px);
+    padding-right: max(env(safe-area-inset-right, 0px), 14px);
+  }
+  header {
+    margin-bottom: 18px;
+    padding-bottom: 14px;
   }
   h1 {
     font-size: 22px;
+    letter-spacing: 1px;
   }
   .toolbar {
     padding: 12px 14px;
@@ -520,11 +567,168 @@ hr {
   .toggle-group {
     margin-left: 0;
     width: 100%;
-    justify-content: flex-end;
+    justify-content: flex-start;
   }
   .content-panel {
-    padding: 20px 16px;
+    padding: 24px 20px;
     border-radius: 8px;
+  }
+  #content h1 { font-size: 22px; margin-top: 22px; }
+  #content h2 { font-size: 18px; margin-top: 18px; }
+  #content h3 { font-size: 16px; margin-top: 14px; }
+}
+
+/* 移动手机专享适配 (iPhone / Android 屏幕 <= 480px) */
+@media (max-width: 480px) {
+  body {
+    padding: 14px 10px max(env(safe-area-inset-bottom, 20px), 56px);
+    padding-left: max(env(safe-area-inset-left, 0px), 10px);
+    padding-right: max(env(safe-area-inset-right, 0px), 10px);
+    line-height: 1.7;
+  }
+  header {
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+    border-bottom-width: 1px;
+  }
+  h1 {
+    font-size: 19px;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+  }
+  .subtitle {
+    font-size: 11.5px;
+    letter-spacing: 0.5px;
+  }
+  .toolbar {
+    padding: 10px 10px;
+    gap: 10px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+  }
+  .filter-group {
+    width: 100%;
+    display: flex;
+    gap: 6px;
+  }
+  .filter-label {
+    display: none; /* 手机端隐藏前缀提示，释放横向空间 */
+  }
+  .filter {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 7px 4px;
+    font-size: 12px;
+    border-radius: 12px;
+    justify-content: center;
+    gap: 4px;
+    white-space: nowrap;
+  }
+  .filter .btn-icon {
+    width: 13px;
+    height: 13px;
+  }
+  .toggle-group {
+    width: 100%;
+    justify-content: center;
+  }
+  .stats {
+    font-size: 11.5px;
+    text-align: center;
+  }
+  .content-panel {
+    padding: 16px 12px;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.03);
+  }
+  #content h1 {
+    font-size: 19px;
+    margin-top: 18px;
+    padding-bottom: 6px;
+    letter-spacing: 0.5px;
+  }
+  #content h2 {
+    font-size: 16.5px;
+    margin-top: 15px;
+    padding-bottom: 4px;
+    letter-spacing: 0.3px;
+  }
+  #content h3 {
+    font-size: 15px;
+    margin-top: 12px;
+  }
+  #content h4, #content h5, #content h6 {
+    font-size: 14px;
+    margin-top: 10px;
+  }
+  #content p {
+    font-size: 14.5px;
+    line-height: 1.7;
+    margin-bottom: 12px;
+    text-align: left; /* 移动端中文齐左更自然，避免大空格拉伸 */
+  }
+  #content ul, #content ol {
+    padding-left: 20px;
+    margin-bottom: 12px;
+    font-size: 14.5px;
+  }
+  #content li {
+    margin-bottom: 4px;
+  }
+  #content blockquote {
+    padding: 10px 12px;
+    margin: 12px 0;
+    font-size: 13.5px;
+  }
+  .original, .translation {
+    padding: 8px 10px;
+    font-size: 13.5px;
+    line-height: 1.7;
+    margin-bottom: 10px;
+  }
+  .annotation {
+    padding: 8px 10px;
+    font-size: 12px;
+    margin-top: 8px;
+  }
+  .card-head {
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+  .date {
+    font-size: 13px;
+  }
+  .type-tag, .warn-tag {
+    font-size: 11px;
+    padding: 1px 8px;
+  }
+  .meta {
+    font-size: 11.5px;
+    gap: 8px;
+    padding-top: 8px;
+    margin-top: 10px;
+  }
+  table {
+    font-size: 12.5px;
+  }
+  th, td {
+    padding: 7px 8px;
+  }
+  pre {
+    padding: 12px 12px;
+    font-size: 12px;
+    margin: 14px 0;
+    border-radius: 6px;
+  }
+  code:not(pre code) {
+    font-size: 12px;
+    padding: 1px 4px;
+  }
+  .toast {
+    max-width: 88vw;
+    font-size: 12px;
+    padding: 8px 16px;
+    bottom: max(env(safe-area-inset-bottom, 16px), 20px);
   }
 }
 
@@ -578,11 +782,11 @@ hr {
             <span class="filter-label">快捷操作：</span>
             <button class="filter" id="btnCopyMd" onclick="copyRawMarkdown()">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-                <span>复制原始 Markdown</span>
+                <span>复制 Markdown</span>
             </button>
             <button class="filter" id="btnPrint" onclick="window.print()">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
-                <span>打印 / 另存为 PDF</span>
+                <span>打印 / PDF</span>
             </button>
             <button class="filter" id="btnTheme" onclick="cyclePaperTone()">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.9 0 1.6-.7 1.6-1.7 0-.4-.2-.8-.4-1.1-.3-.3-.4-.7-.4-1.1 0-.9.7-1.7 1.7-1.7h2c3 0 5.5-2.5 5.5-5.5C22 6 17.5 2 12 2z"></path><circle cx="7.5" cy="11.5" r="1.5" fill="currentColor"></circle><circle cx="12" cy="7.5" r="1.5" fill="currentColor"></circle><circle cx="16.5" cy="11.5" r="1.5" fill="currentColor"></circle></svg>
@@ -633,11 +837,20 @@ hr {
             ta.value = text;
             ta.style.position = "fixed";
             ta.style.opacity = "0";
+            ta.style.fontSize = "16px";
             document.body.appendChild(ta);
+            ta.focus();
             ta.select();
+            if (ta.setSelectionRange) {
+                ta.setSelectionRange(0, 999999);
+            }
             try {
-                document.execCommand('copy');
-                showToast("Markdown 原文已成功复制到剪贴板！");
+                var successful = document.execCommand('copy');
+                if (successful) {
+                    showToast("Markdown 原文已成功复制到剪贴板！");
+                } else {
+                    showToast("复制失败，请手动选取。");
+                }
             } catch (err) {
                 showToast("复制失败，请手动选取。");
             }

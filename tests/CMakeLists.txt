@@ -7,6 +7,7 @@ add_executable(unit_tests
     DictEngineTest.cpp
     DictFormatterTest.cpp
     MarkdownFormatterTest.cpp
+    HtmlExporterTest.cpp
     VersionCheckerTest.cpp
     DocumentPipelineTest.cpp
     ${CMAKE_SOURCE_DIR}/src/core/Logger.cpp
@@ -25,6 +26,7 @@ add_executable(unit_tests
     ${CMAKE_SOURCE_DIR}/src/core/dict/DictFormatter.cpp
     ${CMAKE_SOURCE_DIR}/src/core/dict/DictEngine.cpp
     ${CMAKE_SOURCE_DIR}/src/core/markdown/MarkdownFormatter.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/markdown/HtmlExporter.cpp
     ${CMAKE_SOURCE_DIR}/src/core/PlatformHelper.cpp
     ${CMAKE_SOURCE_DIR}/src/core/pdf/PdfHelper.cpp
     ${CMAKE_SOURCE_DIR}/src/core/document/DocumentPipeline.cpp

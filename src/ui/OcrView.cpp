@@ -3,6 +3,7 @@
 #include "core/WinTtsHelper.hpp"
 #include "core/pdf/PdfHelper.hpp"
 #include "core/document/DocumentPipeline.hpp"
+#include "core/markdown/HtmlExporter.hpp"
 #include "engine/DocLayoutEngine.hpp"
 #include "theme/IconManager.hpp"
 #include "theme/Theme.hpp"
@@ -455,7 +456,9 @@ void OcrView::InitUI() {
 
     m_resultCard->AddToolIcon(3, SVG::FOLDER_OPEN, L"打开输出文件夹", [this]() { OpenOutputDir(); });
 
-    m_resultCard->AddToolIcon(4, SVG::CLEAR, L"清空内容", [this]() {
+    m_resultCard->AddToolIcon(4, SVG::EXPORT, L"导出为独立网页 (HTML)", [this]() { ExportToHtml(); });
+
+    m_resultCard->AddToolIcon(5, SVG::CLEAR, L"清空内容", [this]() {
         if (!m_resultCard)
             return;
         WinTtsHelper::GetInstance().Stop();
@@ -1244,6 +1247,79 @@ void OcrView::OpenOutputDir() {
         return;
     }
     wxLaunchDefaultApplication(m_lastOutputDir);
+}
+
+void OcrView::ExportToHtml() {
+    wxString textToExport = m_lastMarkdownResult;
+    if (textToExport.IsEmpty() && m_resultCard && m_resultCard->GetTextCtrl()) {
+        textToExport = m_resultCard->GetTextCtrl()->GetValue();
+    }
+    if (textToExport.IsEmpty()) {
+        wxMessageBox(L"当前暂无 OCR 识别结果可导出！", L"提示", wxOK | wxICON_INFORMATION, this);
+        return;
+    }
+
+    // 默认保存文件名
+    wxString defaultFileName = L"OCR_解析结果.html";
+    if (!m_loadedImagePath.IsEmpty()) {
+        wxFileName inputFn(m_loadedImagePath);
+        defaultFileName = inputFn.GetName() + L".html";
+    }
+
+    // 默认保存目录
+    wxString defaultDir = wxEmptyString;
+    if (!m_lastOutputDir.IsEmpty() && wxDirExists(m_lastOutputDir)) {
+        defaultDir = m_lastOutputDir;
+    } else if (!m_loadedImagePath.IsEmpty()) {
+        defaultDir = wxFileName(m_loadedImagePath).GetPath();
+    }
+
+    wxFileDialog saveFileDialog(
+        this,
+        L"导出为单文件 HTML 网页",
+        defaultDir,
+        defaultFileName,
+        L"HTML 网页 (*.html;*.htm)|*.html;*.htm",
+        wxFD_SAVE | wxFD_OVERWRITE_PROMPT
+    );
+
+    if (saveFileDialog.ShowModal() == wxID_CANCEL) {
+        return;
+    }
+
+    wxString savePath = saveFileDialog.GetPath();
+    wxString docTitle = wxFileName(savePath).GetName();
+
+    std::string baseDir = std::string(m_lastOutputDir.ToUTF8().data());
+    if (baseDir.empty() && !m_loadedImagePath.IsEmpty()) {
+        wxFileName fn(m_loadedImagePath);
+        baseDir = std::string((fn.GetPath() + "/" + fn.GetName()).ToUTF8().data());
+    }
+
+    bool success = HtmlExporter::ExportToStandaloneHtml(
+        std::string(textToExport.ToUTF8().data()),
+        baseDir,
+        std::string(savePath.ToUTF8().data()),
+        std::string(docTitle.ToUTF8().data())
+    );
+
+    if (success) {
+        int res = wxMessageBox(
+            L"已成功导出单文件 HTML 网页！\n\n"
+            L"• 保存路径: " + savePath + L"\n"
+            L"• 所有排版、公式、表格及截图已完全内嵌\n"
+            L"• 零网络依赖，任何浏览器双击即开\n\n"
+            L"是否立即在浏览器中打开查看？",
+            L"导出成功",
+            wxYES_NO | wxICON_INFORMATION,
+            this
+        );
+        if (res == wxYES) {
+            wxLaunchDefaultApplication(savePath);
+        }
+    } else {
+        wxMessageBox(L"导出 HTML 失败，请检查文件写入权限或磁盘空间。", L"错误", wxOK | wxICON_ERROR, this);
+    }
 }
 
 bool OcrView::PasteImageFromClipboard() {

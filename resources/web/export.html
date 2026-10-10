@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{TITLE}}</title>
+    <!-- KaTeX 数学公式矢量渲染样式 (内联) -->
+    <style id="katex-style">
+{{KATEX_CSS}}
+    </style>
+    <!-- 宣纸书卷雅致风格样式 (古籍宋体/水墨/赭石配色) -->
+    <style>
+:root {
+  --bg: #f5f1e8;
+  --card: #ffffff;
+  --ink: #2a2520;
+  --ink-light: #6b6355;
+  --accent: #8b4513;
+  --line: #e0d8c8;
+  --water: #3a6b8b;
+  --siege: #a63d3d;
+  --rebel: #b86b2f;
+  --bandit: #8b3a3a;
+  --pacify: #3a7a5b;
+  --admin: #6b6b6b;
+  --essay: #8b6b3a;
+}
+
+[data-tone="pure"] {
+  --bg: #fafafa;
+  --card: #ffffff;
+  --line: #e5e5e5;
+}
+
+[data-tone="bamboo"] {
+  --bg: #f2f6f3;
+  --card: #ffffff;
+  --line: #d8e4dc;
+  --accent: #2e694c;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: "Songti SC", "SimSun", "Noto Serif SC", "STSong", "Microsoft YaHei", serif;
+  background: var(--bg);
+  color: var(--ink);
+  line-height: 1.75;
+  padding: 32px 20px 80px;
+  max-width: 1180px;
+  margin: 0 auto;
+  transition: background 0.2s ease;
+}
+
+header {
+  text-align: center;
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 2px solid var(--line);
+}
+
+h1 {
+  font-size: 28px;
+  letter-spacing: 2px;
+  color: #3a2a1a;
+  margin-bottom: 8px;
+  font-weight: 700;
+}
+
+.subtitle {
+  font-size: 14px;
+  color: var(--ink-light);
+  letter-spacing: 1px;
+}
+
+/* 顶部交互工具栏 */
+.toolbar {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px 18px;
+  margin-bottom: 22px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 20px;
+  align-items: center;
+  box-shadow: 0 1px 4px rgba(0,0,0,.04);
+}
+
+.filter-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.filter-label {
+  font-size: 13px;
+  color: var(--ink-light);
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+
+.filter {
+  font-family: inherit;
+  font-size: 13px;
+  padding: 4px 13px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink-light);
+  cursor: pointer;
+  transition: .15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 1.4;
+}
+
+.filter:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.filter.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.filter .btn-icon {
+  width: 14px;
+  height: 14px;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+.toggle-group {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.stats {
+  font-size: 13px;
+  color: var(--ink-light);
+  letter-spacing: .5px;
+}
+
+.stats b {
+  color: var(--accent);
+  font-size: 14px;
+}
+
+/* 主文档卡片 */
+.content-panel {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 36px 48px;
+  box-shadow: 0 1px 6px rgba(0,0,0,.04);
+  word-wrap: break-word;
+  position: relative;
+}
+
+/* 原文/译文/校勘 特殊卡片样式 */
+.original {
+  font-size: 14px;
+  color: #3a3530;
+  background: #faf7f0;
+  border-left: 3px solid #d4c9b8;
+  border-radius: 0 4px 4px 0;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  line-height: 1.85;
+  letter-spacing: .3px;
+}
+
+.original::before {
+  content: '原';
+  display: inline-block;
+  font-size: 11px;
+  color: #a89880;
+  border: 1px solid #d4c9b8;
+  border-radius: 2px;
+  padding: 0 4px;
+  margin-right: 8px;
+  vertical-align: 1px;
+}
+
+.translation {
+  font-size: 14px;
+  color: #4a4540;
+  line-height: 1.85;
+  margin-bottom: 12px;
+  letter-spacing: .3px;
+}
+
+.translation::before {
+  content: '译';
+  display: inline-block;
+  font-size: 11px;
+  color: #9ab8a0;
+  border: 1px solid #b8d4be;
+  border-radius: 2px;
+  padding: 0 4px;
+  margin-right: 8px;
+  vertical-align: 1px;
+}
+
+.annotation {
+  margin-top: 10px;
+  padding: 10px 14px;
+  background: #fdf9ec;
+  border: 1px solid #efe0b8;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #7a6010;
+  line-height: 1.7;
+}
+
+.annotation::before {
+  content: '⚑ 校勘';
+  display: block;
+  font-size: 11px;
+  font-weight: bold;
+  color: #b8922a;
+  margin-bottom: 4px;
+  letter-spacing: 1px;
+}
+
+/* 标签体系 */
+.card-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.date {
+  font-size: 14px;
+  font-weight: bold;
+  color: var(--accent);
+  letter-spacing: 1px;
+}
+
+.type-tag {
+  font-size: 12px;
+  padding: 2px 10px;
+  border-radius: 10px;
+  color: #fff;
+  letter-spacing: 1px;
+}
+.type-tag[data-t="水战"] { background: var(--water); }
+.type-tag[data-t="攻城"] { background: var(--siege); }
+.type-tag[data-t="民变"] { background: var(--rebel); }
+.type-tag[data-t="匪患"] { background: var(--bandit); }
+.type-tag[data-t="剿抚"] { background: var(--pacify); }
+.type-tag[data-t="团练善后"] { background: var(--admin); }
+.type-tag[data-t="方志论"] { background: var(--essay); }
+.type-tag[data-t="屠戮"] { background: #6b1a1a; }
+
+.warn-tag {
+  font-size: 12px;
+  padding: 2px 10px;
+  border-radius: 10px;
+  background: #fdf3d8;
+  color: #8a6a10;
+  border: 1px solid #e8d48a;
+  letter-spacing: .5px;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 12.5px;
+  color: var(--ink-light);
+  padding-top: 10px;
+  border-top: 1px dashed var(--line);
+  margin-top: 12px;
+}
+
+/* 正文 Markdown 标题排版 */
+#content h1, #content h2, #content h3, #content h4, #content h5, #content h6 {
+  color: #3a2a1a;
+  font-weight: 700;
+  line-height: 1.4;
+  margin-top: 26px;
+  margin-bottom: 12px;
+}
+
+#content h1 {
+  font-size: 24px;
+  letter-spacing: 1px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--line);
+}
+
+#content h2 {
+  font-size: 20px;
+  letter-spacing: 0.8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+}
+
+#content h3 {
+  font-size: 17px;
+  color: var(--accent);
+  letter-spacing: 0.5px;
+}
+
+#content h4 { font-size: 15px; }
+#content h5 { font-size: 14px; }
+#content h6 { font-size: 13px; color: var(--ink-light); }
+
+#content p {
+  margin-top: 0;
+  margin-bottom: 14px;
+  text-align: justify;
+}
+
+#content a {
+  color: var(--water);
+  text-decoration: none;
+  border-bottom: 1px dashed var(--water);
+}
+#content a:hover {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+#content strong {
+  font-weight: 700;
+  color: #241c14;
+}
+
+#content em {
+  font-style: italic;
+  font-family: inherit;
+}
+
+/* 古风排版引用块 (Blockquote) */
+#content blockquote {
+  background: #faf7f0;
+  border-left: 4px solid var(--accent);
+  border-radius: 0 6px 6px 0;
+  padding: 12px 18px;
+  margin: 16px 0;
+  color: #4a4540;
+}
+#content blockquote p {
+  margin-bottom: 8px;
+}
+#content blockquote p:last-child {
+  margin-bottom: 0;
+}
+
+/* 表格优雅样式 (GFM & OTSL 表格) */
+.table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  margin: 20px 0;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+th {
+  background: #faf7f0;
+  color: var(--accent);
+  font-weight: 700;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  text-align: left;
+}
+
+td {
+  padding: 9px 14px;
+  border: 1px solid var(--line);
+  color: var(--ink);
+}
+
+tbody tr:nth-child(even) td {
+  background: #faf8f3;
+}
+
+tbody tr:hover td {
+  background: #f3ece0;
+}
+
+/* 列表样式 */
+#content ul, #content ol {
+  padding-left: 26px;
+  margin-bottom: 14px;
+}
+
+#content li {
+  margin-bottom: 6px;
+}
+
+#content li::marker {
+  color: var(--accent);
+}
+
+/* 行内代码与代码块 */
+code:not(pre code) {
+  background: #ebe4d5;
+  color: #6b2a1a;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: "Fira Code", Consolas, "Courier New", monospace;
+  font-size: 13px;
+}
+
+pre {
+  background: #2a2520;
+  color: #f5f1e8;
+  padding: 16px 20px;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 18px 0;
+  border: 1px solid #4a4035;
+  line-height: 1.6;
+}
+
+pre code {
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  font-family: "Fira Code", Consolas, "Courier New", monospace;
+  font-size: 13px;
+}
+
+/* 图片居中与投影 */
+#content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  margin: 14px auto;
+  display: block;
+}
+
+/* 分割线 */
+hr {
+  border: none;
+  border-top: 1px solid var(--line);
+  margin: 24px 0;
+}
+
+/* LaTeX / ULEM 文本修饰 (波浪线、下划线、删除线) */
+.wavy-underline, .katex .wavy-underline {
+  text-decoration: underline wavy currentColor !important;
+  text-decoration-skip-ink: none !important;
+  text-underline-offset: 4px !important;
+}
+.single-underline, .katex .single-underline {
+  text-decoration: underline solid currentColor !important;
+  text-decoration-skip-ink: none !important;
+  text-underline-offset: 3px !important;
+}
+.double-underline, .katex .double-underline {
+  text-decoration: underline double currentColor !important;
+  text-underline-offset: 3px !important;
+}
+.dashed-underline, .katex .dashed-underline {
+  text-decoration: underline dashed currentColor !important;
+}
+.dotted-underline, .katex .dotted-underline {
+  text-decoration: underline dotted currentColor !important;
+}
+.strikethrough-line, .katex .strikethrough-line {
+  text-decoration: line-through solid currentColor !important;
+}
+
+/* 复制反馈气泡 */
+.toast {
+  position: fixed;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(42, 37, 32, 0.92);
+  color: #f5f1e8;
+  padding: 10px 22px;
+  border-radius: 20px;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+  z-index: 9999;
+}
+.toast.show {
+  opacity: 1;
+}
+
+/* 响应式排版适配 */
+@media (max-width: 768px) {
+  body {
+    padding: 18px 12px 60px;
+  }
+  h1 {
+    font-size: 22px;
+  }
+  .toolbar {
+    padding: 12px 14px;
+    gap: 12px;
+  }
+  .toggle-group {
+    margin-left: 0;
+    width: 100%;
+    justify-content: flex-end;
+  }
+  .content-panel {
+    padding: 20px 16px;
+    border-radius: 8px;
+  }
+}
+
+/* 打印与另存为 PDF 纯净模式 */
+@media print {
+  body {
+    background: #ffffff !important;
+    padding: 0;
+    max-width: 100%;
+  }
+  .toolbar, header .subtitle {
+    display: none !important;
+  }
+  .content-panel {
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+  }
+  header {
+    border-bottom: 1px solid #000;
+    margin-bottom: 18px;
+    padding-bottom: 12px;
+  }
+  h1 {
+    color: #000 !important;
+  }
+}
+    </style>
+
+    <!-- 内联 marked.js 编译引擎 -->
+    <script id="marked-script">
+{{MARKED_JS}}
+    </script>
+    <!-- 内联 katex.min.js 数学公式编译器 -->
+    <script id="katex-script">
+{{KATEX_JS}}
+    </script>
+    <!-- 共享 Markdown 与公式渲染引擎 (内联) -->
+    <script id="render-script">
+{{RENDER_JS}}
+    </script>
+</head>
+<body>
+    <header>
+        <h1>{{TITLE}}</h1>
+        <div class="subtitle">LinguaAlpaca 文档解析结果 · 视觉与结构化重构</div>
+    </header>
+
+    <div class="toolbar">
+        <div class="filter-group">
+            <span class="filter-label">快捷操作：</span>
+            <button class="filter" id="btnCopyMd" onclick="copyRawMarkdown()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                <span>复制原始 Markdown</span>
+            </button>
+            <button class="filter" id="btnPrint" onclick="window.print()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+                <span>打印 / 另存为 PDF</span>
+            </button>
+            <button class="filter" id="btnTheme" onclick="cyclePaperTone()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.9 0 1.6-.7 1.6-1.7 0-.4-.2-.8-.4-1.1-.3-.3-.4-.7-.4-1.1 0-.9.7-1.7 1.7-1.7h2c3 0 5.5-2.5 5.5-5.5C22 6 17.5 2 12 2z"></path><circle cx="7.5" cy="11.5" r="1.5" fill="currentColor"></circle><circle cx="12" cy="7.5" r="1.5" fill="currentColor"></circle><circle cx="16.5" cy="11.5" r="1.5" fill="currentColor"></circle></svg>
+                <span>切换纸色</span>
+            </button>
+        </div>
+        <div class="toggle-group">
+            <div class="stats">
+                共 <b>{{CHAR_COUNT}}</b> 字符 ｜ 导出时间：<span>{{TIME}}</span>
+            </div>
+        </div>
+    </div>
+
+    <main class="content-panel">
+        <div id="content"></div>
+    </main>
+
+    <div class="toast" id="toastBox">提示信息</div>
+
+    <script>
+        var rawMarkdown = {{RAW_MARKDOWN_JSON}};
+
+        function showToast(msg) {
+            var box = document.getElementById('toastBox');
+            if (!box) return;
+            box.innerText = msg;
+            box.classList.add('show');
+            setTimeout(function() {
+                box.classList.remove('show');
+            }, 2000);
+        }
+
+        function copyRawMarkdown() {
+            if (!rawMarkdown) return;
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(rawMarkdown).then(function() {
+                    showToast("Markdown 原文已成功复制到剪贴板！");
+                }).catch(function() {
+                    fallbackCopy(rawMarkdown);
+                });
+            } else {
+                fallbackCopy(rawMarkdown);
+            }
+        }
+
+        function fallbackCopy(text) {
+            var ta = document.createElement("textarea");
+            ta.value = text;
+            ta.style.position = "fixed";
+            ta.style.opacity = "0";
+            document.body.appendChild(ta);
+            ta.select();
+            try {
+                document.execCommand('copy');
+                showToast("Markdown 原文已成功复制到剪贴板！");
+            } catch (err) {
+                showToast("复制失败，请手动选取。");
+            }
+            document.body.removeChild(ta);
+        }
+
+        // 宣纸色泽平滑切换 (古纸 / 纯白 / 晴竹)
+        var currentToneIndex = 0;
+        var toneList = ["", "pure", "bamboo"];
+        var toneNames = ["宣纸素雅", "纯白明洁", "晴竹淡绿"];
+
+        function cyclePaperTone() {
+            currentToneIndex = (currentToneIndex + 1) % toneList.length;
+            var t = toneList[currentToneIndex];
+            if (t) {
+                document.documentElement.setAttribute('data-tone', t);
+            } else {
+                document.documentElement.removeAttribute('data-tone');
+            }
+            showToast("已切换底色为：" + toneNames[currentToneIndex]);
+        }
+
+        // 自启动渲染
+        function doRender() {
+            if (typeof renderMarkdown === 'function') {
+                renderMarkdown(rawMarkdown, "", false);
+            }
+        }
+
+        if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", doRender);
+        } else {
+            doRender();
+        }
+    </script>
+</body>
+</html>

@@ -77,6 +77,7 @@ private:
 
     void DoExecuteDocumentPipeline(const std::string& docPath);
     void OpenOutputDir();
+    void ExportToHtml();
 
     void SetState(OcrTaskState state);
     void LoadImageFile(const wxString& filePath);

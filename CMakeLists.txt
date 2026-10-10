@@ -119,6 +119,8 @@ set(CORE_SOURCES
     src/core/dict/DictEngine.cpp
     src/core/markdown/MarkdownFormatter.hpp
     src/core/markdown/MarkdownFormatter.cpp
+    src/core/markdown/HtmlExporter.hpp
+    src/core/markdown/HtmlExporter.cpp
     src/core/PlatformHelper.hpp
     src/core/PlatformHelper.cpp
     src/core/pdf/PdfHelper.hpp

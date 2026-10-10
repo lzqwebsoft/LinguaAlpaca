@@ -31,6 +31,12 @@ public:
 
     TextCtrl* GetTextCtrl() const;
     MarkdownView* GetMarkdownView() const { return m_markdownView; }
+    wxString GetRenderedHtml() const {
+        if (m_markdownView) {
+            return m_markdownView->GetRenderedHtml();
+        }
+        return wxString();
+    }
 
     void SetContent(const std::string& text, bool preserveScroll = false);
     void SetMarkdown(const std::string& markdown, const std::string& baseDir = "", bool preserveScroll = false);

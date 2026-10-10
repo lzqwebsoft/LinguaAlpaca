@@ -352,7 +352,12 @@ std::string HtmlExporter::EmbedLocalImagesAsBase64(const std::string& md, const 
 wxString HtmlExporter::GetWebResourcesDir() {
     std::vector<wxString> candidates;
 
-    // 1. 可执行程序同级与各级上级路径
+    // 1. 开发环境源码树工作目录相对路径查找 (优先开发阶段源码树最新文件)
+    candidates.push_back("resources/web");
+    candidates.push_back("../resources/web");
+    candidates.push_back("../../resources/web");
+
+    // 2. 可执行程序同级与各级上级路径
     wxFileName execFn(wxStandardPaths::Get().GetExecutablePath());
     wxString dir = execFn.GetPath();
     candidates.push_back(dir + "/resources/web");
@@ -361,15 +366,10 @@ wxString HtmlExporter::GetWebResourcesDir() {
     candidates.push_back(dir + "/../../../resources/web");
 
 #ifdef __APPLE__
-    // 2. macOS App Bundle 资源目录查找
+    // 3. macOS App Bundle 资源目录查找
     candidates.push_back(wxStandardPaths::Get().GetResourcesDir() + "/resources/web");
     candidates.push_back(wxStandardPaths::Get().GetResourcesDir() + "/resources");
 #endif
-
-    // 3. 开发环境源码树工作目录相对路径查找
-    candidates.push_back("resources/web");
-    candidates.push_back("../resources/web");
-    candidates.push_back("../../resources/web");
 
     // 第一轮：严格寻找包含 export.html 的目录
     for (const auto& c : candidates) {
@@ -391,7 +391,8 @@ wxString HtmlExporter::GetWebResourcesDir() {
 std::string HtmlExporter::GenerateStandaloneHtml(
     const std::string& markdown,
     const std::string& baseDir,
-    const std::string& title
+    const std::string& title,
+    const std::string& preRenderedHtml
 ) {
     // 1. 本地图片内联嵌入 Base64
     std::string processedMd = EmbedLocalImagesAsBase64(markdown, baseDir);
@@ -443,6 +444,7 @@ std::string HtmlExporter::GenerateStandaloneHtml(
         ReplaceAll(html, "{{MARKED_JS}}", s_cachedAssets.markedJs);
         ReplaceAll(html, "{{KATEX_JS}}", s_cachedAssets.katexJs);
         ReplaceAll(html, "{{RENDER_JS}}", s_cachedAssets.renderJs);
+        ReplaceAll(html, "{{RENDERED_CONTENT}}", preRenderedHtml);
         ReplaceAll(html, "{{RAW_MARKDOWN_JSON}}", jsonMd);
 
         return html;
@@ -469,11 +471,12 @@ std::string HtmlExporter::GenerateStandaloneHtml(
         "        <h1 style='color:#3a2a1a;font-size:26px;'>" + safeTitle + "</h1>\n"
         "        <div style='color:#6b6355;font-size:13px;'>LinguaAlpaca 文档解析结果</div>\n"
         "    </header>\n"
-        "    <main class='content-panel'><div id='content'></div></main>\n"
+        "    <main class='content-panel'><div id='content'>" + preRenderedHtml + "</div></main>\n"
         "    <script>\n"
         "        var rawMarkdownData = " + jsonMd + ";\n"
         "        function renderMarkdown(md) {\n"
-        "            if (typeof marked !== 'undefined') document.getElementById('content').innerHTML = marked.parse(md);\n"
+        "            var el = document.getElementById('content');\n"
+        "            if ((!el || !el.innerHTML.trim()) && typeof marked !== 'undefined') el.innerHTML = marked.parse(md);\n"
         "        }\n"
         "        renderMarkdown(rawMarkdownData);\n"
         "    </script>\n"
@@ -487,7 +490,8 @@ bool HtmlExporter::ExportToStandaloneHtml(
     const std::string& markdown,
     const std::string& baseDir,
     const std::string& outputPath,
-    const std::string& title
+    const std::string& title,
+    const std::string& preRenderedHtml
 ) {
     if (outputPath.empty()) {
         LOG_WARN("HtmlExporter", "Export failed: output path is empty");
@@ -507,7 +511,7 @@ bool HtmlExporter::ExportToStandaloneHtml(
             return false;
         }
 
-        std::string html = GenerateStandaloneHtml(markdown, baseDir, title);
+        std::string html = GenerateStandaloneHtml(markdown, baseDir, title, preRenderedHtml);
         if (file.Write(html.data(), html.size()) != html.size()) {
             LOG_ERROR("HtmlExporter", "Failed to write complete HTML content: " + outputPath);
             return false;

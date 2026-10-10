@@ -1296,11 +1296,17 @@ void OcrView::ExportToHtml() {
         baseDir = std::string((fn.GetPath() + "/" + fn.GetName()).ToUTF8().data());
     }
 
+    wxString preRenderedHtml;
+    if (m_resultCard) {
+        preRenderedHtml = m_resultCard->GetRenderedHtml();
+    }
+
     bool success = HtmlExporter::ExportToStandaloneHtml(
         std::string(textToExport.ToUTF8().data()),
         baseDir,
         std::string(savePath.ToUTF8().data()),
-        std::string(docTitle.ToUTF8().data())
+        std::string(docTitle.ToUTF8().data()),
+        std::string(preRenderedHtml.ToUTF8().data())
     );
 
     if (success) {

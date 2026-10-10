@@ -50,6 +50,12 @@ public:
     wxString GetPlainText() const;
     size_t GetCharacterCount() const { return m_rawMarkdown.size(); }
 
+    /**
+     * @brief 获取当前 WebView 内部已渲染完成的完整静态 HTML (即 #content 容器的 innerHTML)
+     * @return 包含公式 MathML、OTSL 表格、样式及 Base64 图片的静态 HTML 字符串
+     */
+    wxString GetRenderedHtml() const;
+
     // 主题与样式
     void UpdateTheme();
 

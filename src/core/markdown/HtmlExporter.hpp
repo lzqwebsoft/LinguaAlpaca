@@ -24,13 +24,15 @@ public:
      * @param baseDir 图片等相对资源的基准路径（如 outputDir，可为空）
      * @param outputPath 输出的目标 .html 文件绝对路径
      * @param title 文档标题（默认为 "OCR 解析文档"）
+     * @param preRenderedHtml 宿主已预渲染的静态 HTML (可选，直接填入正文容器，支持 iPhone 零脚本环境阅读)
      * @return 导出成功返回 true，否则返回 false
      */
     static bool ExportToStandaloneHtml(
         const std::string& markdown,
         const std::string& baseDir,
         const std::string& outputPath,
-        const std::string& title = "OCR 解析文档"
+        const std::string& title = "OCR 解析文档",
+        const std::string& preRenderedHtml = ""
     );
 
     /**
@@ -38,12 +40,14 @@ public:
      * @param markdown 原始 Markdown 文本
      * @param baseDir 相对资源基准路径
      * @param title 文档标题
+     * @param preRenderedHtml 宿主已预渲染的静态 DOM 内容 (可选，直接注入到 #content 容器)
      * @return 完整 HTML 网页内容
      */
     static std::string GenerateStandaloneHtml(
         const std::string& markdown,
         const std::string& baseDir,
-        const std::string& title = "OCR 解析文档"
+        const std::string& title = "OCR 解析文档",
+        const std::string& preRenderedHtml = ""
     );
 
     /**

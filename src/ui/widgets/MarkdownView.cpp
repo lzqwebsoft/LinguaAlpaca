@@ -406,6 +406,17 @@ wxString MarkdownView::GetPlainText() const {
     return wxString::FromUTF8(m_rawMarkdown);
 }
 
+wxString MarkdownView::GetRenderedHtml() const {
+    if (!m_webView || !m_isWebViewReady) {
+        return wxEmptyString;
+    }
+    wxString html;
+    if (m_webView->RunScript("document.getElementById('content') ? document.getElementById('content').innerHTML : '';", &html)) {
+        return html;
+    }
+    return wxEmptyString;
+}
+
 void MarkdownView::UpdateTheme() {
     auto palette = ThemeColors::GetCurrentPalette();
     SetBackgroundColour(palette.cardBg);

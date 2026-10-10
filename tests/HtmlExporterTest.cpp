@@ -32,6 +32,14 @@ TEST_CASE("HtmlExporter - Generate Standalone HTML", "[core][markdown][html_expo
         // </ 必须被安全转义为 <\/
         REQUIRE(html.find("</script><script>") == std::string::npos);
     }
+
+    SECTION("Embeds pre-rendered HTML DOM directly into content container for zero-JS viewing") {
+        std::string sampleMd = "# 原文";
+        std::string staticDom = "<h1>静态预渲染标题</h1><p>无需JS即可在iOS上阅读的段落</p>";
+        std::string html = HtmlExporter::GenerateStandaloneHtml(sampleMd, "", "iOS 兼容文档", staticDom);
+
+        REQUIRE(html.find("<div id=\"content\">" + staticDom + "</div>") != std::string::npos);
+    }
 }
 
 TEST_CASE("HtmlExporter - Export to File on Disk", "[core][markdown][html_exporter]") {

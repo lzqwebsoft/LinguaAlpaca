@@ -597,7 +597,7 @@ hr {
     </div>
 
     <main class="content-panel">
-        <div id="content"></div>
+        <div id="content">{{RENDERED_CONTENT}}</div>
     </main>
 
     <div class="toast" id="toastBox">提示信息</div>
@@ -660,10 +660,13 @@ hr {
             showToast("已切换底色为：" + toneNames[currentToneIndex]);
         }
 
-        // 自启动渲染
+        // 自启动渲染：若宿主已预渲染好静态 DOM 内容，则无需重复执行；仅在容器为空时执行客户端渲染兜底
         function doRender() {
-            if (typeof renderMarkdown === 'function') {
-                renderMarkdown(rawMarkdown, "", false);
+            var contentEl = document.getElementById('content');
+            if (!contentEl || !contentEl.innerHTML.trim()) {
+                if (typeof renderMarkdown === 'function') {
+                    renderMarkdown(rawMarkdown, "", false);
+                }
             }
         }
 

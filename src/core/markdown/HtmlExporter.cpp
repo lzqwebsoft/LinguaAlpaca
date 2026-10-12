@@ -399,14 +399,21 @@ std::string HtmlExporter::GenerateStandaloneHtml(
     const std::string& title,
     const std::string& preRenderedHtml
 ) {
-    // 1. 本地图片内联嵌入 Base64
-    std::string processedMd = EmbedLocalImagesAsBase64(markdown, baseDir);
+    bool hasPreRenderedDom = !preRenderedHtml.empty();
 
-    // 2. 将 Markdown 转为安全 JSON 字符串字面量，防止 </script> 语法断裂
-    std::string jsonMd = nlohmann::json(processedMd).dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
-    ReplaceAll(jsonMd, "</", "<\\/");
+    // 1. 若宿主未提供 preRenderedHtml，才需要处理 Markdown 并转为客户端渲染 JSON；
+    //    若已提供 preRenderedHtml，则去除冗余 Markdown 原文（避免文档和 Base64 图片在 HTML 和 JS 里重复存储两份），
+    //    从而显著缩减导出的 HTML 单文件体积并加快移动端加载速度。
+    std::string jsonMd;
+    if (!hasPreRenderedDom) {
+        std::string processedMd = EmbedLocalImagesAsBase64(markdown, baseDir);
+        jsonMd = nlohmann::json(processedMd).dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
+        ReplaceAll(jsonMd, "</", "<\\/");
+    } else {
+        jsonMd = "null";
+    }
 
-    // 3. 读取本地静态模板 export.html 与离线脚本/样式
+    // 2. 读取本地静态模板 export.html 与离线脚本/样式
     {
         std::lock_guard<std::mutex> lock(s_assetsMutex);
         if (!s_cachedAssets.loaded) {
@@ -438,7 +445,7 @@ std::string HtmlExporter::GenerateStandaloneHtml(
     std::string timeStr = std::string(nowTimeStr.ToUTF8().data());
     std::string charCountStr = std::to_string(markdown.size());
 
-    // 4. 使用外部文件模板 export.html 进行占位符动态填充 (完全零 C++ 硬编码)
+    // 3. 使用外部文件模板 export.html 进行占位符动态填充 (完全零 C++ 硬编码)
     if (s_cachedAssets.loaded && !s_cachedAssets.exportHtml.empty()) {
         std::string html = s_cachedAssets.exportHtml;
 
@@ -446,9 +453,10 @@ std::string HtmlExporter::GenerateStandaloneHtml(
         ReplaceAll(html, "{{TIME}}", timeStr);
         ReplaceAll(html, "{{CHAR_COUNT}}", charCountStr);
         ReplaceAll(html, "{{KATEX_CSS}}", s_cachedAssets.katexCss);
-        ReplaceAll(html, "{{MARKED_JS}}", s_cachedAssets.markedJs);
-        ReplaceAll(html, "{{KATEX_JS}}", s_cachedAssets.katexJs);
-        ReplaceAll(html, "{{RENDER_JS}}", s_cachedAssets.renderJs);
+        // 若已包含静态预渲染 DOM，无需嵌入巨大的编译引擎 JS (节省 ~330KB 体积)
+        ReplaceAll(html, "{{MARKED_JS}}", hasPreRenderedDom ? "" : s_cachedAssets.markedJs);
+        ReplaceAll(html, "{{KATEX_JS}}", hasPreRenderedDom ? "" : s_cachedAssets.katexJs);
+        ReplaceAll(html, "{{RENDER_JS}}", hasPreRenderedDom ? "" : s_cachedAssets.renderJs);
         ReplaceAll(html, "{{RENDERED_CONTENT}}", preRenderedHtml);
         ReplaceAll(html, "{{RAW_MARKDOWN_JSON}}", jsonMd);
 

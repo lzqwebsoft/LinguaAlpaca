@@ -42,21 +42,31 @@
 html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
   font-family: "Songti SC", "SimSun", "Noto Serif SC", "STSong", "Microsoft YaHei", serif;
+  font-size: 16px;
   background: var(--bg);
   color: var(--ink);
   line-height: 1.75;
-  padding: 32px 20px 80px;
-  padding-left: max(env(safe-area-inset-left, 0px), 20px);
-  padding-right: max(env(safe-area-inset-right, 0px), 20px);
-  padding-bottom: max(env(safe-area-inset-bottom, 20px), 80px);
+  width: 100%;
   max-width: 1180px;
-  margin: 0 auto;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  margin-top: 0;
+  margin-bottom: 0;
+  padding: 32px 20px 80px 20px;
+  padding-left: calc(20px + env(safe-area-inset-left, 0px));
+  padding-right: calc(20px + env(safe-area-inset-right, 0px));
+  padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
+  overflow-x: hidden;
   transition: background 0.2s ease;
   word-wrap: break-word;
   overflow-wrap: break-word;
@@ -64,13 +74,18 @@ body {
 
 header {
   text-align: center;
+  width: 100%;
+  max-width: 100%;
+  margin-left: auto;
+  margin-right: auto;
   margin-bottom: 24px;
   padding-bottom: 20px;
   border-bottom: 2px solid var(--line);
+  box-sizing: border-box;
 }
 
 h1 {
-  font-size: 28px;
+  font-size: 1.75em;
   letter-spacing: 2px;
   color: #3a2a1a;
   margin-bottom: 8px;
@@ -78,7 +93,7 @@ h1 {
 }
 
 .subtitle {
-  font-size: 14px;
+  font-size: 0.875em;
   color: var(--ink-light);
   letter-spacing: 1px;
 }
@@ -89,12 +104,17 @@ h1 {
   border: 1px solid var(--line);
   border-radius: 10px;
   padding: 14px 18px;
+  width: 100%;
+  max-width: 100%;
+  margin-left: auto;
+  margin-right: auto;
   margin-bottom: 22px;
   display: flex;
   flex-wrap: wrap;
   gap: 14px 20px;
   align-items: center;
   box-shadow: 0 1px 4px rgba(0,0,0,.04);
+  box-sizing: border-box;
 }
 
 .filter-group {
@@ -105,7 +125,7 @@ h1 {
 }
 
 .filter-label {
-  font-size: 13px;
+  font-size: 0.8125em;
   color: var(--ink-light);
   letter-spacing: 1px;
   white-space: nowrap;
@@ -113,7 +133,7 @@ h1 {
 
 .filter {
   font-family: inherit;
-  font-size: 13px;
+  font-size: 0.8125em;
   padding: 5px 14px;
   border-radius: 14px;
   border: 1px solid var(--line);
@@ -157,14 +177,14 @@ h1 {
 }
 
 .stats {
-  font-size: 13px;
+  font-size: 0.8125em;
   color: var(--ink-light);
   letter-spacing: .5px;
 }
 
 .stats b {
   color: var(--accent);
-  font-size: 14px;
+  font-size: 0.875em;
 }
 
 /* 主文档卡片 */
@@ -173,14 +193,20 @@ h1 {
   border: 1px solid var(--line);
   border-radius: 10px;
   padding: 36px 48px;
+  width: 100%;
+  max-width: 100%;
+  margin-left: auto;
+  margin-right: auto;
   box-shadow: 0 1px 6px rgba(0,0,0,.04);
   word-wrap: break-word;
+  overflow-wrap: break-word;
   position: relative;
+  box-sizing: border-box;
 }
 
 /* 原文/译文/校勘 特殊卡片样式 */
 .original {
-  font-size: 14px;
+  font-size: 0.875em;
   color: #3a3530;
   background: #faf7f0;
   border-left: 3px solid #d4c9b8;
@@ -194,7 +220,7 @@ h1 {
 .original::before {
   content: '原';
   display: inline-block;
-  font-size: 11px;
+  font-size: 0.78em;
   color: #a89880;
   border: 1px solid #d4c9b8;
   border-radius: 2px;
@@ -204,7 +230,7 @@ h1 {
 }
 
 .translation {
-  font-size: 14px;
+  font-size: 0.875em;
   color: #4a4540;
   line-height: 1.85;
   margin-bottom: 12px;
@@ -214,7 +240,7 @@ h1 {
 .translation::before {
   content: '译';
   display: inline-block;
-  font-size: 11px;
+  font-size: 0.78em;
   color: #9ab8a0;
   border: 1px solid #b8d4be;
   border-radius: 2px;
@@ -229,7 +255,7 @@ h1 {
   background: #fdf9ec;
   border: 1px solid #efe0b8;
   border-radius: 6px;
-  font-size: 13px;
+  font-size: 0.8125em;
   color: #7a6010;
   line-height: 1.7;
 }
@@ -237,7 +263,7 @@ h1 {
 .annotation::before {
   content: '⚑ 校勘';
   display: block;
-  font-size: 11px;
+  font-size: 0.85em;
   font-weight: bold;
   color: #b8922a;
   margin-bottom: 4px;
@@ -254,14 +280,14 @@ h1 {
 }
 
 .date {
-  font-size: 14px;
+  font-size: 0.875em;
   font-weight: bold;
   color: var(--accent);
   letter-spacing: 1px;
 }
 
 .type-tag {
-  font-size: 12px;
+  font-size: 0.75em;
   padding: 2px 10px;
   border-radius: 10px;
   color: #fff;
@@ -277,7 +303,7 @@ h1 {
 .type-tag[data-t="屠戮"] { background: #6b1a1a; }
 
 .warn-tag {
-  font-size: 12px;
+  font-size: 0.75em;
   padding: 2px 10px;
   border-radius: 10px;
   background: #fdf3d8;
@@ -290,14 +316,27 @@ h1 {
   display: flex;
   flex-wrap: wrap;
   gap: 14px;
-  font-size: 12.5px;
+  font-size: 0.78em;
   color: var(--ink-light);
   padding-top: 10px;
   border-top: 1px dashed var(--line);
   margin-top: 12px;
 }
 
-/* 正文 Markdown 标题排版 */
+/* -------------------------------------------------------------
+   正文 Markdown 渲染区域 (#content) 默认排版
+   纯声明式 CSS 规则驱动，统一采用 em 相对弹性阶梯，零 JavaScript 介入控制
+   预渲染 HTML 结构化直出，在手机端保持完美居中排版与舒适视距
+   ------------------------------------------------------------- */
+#content {
+  font-size: 1em;
+  line-height: 1.75;
+  color: var(--ink);
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  max-width: 100%;
+}
+
 #content h1, #content h2, #content h3, #content h4, #content h5, #content h6 {
   color: #3a2a1a;
   font-weight: 700;
@@ -307,32 +346,33 @@ h1 {
 }
 
 #content h1 {
-  font-size: 24px;
+  font-size: 1.5em;
   letter-spacing: 1px;
   padding-bottom: 8px;
   border-bottom: 2px solid var(--line);
 }
 
 #content h2 {
-  font-size: 20px;
+  font-size: 1.25em;
   letter-spacing: 0.8px;
   padding-bottom: 6px;
   border-bottom: 1px solid var(--line);
 }
 
 #content h3 {
-  font-size: 17px;
+  font-size: 1.0625em;
   color: var(--accent);
   letter-spacing: 0.5px;
 }
 
-#content h4 { font-size: 15px; }
-#content h5 { font-size: 14px; }
-#content h6 { font-size: 13px; color: var(--ink-light); }
+#content h4 { font-size: 0.9375em; }
+#content h5 { font-size: 0.875em; }
+#content h6 { font-size: 0.8125em; color: var(--ink-light); }
 
 #content p {
   margin-top: 0;
   margin-bottom: 14px;
+  font-size: 1em;
   text-align: justify;
 }
 
@@ -385,9 +425,19 @@ h1 {
 
 table {
   width: 100%;
-  min-width: 100%;
+  max-width: 100%;
   border-collapse: collapse;
-  font-size: 14px;
+  font-size: 0.875em;
+}
+
+/* 确保所有直接插入 #content 的表格均带平滑横向滚动，防止手机端内容被撑破导致偏向一侧无法居中 */
+.table-wrapper, #content table:not(.table-wrapper table) {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  box-sizing: border-box;
 }
 
 th {
@@ -434,7 +484,7 @@ code:not(pre code) {
   padding: 2px 6px;
   border-radius: 4px;
   font-family: "Fira Code", Consolas, "Courier New", monospace;
-  font-size: 13px;
+  font-size: 0.875em;
   word-break: break-word;
 }
 
@@ -456,7 +506,7 @@ pre code {
   color: inherit;
   padding: 0;
   font-family: "Fira Code", Consolas, "Courier New", monospace;
-  font-size: 13px;
+  font-size: 0.875em;
 }
 
 /* KaTeX 数学公式移动端自适应与平滑横向滚动 */
@@ -476,15 +526,16 @@ pre code {
   max-width: 100%;
 }
 
-/* 图片居中与投影 */
-#content img {
-  max-width: 100%;
-  height: auto;
+/* 图片居中与投影 (强制限制 100% 宽度，消除手机端图片撑开视口导致偏侧无法居中的兼容性隐患) */
+#content img, .content-panel img {
+  max-width: 100% !important;
+  height: auto !important;
   border-radius: 6px;
   border: 1px solid var(--line);
   box-shadow: 0 2px 8px rgba(0,0,0,0.06);
   margin: 14px auto;
   display: block;
+  box-sizing: border-box;
 }
 
 /* 分割线 */
@@ -523,14 +574,14 @@ hr {
 .toast {
   position: fixed;
   bottom: 30px;
-  bottom: max(env(safe-area-inset-bottom, 20px), 30px);
+  bottom: calc(30px + env(safe-area-inset-bottom, 0px));
   left: 50%;
   transform: translateX(-50%);
   background: rgba(42, 37, 32, 0.92);
   color: #f5f1e8;
   padding: 10px 22px;
   border-radius: 20px;
-  font-size: 13px;
+  font-size: 0.8125em;
   letter-spacing: 0.5px;
   box-shadow: 0 4px 16px rgba(0,0,0,0.18);
   opacity: 0;
@@ -550,8 +601,10 @@ hr {
    ========================================== */
 .toc-container {
   position: fixed;
-  left: max(env(safe-area-inset-left, 0px) + 24px, 24px);
-  bottom: max(env(safe-area-inset-bottom, 0px) + 24px, 24px);
+  left: 24px;
+  left: calc(24px + env(safe-area-inset-left, 0px));
+  bottom: 24px;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
   z-index: 999;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
 }
@@ -567,7 +620,7 @@ hr {
   border-radius: 24px;
   cursor: pointer;
   box-shadow: 0 4px 16px rgba(42, 37, 32, 0.12), 0 1px 3px rgba(0,0,0,0.06);
-  font-size: 13.5px;
+  font-size: 0.85em;
   font-weight: 500;
   letter-spacing: 0.5px;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
@@ -601,7 +654,7 @@ hr {
 }
 
 .toc-fab-badge {
-  font-size: 11px;
+  font-size: 0.75em;
   font-weight: 600;
   background: rgba(139, 69, 19, 0.1);
   color: var(--accent);
@@ -651,7 +704,7 @@ hr {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 13.5px;
+  font-size: 0.85em;
   font-weight: 600;
   color: var(--ink);
   letter-spacing: 0.5px;
@@ -695,12 +748,12 @@ hr {
   background: var(--ink-light);
 }
 
-/* 目录项层级样式 */
+/* 目录项层级样式 (全部 em 相对字号自适应) */
 .toc-item {
   display: block;
   padding: 6px 10px;
   margin: 1px 0;
-  font-size: 13px;
+  font-size: 0.8125em;
   line-height: 1.45;
   color: var(--ink);
   text-decoration: none;
@@ -727,19 +780,20 @@ hr {
 .toc-item.level-1 {
   font-weight: 600;
   padding-left: 10px;
+  font-size: 0.875em;
   color: var(--ink);
 }
 
 .toc-item.level-2 {
   padding-left: 22px;
   color: var(--ink-light);
-  font-size: 12.5px;
+  font-size: 0.8125em;
 }
 
 .toc-item.level-3 {
   padding-left: 34px;
   color: var(--ink-light);
-  font-size: 12px;
+  font-size: 0.75em;
 }
 
 .toc-item.level-4,
@@ -747,7 +801,7 @@ hr {
 .toc-item.level-6 {
   padding-left: 44px;
   color: var(--ink-light);
-  font-size: 12px;
+  font-size: 0.75em;
 }
 
 /* 遮罩层 (移动端点击空白处关闭) */
@@ -768,21 +822,38 @@ hr {
 /* 响应式排版适配 (平板 & 中屏设备) */
 @media (max-width: 768px) {
   body {
-    padding: 20px 14px max(env(safe-area-inset-bottom, 20px), 64px);
-    padding-left: max(env(safe-area-inset-left, 0px), 14px);
-    padding-right: max(env(safe-area-inset-right, 0px), 14px);
+    font-size: 16.5px; /* 平板弹性基准字号 */
+    width: 100%;
+    max-width: 100%;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    padding: 20px 14px 64px 14px;
+    padding-left: calc(14px + env(safe-area-inset-left, 0px));
+    padding-right: calc(14px + env(safe-area-inset-right, 0px));
+    padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+    box-sizing: border-box;
   }
   header {
+    width: 100%;
+    max-width: 100%;
+    margin-left: auto;
+    margin-right: auto;
     margin-bottom: 18px;
     padding-bottom: 14px;
+    box-sizing: border-box;
   }
   h1 {
-    font-size: 24px;
+    font-size: 1.5em;
     letter-spacing: 1px;
   }
   .toolbar {
+    width: 100%;
+    max-width: 100%;
+    margin-left: auto;
+    margin-right: auto;
     padding: 12px 14px;
     gap: 12px;
+    box-sizing: border-box;
   }
   .toggle-group {
     margin-left: 0;
@@ -790,20 +861,41 @@ hr {
     justify-content: flex-start;
   }
   .content-panel {
+    width: 100%;
+    max-width: 100%;
+    margin-left: auto;
+    margin-right: auto;
     padding: 26px 20px;
     border-radius: 8px;
+    box-sizing: border-box;
   }
-  #content h1 { font-size: 24px; margin-top: 22px; }
-  #content h2 { font-size: 21px; margin-top: 18px; }
-  #content h3 { font-size: 18.5px; margin-top: 15px; }
-  #content p { font-size: 16.5px; line-height: 1.8; }
-  #content ul, #content ol { font-size: 16.5px; line-height: 1.8; }
-  .original, .translation { font-size: 15.5px; }
+  #content {
+    font-size: 1em;
+    line-height: 1.8;
+  }
+  #content h1 { font-size: 1.45em; margin-top: 22px; }
+  #content h2 { font-size: 1.25em; margin-top: 18px; }
+  #content h3 { font-size: 1.1em; margin-top: 15px; }
+  #content h4 { font-size: 1.0em; margin-top: 12px; }
+  #content h5, #content h6 { font-size: 0.95em; margin-top: 10px; }
+  #content p { font-size: 1em; line-height: 1.8; }
+  #content ul, #content ol { font-size: 1em; line-height: 1.8; }
+  #content li { font-size: 1em; line-height: 1.8; }
+  #content blockquote { font-size: 0.95em; }
+  #content blockquote p { font-size: 1em; }
+  .original, .translation { font-size: 0.95em; }
+  .annotation { font-size: 0.88em; }
+  table { font-size: 0.88em; }
+  th, td { padding: 9px 12px; }
+  pre { font-size: 0.85em; }
+  code:not(pre code) { font-size: 0.85em; }
 
-  /* 悬浮目录平板端微调 */
+  /* 悬浮目录平板端微调 (修复 calc 语法兼容) */
   .toc-container {
-    left: max(env(safe-area-inset-left, 0px) + 16px, 16px);
-    bottom: max(env(safe-area-inset-bottom, 0px) + 20px, 20px);
+    left: 16px;
+    left: calc(16px + env(safe-area-inset-left, 0px));
+    bottom: 20px;
+    bottom: calc(20px + env(safe-area-inset-bottom, 0px));
   }
   .toc-panel {
     width: 320px;
@@ -812,33 +904,55 @@ hr {
   }
 }
 
-/* 移动手机专享适配 (iPhone / Android 屏幕 <= 480px，字号增大增强阅读体验) */
+/* 移动手机专享适配 (iPhone / Android 屏幕 <= 480px)
+   1. 统一采用 17px 基准与全量 em 弹性缩放，文字大而清晰舒展
+   2. 严格左右居中对称与容器安全居中，消除横向滚动与偏侧问题
+   3. 零 JavaScript 控制字体，纯 CSS 声明式极速直出 */
 @media (max-width: 480px) {
   body {
-    padding: 14px 10px max(env(safe-area-inset-bottom, 20px), 64px);
-    padding-left: max(env(safe-area-inset-left, 0px), 10px);
-    padding-right: max(env(safe-area-inset-right, 0px), 10px);
+    font-size: 17px; /* 手机端专享清晰基准字号 (子项全部以 em 阶梯缩放) */
+    width: 100%;
+    max-width: 100%;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    padding: 14px 12px 64px 12px;
+    padding-left: calc(12px + env(safe-area-inset-left, 0px));
+    padding-right: calc(12px + env(safe-area-inset-right, 0px));
+    padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px));
     line-height: 1.8;
+    box-sizing: border-box;
+    overflow-x: hidden;
   }
   header {
+    width: 100%;
+    max-width: 100%;
+    margin-left: auto;
+    margin-right: auto;
     margin-bottom: 14px;
     padding-bottom: 10px;
     border-bottom-width: 1px;
+    text-align: center;
+    box-sizing: border-box;
   }
   h1 {
-    font-size: 22px;
+    font-size: 1.35em;
     letter-spacing: 0.5px;
     margin-bottom: 4px;
   }
   .subtitle {
-    font-size: 13px;
+    font-size: 0.82em;
     letter-spacing: 0.5px;
   }
   .toolbar {
+    width: 100%;
+    max-width: 100%;
+    margin-left: auto;
+    margin-right: auto;
     padding: 10px 10px;
     gap: 10px;
     border-radius: 8px;
     margin-bottom: 16px;
+    box-sizing: border-box;
   }
   .filter-group {
     width: 100%;
@@ -852,7 +966,7 @@ hr {
     flex: 1 1 0;
     min-width: 0;
     padding: 8px 6px;
-    font-size: 13px;
+    font-size: 0.82em;
     border-radius: 12px;
     justify-content: center;
     gap: 4px;
@@ -867,135 +981,175 @@ hr {
     justify-content: center;
   }
   .stats {
-    font-size: 12.5px;
+    font-size: 0.78em;
     text-align: center;
   }
   .stats b {
-    font-size: 13.5px;
+    font-size: 0.85em;
   }
   .content-panel {
-    padding: 18px 14px;
+    width: 100%;
+    max-width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    padding: 18px 12px;
     border-radius: 8px;
     box-shadow: 0 1px 3px rgba(0,0,0,.03);
+    box-sizing: border-box;
+  }
+  /* 正文渲染区域 (#content) 手机端字体排版 (全部 em 相对阶梯) */
+  #content {
+    font-size: 1em;
+    line-height: 1.8;
+    word-break: break-word;
+    overflow-wrap: break-word;
+    max-width: 100%;
   }
   #content h1 {
-    font-size: 23px;
+    font-size: 1.35em;
     margin-top: 22px;
     padding-bottom: 7px;
     letter-spacing: 0.5px;
   }
   #content h2 {
-    font-size: 20px;
+    font-size: 1.18em;
     margin-top: 18px;
     padding-bottom: 5px;
     letter-spacing: 0.3px;
   }
   #content h3 {
-    font-size: 18px;
+    font-size: 1.06em;
     margin-top: 15px;
   }
   #content h4 {
-    font-size: 16.5px;
+    font-size: 1.0em;
     margin-top: 12px;
   }
   #content h5, #content h6 {
-    font-size: 15.5px;
+    font-size: 0.92em;
     margin-top: 10px;
   }
   #content p {
-    font-size: 16.5px;
+    font-size: 1em;
     line-height: 1.8;
     margin-bottom: 14px;
     text-align: left; /* 移动端中文齐左更自然，避免大空格拉伸 */
   }
   #content ul, #content ol {
-    padding-left: 22px;
+    padding-left: 20px;
     margin-bottom: 14px;
-    font-size: 16.5px;
+    font-size: 1em;
     line-height: 1.8;
   }
   #content li {
+    font-size: 1em;
+    line-height: 1.8;
     margin-bottom: 6px;
   }
   #content blockquote {
     padding: 12px 14px;
     margin: 14px 0;
-    font-size: 15.5px;
+    font-size: 0.94em;
+    line-height: 1.75;
+  }
+  #content blockquote p {
+    font-size: 1em;
     line-height: 1.75;
   }
   .original, .translation {
     padding: 10px 12px;
-    font-size: 15.5px;
+    font-size: 0.94em;
     line-height: 1.8;
     margin-bottom: 12px;
   }
   .original::before, .translation::before {
-    font-size: 12px;
+    font-size: 0.76em;
   }
   .annotation {
     padding: 9px 12px;
-    font-size: 14px;
+    font-size: 0.85em;
     line-height: 1.7;
-    margin-top: 10px;
   }
   .card-head {
     gap: 8px;
     margin-bottom: 8px;
   }
   .date {
-    font-size: 14px;
+    font-size: 0.85em;
   }
   .type-tag, .warn-tag {
-    font-size: 12px;
+    font-size: 0.75em;
     padding: 2px 8px;
   }
   .meta {
-    font-size: 13px;
+    font-size: 0.78em;
     gap: 8px;
     padding-top: 8px;
     margin-top: 10px;
   }
   table {
-    font-size: 14px;
+    font-size: 0.85em;
   }
   th, td {
     padding: 8px 10px;
   }
   pre {
     padding: 12px 14px;
-    font-size: 13.5px;
+    font-size: 0.82em;
     margin: 14px 0;
     border-radius: 6px;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-x: auto;
   }
   code:not(pre code) {
-    font-size: 14px;
+    font-size: 0.85em;
     padding: 2px 5px;
+  }
+  .katex {
+    font-size: 1.05em;
+    max-width: 100%;
+  }
+  .katex-display {
+    font-size: 1.05em;
+    padding: 6px 0;
+    margin: 14px 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-x: auto;
   }
   .toast {
     max-width: 88vw;
-    font-size: 13px;
+    font-size: 0.82em;
     padding: 9px 18px;
-    bottom: max(env(safe-area-inset-bottom, 16px), 20px);
+    bottom: 20px;
+    bottom: calc(20px + env(safe-area-inset-bottom, 0px));
   }
 
-  /* 悬浮目录手机端布局 (全宽底抽屉式浮层) */
+  /* 悬浮目录手机端布局 (修复 calc 语法兼容与防溢出) */
   .toc-container {
-    left: max(env(safe-area-inset-left, 0px) + 12px, 12px);
-    bottom: max(env(safe-area-inset-bottom, 0px) + 14px, 14px);
+    left: 12px;
+    left: calc(12px + env(safe-area-inset-left, 0px));
+    bottom: 14px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
   }
   .toc-fab {
     padding: 8px 14px;
-    font-size: 13px;
+    font-size: 0.82em;
     gap: 6px;
   }
   .toc-panel {
     position: fixed;
-    left: max(env(safe-area-inset-left, 0px) + 12px, 12px);
-    right: max(env(safe-area-inset-right, 0px) + 12px, 12px);
-    bottom: max(env(safe-area-inset-bottom, 0px) + 58px, 58px);
+    left: 12px;
+    right: 12px;
+    left: calc(12px + env(safe-area-inset-left, 0px));
+    right: calc(12px + env(safe-area-inset-right, 0px));
+    bottom: 58px;
+    bottom: calc(58px + env(safe-area-inset-bottom, 0px));
     width: auto;
     max-width: none;
     max-height: 65vh;
+    box-sizing: border-box;
   }
   .toc-backdrop.open {
     display: block;
@@ -1009,11 +1163,11 @@ hr {
   }
   .toc-item {
     padding: 8px 10px;
-    font-size: 14px;
+    font-size: 0.85em;
   }
-  .toc-item.level-1 { padding-left: 10px; font-size: 14.5px; }
-  .toc-item.level-2 { padding-left: 20px; font-size: 13.5px; }
-  .toc-item.level-3 { padding-left: 30px; font-size: 13px; }
+  .toc-item.level-1 { padding-left: 10px; font-size: 0.88em; }
+  .toc-item.level-2 { padding-left: 20px; font-size: 0.82em; }
+  .toc-item.level-3 { padding-left: 30px; font-size: 0.78em; }
 }
 
 /* 打印与另存为 PDF 纯净模式 */
@@ -1064,9 +1218,9 @@ hr {
     <div class="toolbar">
         <div class="filter-group">
             <span class="filter-label">快捷操作：</span>
-            <button class="filter" id="btnCopyMd" onclick="copyRawMarkdown()">
+            <button class="filter" id="btnCopy" onclick="copyDocumentContent()">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-                <span>复制 Markdown</span>
+                <span id="btnCopyLabel">复制正文</span>
             </button>
             <button class="filter" id="btnPrint" onclick="window.print()">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
@@ -1132,20 +1286,34 @@ hr {
             }, 2000);
         }
 
-        function copyRawMarkdown() {
-            if (!rawMarkdown) return;
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(rawMarkdown).then(function() {
-                    showToast("Markdown 原文已成功复制到剪贴板！");
-                }).catch(function() {
-                    fallbackCopy(rawMarkdown);
-                });
+        function copyDocumentContent() {
+            if (rawMarkdown) {
+                copyTextToClipboard(rawMarkdown, "Markdown 原文已成功复制到剪贴板！");
             } else {
-                fallbackCopy(rawMarkdown);
+                var contentEl = document.getElementById('content');
+                var text = contentEl ? (contentEl.innerText || contentEl.textContent || '') : '';
+                if (text && text.trim()) {
+                    copyTextToClipboard(text.trim(), "文档正文内容已成功复制到剪贴板！");
+                } else {
+                    showToast("未检测到可复制的文档内容");
+                }
             }
         }
 
-        function fallbackCopy(text) {
+        function copyTextToClipboard(text, successMsg) {
+            if (!text) return;
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(function() {
+                    showToast(successMsg);
+                }).catch(function() {
+                    fallbackCopy(text, successMsg);
+                });
+            } else {
+                fallbackCopy(text, successMsg);
+            }
+        }
+
+        function fallbackCopy(text, successMsg) {
             var ta = document.createElement("textarea");
             ta.value = text;
             ta.style.position = "fixed";
@@ -1160,7 +1328,7 @@ hr {
             try {
                 var successful = document.execCommand('copy');
                 if (successful) {
-                    showToast("Markdown 原文已成功复制到剪贴板！");
+                    showToast(successMsg || "已成功复制到剪贴板！");
                 } else {
                     showToast("复制失败，请手动选取。");
                 }
@@ -1168,6 +1336,13 @@ hr {
                 showToast("复制失败，请手动选取。");
             }
             document.body.removeChild(ta);
+        }
+
+        function updateCopyButtonLabel() {
+            var lbl = document.getElementById('btnCopyLabel');
+            if (lbl) {
+                lbl.innerText = (rawMarkdown ? "复制 Markdown" : "复制正文");
+            }
         }
 
         // 宣纸色泽平滑切换 (古纸 / 纯白 / 晴竹)
@@ -1374,9 +1549,10 @@ hr {
 
         // 自启动渲染：若宿主已预渲染好静态 DOM 内容，则无需重复执行；仅在容器为空时执行客户端渲染兜底
         function doRender() {
+            updateCopyButtonLabel();
             var contentEl = document.getElementById('content');
             if (!contentEl || !contentEl.innerHTML.trim()) {
-                if (typeof renderMarkdown === 'function') {
+                if (typeof renderMarkdown === 'function' && typeof rawMarkdown === 'string' && rawMarkdown) {
                     renderMarkdown(rawMarkdown, "", false);
                 }
             }

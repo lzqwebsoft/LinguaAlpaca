@@ -33,12 +33,16 @@ TEST_CASE("HtmlExporter - Generate Standalone HTML", "[core][markdown][html_expo
         REQUIRE(html.find("</script><script>") == std::string::npos);
     }
 
-    SECTION("Embeds pre-rendered HTML DOM directly into content container for zero-JS viewing") {
-        std::string sampleMd = "# 原文";
+    SECTION("Embeds pre-rendered HTML DOM directly into content container for zero-JS viewing and eliminates duplicate markdown") {
+        std::string sampleMd = "# 原文内容测试，重复两份会增加体积";
         std::string staticDom = "<h1>静态预渲染标题</h1><p>无需JS即可在iOS上阅读的段落</p>";
         std::string html = HtmlExporter::GenerateStandaloneHtml(sampleMd, "", "iOS 兼容文档", staticDom);
 
         REQUIRE(html.find("<div id=\"content\">" + staticDom + "</div>") != std::string::npos);
+        // 校验 rawMarkdown 不再重复嵌入全文，避免体积翻倍
+        REQUIRE(html.find("var rawMarkdown = null;") != std::string::npos);
+        // 校验因去除了冗余编译引擎与 Markdown 原文，体积显著减小 (远小于 150KB)
+        REQUIRE(html.size() < 150000);
     }
 }
 

@@ -141,6 +141,7 @@ private:
     // 渲染平滑调度与节流控制（彻底避免百页文档频繁重排卡死 UI）
     uint64_t m_lastRenderTimestamp{0};
     int m_lastRenderedPage{-1};
+    std::string m_lastRenderedMarkdown;
 
     // Dropzone hover & action states
     bool m_isDropzoneHovered{false};

@@ -290,6 +290,9 @@ wxString MarkdownView::FindHtmlTemplatePath() const {
 }
 
 void MarkdownView::SetMarkdown(const std::string& markdown, const std::string& baseDir, bool preserveScroll) {
+    if (m_rawMarkdown == markdown && m_baseDir == baseDir) {
+        return;
+    }
     m_rawMarkdown = markdown;
     m_baseDir = baseDir;
 

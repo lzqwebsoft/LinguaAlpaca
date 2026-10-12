@@ -465,6 +465,9 @@ void OcrView::InitUI() {
         m_resultCard->Clear();
         m_lastMarkdownResult.Clear();
         m_lastJsonResult.Clear();
+        m_lastRenderedMarkdown.clear();
+        m_lastRenderTimestamp = 0;
+        m_lastRenderedPage = -1;
         m_resumeFromPage = 0;
         m_resumeInitialMarkdown.clear();
         m_resumeInitialJson.clear();
@@ -1550,6 +1553,7 @@ void OcrView::DoExecuteDocumentPipeline(const std::string& docPath) {
     WinTtsHelper::GetInstance().Stop();
     m_lastRenderTimestamp = 0;
     m_lastRenderedPage = -1;
+    m_lastRenderedMarkdown = (m_resumeFromPage > 0) ? m_resumeInitialMarkdown : "";
 
     // 仅在非断点续传时清空结果卡片与重置计数
     if (m_resumeFromPage <= 0) {
@@ -1665,37 +1669,41 @@ void OcrView::DoExecuteDocumentPipeline(const std::string& docPath) {
                                                                                    m_progressPanel->SetProgress(displayPage, totalPages, percent, wxString::FromUTF8(stageDesc));
                                                                                 }
 
-                                                                                // 2. 接收 Markdown 结果并进行智能平滑节流，彻底杜绝百页长文档频繁全量重排卡死 UI 线程
+                                                                                // 2. 接收 Markdown 结果并进行智能平滑节流，彻底杜绝长文档频繁全量重排卡死 UI 线程
                                                                                 auto now = std::chrono::steady_clock::now();
                                                                                 uint64_t nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
-                                                                                bool isPageDone = (stageDesc.find("完成") != std::string::npos);
+                                                                                bool isPageDone = (stageDesc.find("页解析完成") != std::string::npos);
+                                                                                bool isTextModified = (!currentMarkdown.empty() && currentMarkdown != m_lastRenderedMarkdown);
                                                                                 bool shouldRender = false;
 
-                                                                                if (totalPages <= 1) {
-                                                                                   // 单页图像模式：间隔 400ms 刷新或单页完成时必刷新
-                                                                                   if (nowMs - m_lastRenderTimestamp >= 400 || isPageDone) {
-                                                                                       shouldRender = true;
-                                                                                   }
-                                                                                } else {
-                                                                                    // 多页 PDF 模式：
-                                                                                    // 对于百页超长文档 (> 30000 字符)，切片中间识别不触发昂贵的全量 WebView 重绘，单页完成时或长达 10 秒以上才按需刷新
-                                                                                    if (currentMarkdown.size() > 30000) {
-                                                                                        if (isPageDone || (nowMs - m_lastRenderTimestamp >= 10000)) {
+                                                                                if (isTextModified) {
+                                                                                    if (totalPages <= 1) {
+                                                                                        // 单页图像模式：间隔 1200ms 刷新流式内容，或单页完成时必刷新
+                                                                                        if (isPageDone || (nowMs - m_lastRenderTimestamp >= 1200)) {
                                                                                             shouldRender = true;
                                                                                         }
                                                                                     } else {
-                                                                                        if (isPageDone || curPage != m_lastRenderedPage || (nowMs - m_lastRenderTimestamp >= 2500)) {
+                                                                                        // 多页 PDF 模式：
+                                                                                        // 关键优化：每当一页完全解析完成 (isPageDone) 时必刷新渲染；
+                                                                                        // 在单页内部元素流式识别期间：
+                                                                                        // - 若全文较短 (< 12000 字符)，每隔 3000ms 流式预览一次，给用户实时的流式反馈
+                                                                                        // - 若累计全文庞大 (>= 12000 字符)，严格仅在单页解析完成 (isPageDone) 时才刷新 DOM，
+                                                                                        //   彻底消除超长文档多公式在 WebView 中反复全量重排导致的 UI 卡频与掉帧
+                                                                                        if (isPageDone) {
+                                                                                            shouldRender = true;
+                                                                                        } else if (currentMarkdown.size() < 12000 && (nowMs - m_lastRenderTimestamp >= 3000)) {
                                                                                             shouldRender = true;
                                                                                         }
                                                                                     }
                                                                                 }
 
-                                                                                if (shouldRender && m_resultCard && !currentMarkdown.empty()) {
-                                                                                   m_lastRenderTimestamp = nowMs;
-                                                                                   m_lastRenderedPage = curPage;
-                                                                                   m_resultCard->SetMarkdown(currentMarkdown, std::string(m_lastOutputDir.ToUTF8().data()), true);
+                                                                                if (shouldRender && m_resultCard) {
+                                                                                    m_lastRenderTimestamp = nowMs;
+                                                                                    m_lastRenderedPage = curPage;
+                                                                                    m_lastRenderedMarkdown = currentMarkdown;
+                                                                                    m_lastMarkdownResult = wxString::FromUTF8(currentMarkdown);
+                                                                                    m_resultCard->SetMarkdown(currentMarkdown, std::string(m_lastOutputDir.ToUTF8().data()), true);
                                                                                 }
-                                                                                m_lastMarkdownResult = wxString::FromUTF8(currentMarkdown);
                                                                            }),
                                                                            BindUi([this](bool success, std::string fullMarkdown, std::string jsonStructured, std::string error) {
                                                                                SetState(OcrTaskState::Idle);
@@ -1703,6 +1711,7 @@ void OcrView::DoExecuteDocumentPipeline(const std::string& docPath) {
                                                                                    m_resumeFromPage = 0;
                                                                                    m_resumeInitialMarkdown.clear();
                                                                                    m_resumeInitialJson.clear();
+                                                                                   m_lastRenderedMarkdown = fullMarkdown;
                                                                                    m_lastMarkdownResult = wxString::FromUTF8(fullMarkdown);
                                                                                    m_lastJsonResult = wxString::FromUTF8(jsonStructured);
                                                                                    if (m_resultCard) {
@@ -1730,6 +1739,7 @@ void OcrView::DoExecuteDocumentPipeline(const std::string& docPath) {
                                                                                                 L"文档解析完成", wxOK | wxICON_INFORMATION, this);
                                                                                } else {
                                                                                    // 中断或失败状态完全由独立进度组件展示，彻底避免冲掉 m_resultCard 识别结果
+                                                                                   m_lastRenderedMarkdown = fullMarkdown;
                                                                                    m_lastMarkdownResult = wxString::FromUTF8(fullMarkdown);
                                                                                    m_lastJsonResult = wxString::FromUTF8(jsonStructured);
                                                                                    if (m_resultCard) {

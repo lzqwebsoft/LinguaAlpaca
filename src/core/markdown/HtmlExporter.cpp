@@ -177,6 +177,11 @@ std::string HtmlExporter::LoadImageFileAsDataUrl(const std::string& fullPath) {
 std::string HtmlExporter::EmbedLocalImagesAsBase64(const std::string& md, const std::string& baseDir) {
     if (md.empty()) return md;
 
+    // 极速短路优化：若 Markdown 中不包含任何 <img> 标签或 ![...] 图片引用，直接返回
+    if (md.find("<img") == std::string::npos && md.find("<IMG") == std::string::npos && md.find("![") == std::string::npos) {
+        return md;
+    }
+
     std::unordered_map<std::string, std::pair<std::string, std::string>> localPathCache;
     auto getOrLoadDataUrl = [&](const std::string& rawSrc) -> std::pair<std::string, std::string> {
         auto itLocal = localPathCache.find(rawSrc);

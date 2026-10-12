@@ -388,7 +388,17 @@
         var container = document.getElementById('content');
         if (!container) return;
 
+        // 内容完全一致时短路退出，杜绝无意义的 DOM 重建与重绘
+        if (container._lastRawMarkdown === rawMarkdown && container._lastBaseDir === baseHref) {
+            if (preserveScroll && savedScrollY > 0) {
+                window.scrollTo(0, savedScrollY);
+            }
+            return;
+        }
+
         if (!rawMarkdown || rawMarkdown.trim() === '') {
+            container._lastRawMarkdown = rawMarkdown;
+            container._lastBaseDir = baseHref;
             container.innerHTML = '';
             return;
         }
@@ -464,34 +474,45 @@
             html = '<pre>' + escapeHtmlText(text) + '</pre>';
         }
 
-        // 还原数学公式并调用 KaTeX 矢量渲染 (并注入 ulem 宏增强)
+        // 还原数学公式并调用 KaTeX 矢量渲染 (并注入 ulem 宏增强与全局渲染缓存)
+        if (!global.__katexCache) {
+            global.__katexCache = {};
+        }
+
         for (var i = 0; i < mathBlocks.length; i++) {
             var item = mathBlocks[i];
             var placeholder = item.isBlock ? "%%MATHBLOCK_" + i + "%%" : "%%MATHINLINE_" + i + "%%";
             var renderedMath = "";
             var formulaStr = cleanMathFormula(item.formula);
-            try {
-                if (typeof katex !== 'undefined') {
-                    renderedMath = katex.renderToString(formulaStr, {
-                        displayMode: item.isBlock,
-                        throwOnError: false,
-                        trust: true,
-                        output: "htmlAndMathml",
-                        macros: {
-                            "\\uwave": "\\htmlClass{wavy-underline}{#1}",
-                            "\\uline": "\\htmlClass{single-underline}{#1}",
-                            "\\uuline": "\\htmlClass{double-underline}{#1}",
-                            "\\dashuline": "\\htmlClass{dashed-underline}{#1}",
-                            "\\dotuline": "\\htmlClass{dotted-underline}{#1}",
-                            "\\sout": "\\htmlClass{strikethrough-line}{#1}",
-                            "\\xout": "\\htmlClass{xout-line}{#1}"
-                        }
-                    });
-                } else {
-                    renderedMath = item.isBlock ? "$$" + formulaStr + "$$" : "$" + formulaStr + "$";
+            var cacheKey = (item.isBlock ? "B:" : "I:") + formulaStr;
+
+            if (global.__katexCache[cacheKey]) {
+                renderedMath = global.__katexCache[cacheKey];
+            } else {
+                try {
+                    if (typeof katex !== 'undefined') {
+                        renderedMath = katex.renderToString(formulaStr, {
+                            displayMode: item.isBlock,
+                            throwOnError: false,
+                            trust: true,
+                            output: "htmlAndMathml",
+                            macros: {
+                                "\\uwave": "\\htmlClass{wavy-underline}{#1}",
+                                "\\uline": "\\htmlClass{single-underline}{#1}",
+                                "\\uuline": "\\htmlClass{double-underline}{#1}",
+                                "\\dashuline": "\\htmlClass{dashed-underline}{#1}",
+                                "\\dotuline": "\\htmlClass{dotted-underline}{#1}",
+                                "\\sout": "\\htmlClass{strikethrough-line}{#1}",
+                                "\\xout": "\\htmlClass{xout-line}{#1}"
+                            }
+                        });
+                        global.__katexCache[cacheKey] = renderedMath;
+                    } else {
+                        renderedMath = item.isBlock ? "$$" + formulaStr + "$$" : "$" + formulaStr + "$";
+                    }
+                } catch (e) {
+                    renderedMath = '<span class="katex-error">' + escapeHtmlText(formulaStr) + '</span>';
                 }
-            } catch (e) {
-                renderedMath = '<span class="katex-error">' + escapeHtmlText(formulaStr) + '</span>';
             }
             if (item.isBlock) {
                 html = html.replace(new RegExp('<p>\\s*' + placeholder + '\\s*<\\/p>', 'g'), renderedMath);
@@ -508,6 +529,8 @@
         });
 
         container.innerHTML = html;
+        container._lastRawMarkdown = rawMarkdown;
+        container._lastBaseDir = baseHref;
 
         // 绑定图片点击事件 (支持桌面端协议与浏览器全屏预览)
         var imgs = container.querySelectorAll('img');

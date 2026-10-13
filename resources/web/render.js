@@ -265,7 +265,10 @@
                     var attrs = "";
                     if (cell.rowspan > 1) attrs += ' rowspan="' + cell.rowspan + '"';
                     if (cell.colspan > 1) attrs += ' colspan="' + cell.colspan + '"';
-                    var content = escapeHtmlText(cell.text).replace(/\r?\n/g, "<br>");
+                    var rawCell = (cell.text || "").replace(/\\\(\s*$/, '').replace(/^\s*\\\)/, '');
+                    var content = escapeHtmlText(rawCell)
+                        .replace(/(?:\\\(|\$)?\^\{+([^{}]+?)\}+(?:\\\)|\$)?|(?:\\\(|\$)?\^([0-9①-⑩\*]+)(?:\\\)|\$)?/g, "<sup>$1$2</sup>")
+                        .replace(/\r?\n/g, "<br>");
                     rowHtml += "    <" + tag + attrs + ">" + content + "</" + tag + ">\n";
                 }
             }
@@ -446,6 +449,10 @@
             return prefix + key;
         });
         text = text.replace(/\\\(([\s\S]*?)\\\)/g, function(match, formula) {
+            // 保护：行内公式严禁跨越段落空行(\n\n)或 HTML 表格/块级标签，防止游离未闭合定界符贪婪吞噬后续整个文档与表格
+            if (formula.indexOf('\n\n') !== -1 || /<\/?(?:table|tbody|thead|tr|td|th|div|p)\b/i.test(formula)) {
+                return match;
+            }
             var key = "%%MATHINLINE_" + mathBlocks.length + "%%";
             mathBlocks.push({ isBlock: false, formula: formula });
             return key;

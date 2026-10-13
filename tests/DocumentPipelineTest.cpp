@@ -285,6 +285,51 @@ TEST_CASE("DocLayoutEngine - Test with User Newspaper Image", "[layout]") {
             CHECK(foundContents == true);
         }
 
+        // 验证用户真实图书《中县干部：以成长历程为中心》第 97 页
+        // 包含表格5-20 (含上标 7.5^①)、表格5-21、底部注解 ① 及页脚页码 97
+        std::string zxgb97Path = "tests/test_zxgb_page97.png";
+        if (!wxFileExists(zxgb97Path)) { zxgb97Path = "../tests/test_zxgb_page97.png"; }
+        if (!wxFileExists(zxgb97Path)) { zxgb97Path = "../../tests/test_zxgb_page97.png"; }
+
+        REQUIRE(wxFileExists(zxgb97Path));
+        {
+            DocumentLayoutResult res97;
+            bool ok97 = engine.AnalyzeLayout(zxgb97Path, res97);
+            REQUIRE(ok97 == true);
+            CHECK(res97.elements.size() >= 10);
+            std::cout << "\n--- 中县干部 Page 97 (W=" << res97.imageWidth << ", H=" << res97.imageHeight << ") detected " << res97.elements.size() << " elements:\n";
+            bool foundTable520 = false;
+            bool foundTable521 = false;
+            bool foundBottomFootnote = false;
+            bool leakedPageNumber97 = false;
+
+            for (const auto& elem : res97.elements) {
+                std::cout << "  [" << elem.readingOrder << "] " << elem.labelName 
+                     << " (score=" << elem.score << ") bbox=[" 
+                     << elem.x1 << ", " << elem.y1 << ", " << elem.x2 << ", " << elem.y2 << "]\n";
+                // 验证表 5-20 (y 落在 1400..1700 区间) 正确被识别为表格
+                if (elem.type == LayoutElementType::Table && elem.y1 >= 1400 && elem.y2 <= 1700) {
+                    foundTable520 = true;
+                }
+                // 验证表 5-21 (y 落在 2500..4000 区间) 正确被识别为表格
+                if (elem.type == LayoutElementType::Table && elem.y1 >= 2500 && elem.y2 <= 4000) {
+                    foundTable521 = true;
+                }
+                // 验证底部注解 ① (y >= 4000) 正确被识别并保留
+                if ((elem.labelName == "vision_footnote" || elem.labelName == "footnote") && elem.y1 >= 4000) {
+                    foundBottomFootnote = true;
+                }
+                // 验证右下角独立页码 "97" (x > 2600, y > 4150) 必须被过滤掉，不得误入正文
+                if (elem.labelName == "number" || (elem.x1 >= 2600 && elem.y1 >= 4150)) {
+                    leakedPageNumber97 = true;
+                }
+            }
+            CHECK(foundTable520 == true);
+            CHECK(foundTable521 == true);
+            CHECK(foundBottomFootnote == true);
+            CHECK(leakedPageNumber97 == false);
+        }
+
         // Verify bounding boxes stay within image bounds and no duplicate containment
         for (size_t i = 0; i < result.elements.size(); ++i) {
             const auto& a = result.elements[i];
@@ -444,6 +489,23 @@ TEST_CASE("DocumentPipeline - Convert PaddleOCR OTSL table to HTML table", "[tab
     REQUIRE(html.find("<td>No Strategy</td>") != std::string::npos);
     REQUIRE(html.find("<td>96.8%</td>") != std::string::npos);
     REQUIRE(html.find("</table>") != std::string::npos);
+
+    // 验证用户真实文档《中县干部：以成长历程为中心》第 97 页 表5-20 
+    // 单元格包含上标与末尾游离定界符 (7.5^{①}\()，必须正确转换为语义化 <sup> 标签且清除游离界符
+    std::string otslZxgbTable =
+        "<fcel>晋升为副科（年）<fcel>副科到正科（年）<fcel>正科到副处（年）<fcel>副处到正处（年）<nl>"
+        "<fcel>8<fcel>2.7<fcel>7.3<fcel>7.5^{①}\\(<nl>";
+
+    std::string htmlZxgb = DocumentPipeline::ConvertOtslToHtml(otslZxgbTable);
+    REQUIRE_FALSE(htmlZxgb.empty());
+    REQUIRE(htmlZxgb.find("<th>晋升为副科（年）</th>") != std::string::npos);
+    REQUIRE(htmlZxgb.find("<th>副处到正处（年）</th>") != std::string::npos);
+    REQUIRE(htmlZxgb.find("<td>8</td>") != std::string::npos);
+    REQUIRE(htmlZxgb.find("<td>2.7</td>") != std::string::npos);
+    REQUIRE(htmlZxgb.find("<td>7.3</td>") != std::string::npos);
+    // 核心断言：7.5^{①}\( 必须转为 7.5<sup>①</sup>，绝不得泄漏未闭合的 \(
+    REQUIRE(htmlZxgb.find("<td>7.5<sup>①</sup></td>") != std::string::npos);
+    REQUIRE(htmlZxgb.find("\\(") == std::string::npos);
 }
 
 TEST_CASE("DocLayoutEngine - Filter Header and Footer Page Numbers", "[layout][filter]") {

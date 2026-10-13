@@ -236,6 +236,22 @@ for bin_path in all_binaries:
         subprocess.run(["install_name_tool", "-add_rpath", "@executable_path/../Frameworks", bin_path], check=False)
 
 print("  All install names and LC_RPATHs relocated successfully.")
+
+# 4. 对所有可执行文件与动态库剥离调试/局部符号 (strip -x / strip -u -r)
+print("  Stripping unneeded debug and local symbols to optimize bundle size...")
+for bin_path in all_binaries:
+    is_dylib = bin_path.endswith(".dylib") or ".dylib." in bin_path
+    try:
+        if is_dylib:
+            # 动态库使用 -x：保留所有全局与动态导出符号，仅剥离局部/调试符号
+            subprocess.run(["strip", "-x", bin_path], check=False, stderr=subprocess.DEVNULL)
+        else:
+            # 可执行文件使用 -u -r：保留动态引用并剥离局部/调试符号
+            subprocess.run(["strip", "-u", "-r", bin_path], check=False, stderr=subprocess.DEVNULL)
+    except Exception as e:
+        print(f"    Warning: strip failed for {bin_path}: {e}")
+
+print("  Symbol stripping completed successfully.")
 PY_SCRIPT
 
 # 5. 确保 Resources 资源目录及图标完整
@@ -313,8 +329,8 @@ if [ -f "${ICON_FILE}" ]; then
     SetFile -a V "${TMP_MOUNT}/.VolumeIcon.icns" 2>/dev/null || true
     hdiutil detach "${TMP_MOUNT}" -quiet
 
-    # 转换为高度压缩的只读 UDZO 格式最终发布镜像
-    hdiutil convert "${TMP_RW_DMG}" -format UDZO -o "${DMG_PATH}" -ov > /dev/null 2>&1
+    # 转换为最高压缩等级的只读 UDZO 格式最终发布镜像
+    hdiutil convert "${TMP_RW_DMG}" -format UDZO -imagekey zlib-level=9 -o "${DMG_PATH}" -ov > /dev/null 2>&1
     rm -f "${TMP_RW_DMG}"
 else
     hdiutil create \
@@ -322,6 +338,7 @@ else
         -srcfolder "${DMG_STAGING}" \
         -ov \
         -format UDZO \
+        -imagekey zlib-level=9 \
         "${DMG_PATH}" > /dev/null 2>&1
 fi
 

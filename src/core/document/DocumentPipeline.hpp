@@ -124,7 +124,14 @@ public:
         bool bodyHasMarkers = false
     );
 
+    // 阶段 1 预处理内部数据结构前向声明
+    struct PreprocessedPage;
+
 private:
+    struct ParseSession;
+    struct OcrDispatchResult;
+    struct AssembledPage;
+
     std::shared_ptr<ModelManager> m_modelManager;
     std::shared_ptr<DocLayoutEngine> m_layoutEngine;
 
@@ -133,6 +140,67 @@ private:
     std::atomic<bool> m_isRunning{false};
 
     mutable std::mutex m_mutex;
+
+    bool InitParseSession(
+        const std::string& inputFilePath,
+        const std::string& outputDir,
+        bool translateEnglishToChinese,
+        int startFromPage,
+        const std::string& initialMarkdown,
+        const std::string& initialJson,
+        ParseSession& session,
+        std::string& errorMsg
+    );
+
+    std::shared_ptr<PreprocessedPage> FetchOrWaitStageOne(
+        int p,
+        int totalPages,
+        std::future<std::shared_ptr<PreprocessedPage>>& nextPageFuture,
+        DocProgressCallback onProgress,
+        const std::string& fullMarkdown
+    );
+
+    OcrDispatchResult DispatchParallelOcrWorkers(
+        int p,
+        int totalPages,
+        const std::shared_ptr<PreprocessedPage>& curPageData,
+        DocProgressCallback onProgress,
+        const std::string& fullMarkdown
+    );
+
+    AssembledPage AssemblePageContent(
+        const std::shared_ptr<PreprocessedPage>& curPageData,
+        const OcrDispatchResult& ocrRes,
+        bool translateEnglishToChinese
+    );
+
+    void HandlePipelineInterruption(
+        ParseSession& session,
+        int p,
+        const AssembledPage& assembled,
+        const std::string& failureReason,
+        std::future<std::shared_ptr<PreprocessedPage>>& nextPageFuture
+    );
+
+    void PersistPageSnapshot(
+        ParseSession& session,
+        int p,
+        const AssembledPage& assembled,
+        bool isCompleted
+    );
+
+    void ExecutePipeline(
+        const std::string& inputFilePath,
+        const std::string& outputDir,
+        bool translateEnglishToChinese,
+        DocProgressCallback onProgress,
+        DocCompleteCallback onComplete,
+        int startFromPage,
+        const std::string& initialMarkdown,
+        const std::string& initialJson
+    );
+
+    std::string TranslateEnglishIfNeeded(const std::string& text, bool enableTranslation);
 };
 
 } // namespace LinguaAlpaca

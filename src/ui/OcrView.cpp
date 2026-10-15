@@ -7,7 +7,6 @@
 #include "engine/DocLayoutEngine.hpp"
 #include "theme/IconManager.hpp"
 #include "theme/Theme.hpp"
-#include "MainFrame.hpp"
 #include <base64.hpp>
 #include <nlohmann/json.hpp>
 #include <atomic>
@@ -479,7 +478,6 @@ void OcrView::InitUI() {
         if (m_recognizeBtn) {
             m_recognizeBtn->SetLabel(L"开始文档解析");
         }
-        UpdateTranslateButtonVisibility();
     });
 
     contentSizer->Add(m_resultCard, 55, wxEXPAND);
@@ -501,19 +499,42 @@ void OcrView::InitUI() {
     m_stopBtn->SetIcon(SVG::STOP, dip(16, 16), *wxWHITE);
     m_stopBtn->Hide();
 
+    m_enableTranslateCheck = new wxCheckBox(this, wxID_ANY, L"双语对照翻译 (Hy-MT2)");
+    m_enableTranslateCheck->SetValue(false);
+    m_enableTranslateCheck->SetFont(ThemeFont::GetFont(FontRole::Control));
+    m_enableTranslateCheck->SetForegroundColour(palette.textPrimary);
+    m_enableTranslateCheck->SetToolTip(L"启用后自动调用大模型翻译段落，并在原文下方保持一致的 Markdown 排版呈现译文");
+    m_enableTranslateCheck->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent& ev) {
+        if (!m_loadedImagePath.IsEmpty()) {
+            wxFileName docFn(m_loadedImagePath);
+            std::string baseDocName = docFn.GetName().ToUTF8().data();
+            wxString outDir = docFn.GetPath() + "/" + wxString::FromUTF8(baseDocName);
+            wxString jsonPath = outDir + "/" + wxString::FromUTF8(baseDocName) + ".json";
+            if (wxFileExists(jsonPath)) {
+                try {
+                    std::ifstream f(std::string(jsonPath.ToUTF8().data()), std::ios::binary);
+                    if (f) {
+                        nlohmann::json j;
+                        f >> j;
+                        f.close();
+                        j["translate_enabled"] = ev.IsChecked();
+                        std::ofstream out(std::string(jsonPath.ToUTF8().data()), std::ios::binary);
+                        out << j.dump(2);
+                    }
+                } catch (...) {}
+            }
+        }
+    });
+
     m_openFolderBtn = new CustomButton(this, wxID_ANY, L"打开结果目录", ButtonStyle::Secondary, wxDefaultPosition, dip(155, 42));
     m_openFolderBtn->SetIcon(SVG::FOLDER_OPEN, dip(16, 16), palette.textPrimary);
     m_openFolderBtn->Hide();
 
-    m_translateBtn = new CustomButton(this, wxID_ANY, L"一键翻译", ButtonStyle::Primary, wxDefaultPosition, dip(145, 42));
-    m_translateBtn->SetIcon(SVG::TRANSLATE, dip(16, 16), *wxWHITE);
-    m_translateBtn->Hide();
-
     bottomSizer->Add(m_recognizeBtn, 0);
     bottomSizer->Add(m_stopBtn, 0);
-    bottomSizer->Add(m_openFolderBtn, 0, wxLEFT, 10_dip);
+    bottomSizer->Add(m_enableTranslateCheck, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 16_dip);
     bottomSizer->AddStretchSpacer(1);
-    bottomSizer->Add(m_translateBtn, 0);
+    bottomSizer->Add(m_openFolderBtn, 0, wxALIGN_CENTER_VERTICAL);
 
     mainSizer->Add(bottomSizer, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 20_dip);
 
@@ -525,7 +546,6 @@ void OcrView::InitUI() {
     // Event Bindings
     m_recognizeBtn->Bind(wxEVT_BUTTON, &OcrView::OnRecognizeClicked, this);
     m_stopBtn->Bind(wxEVT_BUTTON, &OcrView::OnStopClicked, this);
-    m_translateBtn->Bind(wxEVT_BUTTON, &OcrView::OnTranslateClicked, this);
 
     m_dropzonePanel->Bind(wxEVT_LEFT_DOWN, &OcrView::OnDropzoneLeftDown, this);
     m_dropzonePanel->Bind(wxEVT_LEFT_UP, &OcrView::OnDropzoneLeftUp, this);
@@ -566,16 +586,11 @@ void OcrView::InitUI() {
         event.Skip();
     });
 
-    m_recognizeBtn->Bind(wxEVT_BUTTON, &OcrView::OnRecognizeClicked, this);
-    m_stopBtn->Bind(wxEVT_BUTTON, &OcrView::OnStopClicked, this);
-    m_translateBtn->Bind(wxEVT_BUTTON, &OcrView::OnTranslateClicked, this);
-
     if (m_resultCard && m_resultCard->GetTextCtrl()) {
         m_resultCard->GetTextCtrl()->Bind(wxEVT_TEXT, [this](wxCommandEvent&) {
             if (m_resultCard && m_resultCard->GetTextCtrl()) {
                 wxString text = m_resultCard->GetTextCtrl()->GetValue();
                 m_resultCard->SetCharacterCount(text.Length());
-                UpdateTranslateButtonVisibility();
             }
         });
     }
@@ -638,8 +653,8 @@ void OcrView::UpdateTheme() {
         m_recognizeBtn->Refresh();
     if (m_stopBtn)
         m_stopBtn->Refresh();
-    if (m_translateBtn)
-        m_translateBtn->Refresh();
+    if (m_enableTranslateCheck)
+        m_enableTranslateCheck->Refresh();
 
     if (m_dropzonePanel) {
         m_dropzonePanel->SetBackgroundColour(palette.cardBg);
@@ -933,7 +948,14 @@ bool OcrView::CheckAndPromptResume(const wxString& filePath) {
         m_resumeFromPage = 0;
         m_resumeInitialMarkdown.clear();
         m_resumeInitialJson.clear();
+        if (m_enableTranslateCheck) {
+            m_enableTranslateCheck->SetValue(false);
+        }
         return false;
+    }
+
+    if (m_enableTranslateCheck) {
+        m_enableTranslateCheck->SetValue(resumeInfo.translateEnabled);
     }
 
     int total = resumeInfo.totalPages > 0 ? resumeInfo.totalPages : (m_pdfTotalPages > 0 ? m_pdfTotalPages : 1);
@@ -943,7 +965,7 @@ bool OcrView::CheckAndPromptResume(const wxString& filePath) {
         wxString msg = wxString::Format(
             L"检测到该文档之前已完成全部解析（共 %d 页）。\n\n"
             L"是否直接载入历史解析结果？\n\n"
-            L"• 点击「是」：载入历史 Markdown 与结构化图文排版\n"
+            L"• 点击「是」：载入历史图文排版与 Markdown 结果\n"
             L"• 点击「否」：重新从头开始全新解析",
             total
         );
@@ -954,7 +976,7 @@ bool OcrView::CheckAndPromptResume(const wxString& filePath) {
             m_lastJsonResult = wxString::FromUTF8(resumeInfo.jsonStructured);
             if (m_resultCard) {
                 m_resultCard->SetMarkdown(resumeInfo.markdown, outDir, false);
-                m_resultCard->SetCharacterCount(m_lastMarkdownResult.Length());
+                m_resultCard->SetCharacterCount(resumeInfo.markdown.size());
             }
             if (m_progressPanel) {
                 m_progressPanel->SetCompleted(total, wxString::FromUTF8(outDir));
@@ -964,7 +986,6 @@ bool OcrView::CheckAndPromptResume(const wxString& filePath) {
                 if (GetSizer())
                     GetSizer()->Layout();
             }
-            UpdateTranslateButtonVisibility();
             if (m_recognizeBtn) {
                 m_recognizeBtn->SetLabel(L"重新开始文档解析");
             }
@@ -987,7 +1008,6 @@ bool OcrView::CheckAndPromptResume(const wxString& filePath) {
                 if (GetSizer())
                     GetSizer()->Layout();
             }
-            UpdateTranslateButtonVisibility();
             return false;
         }
     } else if (resumeInfo.lastProcessedPage > 0) {
@@ -1011,7 +1031,7 @@ bool OcrView::CheckAndPromptResume(const wxString& filePath) {
             m_lastJsonResult = wxString::FromUTF8(resumeInfo.jsonStructured);
             if (m_resultCard) {
                 m_resultCard->SetMarkdown(cleanMd, outDir, false);
-                m_resultCard->SetCharacterCount(m_lastMarkdownResult.Length());
+                m_resultCard->SetCharacterCount(cleanMd.size());
             }
             if (m_progressPanel) {
                 m_progressPanel->SetProgress(
@@ -1024,7 +1044,6 @@ bool OcrView::CheckAndPromptResume(const wxString& filePath) {
                 if (GetSizer())
                     GetSizer()->Layout();
             }
-            UpdateTranslateButtonVisibility();
             if (m_recognizeBtn) {
                 m_recognizeBtn->SetLabel(wxString::Format(L"继续文档解析 (第 %d-%d 页)", targetPage, total));
             }
@@ -1032,7 +1051,7 @@ bool OcrView::CheckAndPromptResume(const wxString& filePath) {
                 GetSizer()->Layout();
             }
             m_resumeFromPage = fullyDone; // 0-indexed: 例如第 26 页对应 0-indexed 为 25
-            m_resumeInitialMarkdown = resumeInfo.markdown;
+            m_resumeInitialMarkdown = cleanMd;
             m_resumeInitialJson = resumeInfo.jsonStructured;
             return true;
         } else {
@@ -1050,8 +1069,6 @@ bool OcrView::CheckAndPromptResume(const wxString& filePath) {
                 if (GetSizer())
                     GetSizer()->Layout();
             }
-            UpdateTranslateButtonVisibility();
-            return false;
         }
     }
 
@@ -1258,12 +1275,12 @@ void OcrView::ExportToHtml() {
         textToExport = m_resultCard->GetTextCtrl()->GetValue();
     }
     if (textToExport.IsEmpty()) {
-        wxMessageBox(L"当前暂无 OCR 识别结果可导出！", L"提示", wxOK | wxICON_INFORMATION, this);
+        wxMessageBox(L"当前暂无识别或翻译结果可导出！", L"提示", wxOK | wxICON_INFORMATION, this);
         return;
     }
 
     // 默认保存文件名
-    wxString defaultFileName = L"OCR_解析结果.html";
+    wxString defaultFileName = L"文档解析.html";
     if (!m_loadedImagePath.IsEmpty()) {
         wxFileName inputFn(m_loadedImagePath);
         defaultFileName = inputFn.GetName() + L".html";
@@ -1314,11 +1331,14 @@ void OcrView::ExportToHtml() {
 
     if (success) {
         int res = wxMessageBox(
-            L"已成功导出单文件 HTML 网页！\n\n"
-            L"• 保存路径: " + savePath + L"\n"
-            L"• 所有排版、公式、表格及截图已完全内嵌\n"
-            L"• 零网络依赖，任何浏览器双击即开\n\n"
-            L"是否立即在浏览器中打开查看？",
+            wxString::Format(
+                L"已成功导出单文件 HTML 网页！\n\n"
+                L"• 保存路径: %s\n"
+                L"• 所有排版、公式、表格及截图已完全内嵌\n"
+                L"• 零网络依赖，任何浏览器双击即开\n\n"
+                L"是否立即在浏览器中打开查看？",
+                savePath
+            ),
             L"导出成功",
             wxYES_NO | wxICON_INFORMATION,
             this
@@ -1490,13 +1510,15 @@ void OcrView::SetState(OcrTaskState state) {
     if (state == OcrTaskState::Recognizing) {
         m_recognizeBtn->Hide();
         m_stopBtn->Show();
-        if (m_translateBtn) {
-            m_translateBtn->Hide();
+        if (m_enableTranslateCheck) {
+            m_enableTranslateCheck->Disable();
         }
     } else {
         m_recognizeBtn->Show();
         m_stopBtn->Hide();
-        UpdateTranslateButtonVisibility();
+        if (m_enableTranslateCheck) {
+            m_enableTranslateCheck->Enable();
+        }
     }
     if (m_dropzonePanel) {
         m_dropzonePanel->Refresh();
@@ -1570,13 +1592,17 @@ void OcrView::DoExecuteDocumentPipeline(const std::string& docPath) {
         if (GetSizer())
             GetSizer()->Layout();
     }
-    UpdateTranslateButtonVisibility();
+
+    bool enableTranslate = m_enableTranslateCheck ? m_enableTranslateCheck->GetValue() : false;
 
     if (m_progressPanel) {
         if (m_resumeFromPage > 0) {
-            m_progressPanel->SetStarting(wxString::Format(L"正在准备断点续传，将从第 %d 页接续解析...", m_resumeFromPage + 1));
+            m_progressPanel->SetStarting(wxString::Format(
+                enableTranslate ? L"正在准备断点续传，将从第 %d 页接续解析与双语对照翻译..." : L"正在准备断点续传，将从第 %d 页接续解析...",
+                m_resumeFromPage + 1));
         } else {
-            m_progressPanel->SetStarting(L"正在启动 PaddleOCR-VL 两阶段文档解析流水线...");
+            m_progressPanel->SetStarting(
+                enableTranslate ? L"正在启动 版面分析 - 视觉OCR - 双语对照翻译 端到端文档解析流水线..." : L"正在启动 版面分析 - 视觉OCR 文档解析流水线...");
         }
     }
 
@@ -1584,228 +1610,263 @@ void OcrView::DoExecuteDocumentPipeline(const std::string& docPath) {
 
     int totalPages = m_pdfTotalPages > 0 ? m_pdfTotalPages : 1;
 
+    // Helper: 真正启动 Pipeline 执行
+    auto launchPipeline = [this, docPath, enableTranslate, totalPages]() {
+        wxFileName fn(wxString::FromUTF8(docPath));
+        std::string outDir = std::string(fn.GetPath().ToUTF8().data()) + "/" + std::string(fn.GetName().ToUTF8().data());
+        m_lastOutputDir = wxString::FromUTF8(outDir);
+
+        auto pipeline = m_modelManager->GetDocumentPipeline();
+        if (!pipeline) {
+            SetState(OcrTaskState::Idle);
+            if (m_progressPanel) {
+                m_progressPanel->SetError(L"文档解析服务未就绪");
+            }
+            return;
+        }
+
+        DocProgressCallback onProgress = BindUi([this](int curPage, int totalPages, std::string stageDesc, std::string currentMd) {
+            int displayPage = curPage + 1;
+            int percent = 0;
+            if (totalPages <= 1) {
+                // 单页图像模式
+                if (stageDesc.find("光栅化") != std::string::npos)
+                    percent = 15;
+                else if (stageDesc.find("版面分析") != std::string::npos)
+                    percent = 35;
+                else if (stageDesc.find("识别") != std::string::npos) {
+                    int elIdx = 0, elTotal = 0;
+                    const char* s = strchr(stageDesc.c_str(), '(');
+                    if (s && sscanf(s, "(%d/%d)", &elIdx, &elTotal) == 2 && elTotal > 0) {
+                        percent = 35 + static_cast<int>(55.0 * elIdx / elTotal);
+                    } else {
+                        percent = 60;
+                    }
+                } else {
+                    percent = 85;
+                }
+            } else {
+                // 多页 PDF 模式
+                double pageFraction = 0.2;
+                if (stageDesc.find("光栅化") != std::string::npos)
+                    pageFraction = 0.1;
+                else if (stageDesc.find("版面分析") != std::string::npos)
+                    pageFraction = 0.35;
+                else if (stageDesc.find("识别") != std::string::npos) {
+                    int elIdx = 0, elTotal = 0;
+                    const char* s = strchr(stageDesc.c_str(), '(');
+                    if (s && sscanf(s, "(%d/%d)", &elIdx, &elTotal) == 2 && elTotal > 0) {
+                        pageFraction = 0.35 + 0.6 * elIdx / elTotal;
+                    } else {
+                        pageFraction = 0.6;
+                    }
+                } else {
+                    pageFraction = 0.9;
+                }
+                percent = (std::clamp)(static_cast<int>(((curPage + pageFraction) / totalPages) * 100.0), 1, 99);
+            }
+
+            // 1. 更新独立进度组件
+            if (m_progressPanel) {
+                m_progressPanel->SetProgress(displayPage, totalPages, percent, wxString::FromUTF8(stageDesc));
+            }
+
+            // 2. 接收 Markdown 结果并进行智能平滑节流
+            auto now = std::chrono::steady_clock::now();
+            uint64_t nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+            bool isPageDone = (stageDesc.find("页解析完成") != std::string::npos);
+            bool isTextModified = (!currentMd.empty() && currentMd != m_lastRenderedMarkdown);
+            bool shouldRender = false;
+
+            if (isTextModified) {
+                if (totalPages <= 1) {
+                    if (isPageDone || (nowMs - m_lastRenderTimestamp >= 1200)) {
+                        shouldRender = true;
+                    }
+                } else {
+                    if (isPageDone) {
+                        shouldRender = true;
+                    } else if (currentMd.size() < 12000 && (nowMs - m_lastRenderTimestamp >= 3000)) {
+                        shouldRender = true;
+                    }
+                }
+            }
+
+            m_lastMarkdownResult = wxString::FromUTF8(currentMd);
+
+            if (m_resultCard) {
+                if (shouldRender) {
+                    m_lastRenderTimestamp = nowMs;
+                    m_lastRenderedPage = curPage;
+                    m_lastRenderedMarkdown = currentMd;
+                    m_resultCard->SetMarkdown(currentMd, std::string(m_lastOutputDir.ToUTF8().data()), false);
+                }
+            }
+        });
+
+        DocCompleteCallback onComplete = BindUi([this, enableTranslate](bool success, std::string fullMd, std::string jsonStructured, std::string error) {
+            SetState(OcrTaskState::Idle);
+            if (success) {
+                m_resumeFromPage = 0;
+                m_resumeInitialMarkdown.clear();
+                m_resumeInitialJson.clear();
+                m_lastRenderedMarkdown = fullMd;
+                m_lastMarkdownResult = wxString::FromUTF8(fullMd);
+                m_lastJsonResult = wxString::FromUTF8(jsonStructured);
+                if (m_resultCard) {
+                    m_resultCard->SetMarkdown(fullMd, std::string(m_lastOutputDir.ToUTF8().data()), false);
+                    m_resultCard->SetCharacterCount(fullMd.size());
+                }
+                if (m_progressPanel) {
+                    m_progressPanel->SetCompleted(m_pdfTotalPages > 0 ? m_pdfTotalPages : 1, m_lastOutputDir);
+                }
+                if (m_openFolderBtn) {
+                    m_openFolderBtn->Show();
+                    if (GetSizer())
+                        GetSizer()->Layout();
+                }
+                if (m_recognizeBtn) {
+                    m_recognizeBtn->SetLabel(L"重新开始文档解析");
+                }
+                wxMessageBox(
+                    wxString::Format(
+                        L"端到端文档解析%s已顺利完成！\n\n"
+                        L"• 结构化图文排版 Markdown 已生成，支持 [排版] (富文本/公式/表格渲染) 与 [源码] 自由查看\n"
+                        L"• 解析文件已自动落盘并保存至:\n  %s\n\n"
+                        L"  - 完整 Markdown 文档: *.md\n"
+                        L"  - 结构化数据与切片插图: figures/\n\n"
+                        L"• 数学公式与 OTSL 表格已按拓扑阅读顺序严格保真重构%s\n"
+                        L"• 如需单文件离线 HTML 网页，可随时点击卡片右上角工具栏导出",
+                        enableTranslate ? L"与双语对照翻译" : L"",
+                        m_lastOutputDir,
+                        enableTranslate ? L"\n• 译文已保持与原文一致的 Markdown 格式插入对应段落下，便于对比与校对" : L""
+                    ),
+                    L"文档解析完成", wxOK | wxICON_INFORMATION, this
+                );
+            } else {
+                // 中断或失败状态完全由独立进度组件展示，彻底避免冲掉 m_resultCard 识别结果
+                m_lastRenderedMarkdown = fullMd;
+                m_lastMarkdownResult = wxString::FromUTF8(fullMd);
+                m_lastJsonResult = wxString::FromUTF8(jsonStructured);
+                if (m_resultCard) {
+                    m_resultCard->SetMarkdown(fullMd, std::string(m_lastOutputDir.ToUTF8().data()), false);
+                    m_resultCard->SetCharacterCount(fullMd.size());
+                }
+                if (m_openFolderBtn) {
+                    m_openFolderBtn->Show();
+                    if (GetSizer())
+                        GetSizer()->Layout();
+                }
+
+                int targetPage = 0;
+                int fullyDone = 0;
+                try {
+                    if (!jsonStructured.empty()) {
+                        auto j = nlohmann::json::parse(jsonStructured);
+                        int comp = j.value("completed_pages", 0);
+                        int lastPIdx = 0;
+                        bool lastPComp = true;
+                        if (j.contains("pages") && j["pages"].is_array() && !j["pages"].empty()) {
+                            lastPIdx = j["pages"].back().value("page_index", static_cast<int>(j["pages"].size()));
+                            lastPComp = j["pages"].back().value("is_page_completed", true);
+                        }
+                        if (j.contains("last_interrupted_page")) {
+                            targetPage = j.value("last_interrupted_page", 0);
+                        } else if (!lastPComp && lastPIdx > 0) {
+                            targetPage = lastPIdx;
+                        } else {
+                            targetPage = (std::max)(lastPIdx, comp);
+                        }
+                        fullyDone = (std::max)(0, targetPage - 1);
+                    }
+                } catch (...) {}
+
+                int total = m_pdfTotalPages > 0 ? m_pdfTotalPages : 1;
+                if (targetPage > 0 && targetPage <= total) {
+                    m_resumeFromPage = fullyDone;
+                    m_resumeInitialMarkdown = fullMd;
+                    m_resumeInitialJson = jsonStructured;
+                    if (m_recognizeBtn) {
+                        m_recognizeBtn->SetLabel(wxString::Format(L"继续文档解析 (第 %d-%d 页)", targetPage, total));
+                    }
+                    if (GetSizer()) {
+                        GetSizer()->Layout();
+                    }
+                }
+
+                if (error == "用户已取消解析") {
+                    if (m_progressPanel) {
+                        m_progressPanel->SetCancelled(fullyDone > 0 ? fullyDone : (m_pdfCurrentPage + 1), total,
+                                                      L"用户已取消解析，已实时保存已生成的 Markdown 与 JSON 结果");
+                    }
+                } else {
+                    if (m_progressPanel) {
+                        m_progressPanel->SetError(wxString::FromUTF8("文档解析中断或异常: " + error + " (已实时保存已完成部分)"));
+                    }
+                }
+            }
+        });
+
+        pipeline->StartParseAsync(
+            docPath, outDir, enableTranslate,
+            onProgress,
+            onComplete,
+            m_resumeFromPage,
+            m_resumeInitialMarkdown,
+            m_resumeInitialJson
+        );
+    };
+
     // 1. 先确保版面分析模型装载就绪 (若未配置则优雅降级为单阶段全页识别)
-    m_modelManager->EnsureModelAsync(TargetModelType::DocLayout, BindUi([this, totalPages](const std::string& statusMsg) {
-                                         if (m_progressPanel) {
-                                             m_progressPanel->SetProgress(0, totalPages, 3, L"正在准备版面分析引擎: " + wxString::FromUTF8(statusMsg));
-                                         }
-                                     }),
-                                     BindUi([this, docPath, totalPages](bool layoutOk, const ServerStatusInfo& layoutInfo) {
-                                         // 2. 继续确保 OCR 视觉模型服务就绪
-                                         m_modelManager->EnsureModelAsync(
-                                             TargetModelType::Ocr, BindUi([this, layoutOk, totalPages](const std::string& statusMsg) {
-                                                 wxString prefix = layoutOk ? L"版面分析引擎已就绪，正在准备视觉模型: " : L"单阶段模式，正在准备视觉模型: ";
-                                                 if (m_progressPanel) {
-                                                     m_progressPanel->SetProgress(0, totalPages, 8, prefix + wxString::FromUTF8(statusMsg));
-                                                 }
-                                                 UpdateStatusBadge();
-                                             }),
-                                             BindUi([this, docPath, layoutOk](bool ok, const ServerStatusInfo& info) {
-                                                 if (!ok) {
-                                                     SetState(OcrTaskState::Idle);
-                                                     if (m_progressPanel) {
-                                                         m_progressPanel->SetError(L"OCR 视觉模型未就绪: " + wxString::FromUTF8(info.message) + L" (请前往「系统偏好设置」检查模型配置)");
-                                                     }
-                                                     UpdateStatusBadge();
-                                                     return;
-                                                 }
+    m_modelManager->EnsureModelAsync(
+        TargetModelType::DocLayout,
+        BindUi([this, totalPages](const std::string& statusMsg) {
+            if (m_progressPanel) {
+                m_progressPanel->SetProgress(0, totalPages, 3, L"正在准备版面分析引擎: " + wxString::FromUTF8(statusMsg));
+            }
+        }),
+        BindUi([this, docPath, totalPages, enableTranslate, launchPipeline](bool layoutOk, const ServerStatusInfo& layoutInfo) {
+            // 2. 继续确保 OCR 视觉模型服务就绪 (PaddleOCR-VL via llama.cpp)
+            m_modelManager->EnsureModelAsync(
+                TargetModelType::Ocr,
+                BindUi([this, layoutOk, totalPages](const std::string& statusMsg) {
+                    wxString prefix = layoutOk ? L"版面分析引擎已就绪，正在准备视觉模型 (llama.cpp): " : L"单阶段模式，正在准备视觉模型 (llama.cpp): ";
+                    if (m_progressPanel) {
+                        m_progressPanel->SetProgress(0, totalPages, 8, prefix + wxString::FromUTF8(statusMsg));
+                    }
+                    UpdateStatusBadge();
+                }),
+                BindUi([this, docPath, totalPages, enableTranslate, launchPipeline](bool ocrOk, const ServerStatusInfo& ocrInfo) {
+                    if (!ocrOk) {
+                        SetState(OcrTaskState::Idle);
+                        if (m_progressPanel) {
+                            m_progressPanel->SetError(L"OCR 视觉模型未就绪: " + wxString::FromUTF8(ocrInfo.message) + L" (请前往「系统偏好设置」检查模型配置)");
+                        }
+                        UpdateStatusBadge();
+                        return;
+                    }
 
-                                                 wxFileName fn(wxString::FromUTF8(docPath));
-                                                 std::string outDir = std::string(fn.GetPath().ToUTF8().data()) + "/" + std::string(fn.GetName().ToUTF8().data());
-                                                 m_lastOutputDir = wxString::FromUTF8(outDir);
-
-                                                 auto pipeline = m_modelManager->GetDocumentPipeline();
-                                                 if (!pipeline) {
-                                                     SetState(OcrTaskState::Idle);
-                                                     if (m_progressPanel) {
-                                                         m_progressPanel->SetError(L"文档解析服务未就绪");
-                                                     }
-                                                     return;
-                                                 }
-
-                                                 pipeline->StartParseAsync(docPath, outDir, false, BindUi([this](int curPage, int totalPages, std::string stageDesc, std::string currentMarkdown) {
-                                                                               int displayPage = curPage + 1;
-                                                                               int percent = 0;
-                                                                               if (totalPages <= 1) {
-                                                                                   // 单页图像模式
-                                                                                   if (stageDesc.find("光栅化") != std::string::npos)
-                                                                                       percent = 15;
-                                                                                   else if (stageDesc.find("版面分析") != std::string::npos)
-                                                                                       percent = 35;
-                                                                                   else if (stageDesc.find("识别") != std::string::npos) {
-                                                                                       int elIdx = 0, elTotal = 0;
-                                                                                       const char* s = strchr(stageDesc.c_str(), '(');
-                                                                                       if (s && sscanf(s, "(%d/%d)", &elIdx, &elTotal) == 2 && elTotal > 0) {
-                                                                                           percent = 35 + static_cast<int>(55.0 * elIdx / elTotal);
-                                                                                       } else {
-                                                                                           percent = 60;
-                                                                                       }
-                                                                                   } else {
-                                                                                       percent = 85;
-                                                                                   }
-                                                                               } else {
-                                                                                   // 多页 PDF 模式
-                                                                                   double pageFraction = 0.2;
-                                                                                   if (stageDesc.find("光栅化") != std::string::npos)
-                                                                                       pageFraction = 0.1;
-                                                                                   else if (stageDesc.find("版面分析") != std::string::npos)
-                                                                                       pageFraction = 0.35;
-                                                                                   else if (stageDesc.find("识别") != std::string::npos) {
-                                                                                       int elIdx = 0, elTotal = 0;
-                                                                                       const char* s = strchr(stageDesc.c_str(), '(');
-                                                                                       if (s && sscanf(s, "(%d/%d)", &elIdx, &elTotal) == 2 && elTotal > 0) {
-                                                                                           pageFraction = 0.35 + 0.6 * elIdx / elTotal;
-                                                                                       } else {
-                                                                                           pageFraction = 0.6;
-                                                                                       }
-                                                                                   } else {
-                                                                                       pageFraction = 0.9;
-                                                                                   }
-                                                                                   percent = (std::clamp)(static_cast<int>(((curPage + pageFraction) / totalPages) * 100.0), 1, 99);
-                                                                                }
-
-                                                                                // 1. 更新独立进度组件（进度条、百分比、当前阶段信息保持 100% 实时反馈）
-                                                                                if (m_progressPanel) {
-                                                                                   m_progressPanel->SetProgress(displayPage, totalPages, percent, wxString::FromUTF8(stageDesc));
-                                                                                }
-
-                                                                                // 2. 接收 Markdown 结果并进行智能平滑节流，彻底杜绝长文档频繁全量重排卡死 UI 线程
-                                                                                auto now = std::chrono::steady_clock::now();
-                                                                                uint64_t nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
-                                                                                bool isPageDone = (stageDesc.find("页解析完成") != std::string::npos);
-                                                                                bool isTextModified = (!currentMarkdown.empty() && currentMarkdown != m_lastRenderedMarkdown);
-                                                                                bool shouldRender = false;
-
-                                                                                if (isTextModified) {
-                                                                                    if (totalPages <= 1) {
-                                                                                        // 单页图像模式：间隔 1200ms 刷新流式内容，或单页完成时必刷新
-                                                                                        if (isPageDone || (nowMs - m_lastRenderTimestamp >= 1200)) {
-                                                                                            shouldRender = true;
-                                                                                        }
-                                                                                    } else {
-                                                                                        // 多页 PDF 模式：
-                                                                                        // 关键优化：每当一页完全解析完成 (isPageDone) 时必刷新渲染；
-                                                                                        // 在单页内部元素流式识别期间：
-                                                                                        // - 若全文较短 (< 12000 字符)，每隔 3000ms 流式预览一次，给用户实时的流式反馈
-                                                                                        // - 若累计全文庞大 (>= 12000 字符)，严格仅在单页解析完成 (isPageDone) 时才刷新 DOM，
-                                                                                        //   彻底消除超长文档多公式在 WebView 中反复全量重排导致的 UI 卡频与掉帧
-                                                                                        if (isPageDone) {
-                                                                                            shouldRender = true;
-                                                                                        } else if (currentMarkdown.size() < 12000 && (nowMs - m_lastRenderTimestamp >= 3000)) {
-                                                                                            shouldRender = true;
-                                                                                        }
-                                                                                    }
-                                                                                }
-
-                                                                                if (shouldRender && m_resultCard) {
-                                                                                    m_lastRenderTimestamp = nowMs;
-                                                                                    m_lastRenderedPage = curPage;
-                                                                                    m_lastRenderedMarkdown = currentMarkdown;
-                                                                                    m_lastMarkdownResult = wxString::FromUTF8(currentMarkdown);
-                                                                                    m_resultCard->SetMarkdown(currentMarkdown, std::string(m_lastOutputDir.ToUTF8().data()), true);
-                                                                                }
-                                                                           }),
-                                                                           BindUi([this](bool success, std::string fullMarkdown, std::string jsonStructured, std::string error) {
-                                                                               SetState(OcrTaskState::Idle);
-                                                                               if (success) {
-                                                                                   m_resumeFromPage = 0;
-                                                                                   m_resumeInitialMarkdown.clear();
-                                                                                   m_resumeInitialJson.clear();
-                                                                                   m_lastRenderedMarkdown = fullMarkdown;
-                                                                                   m_lastMarkdownResult = wxString::FromUTF8(fullMarkdown);
-                                                                                   m_lastJsonResult = wxString::FromUTF8(jsonStructured);
-                                                                                   if (m_resultCard) {
-                                                                                       m_resultCard->SetMarkdown(fullMarkdown, std::string(m_lastOutputDir.ToUTF8().data()), true);
-                                                                                       m_resultCard->SetCharacterCount(m_lastMarkdownResult.Length());
-                                                                                   }
-                                                                                   if (m_progressPanel) {
-                                                                                       m_progressPanel->SetCompleted(m_pdfTotalPages > 0 ? m_pdfTotalPages : 1, m_lastOutputDir);
-                                                                                   }
-                                                                                   if (m_openFolderBtn) {
-                                                                                       m_openFolderBtn->Show();
-                                                                                       if (GetSizer())
-                                                                                           GetSizer()->Layout();
-                                                                                   }
-                                                                                   UpdateTranslateButtonVisibility();
-                                                                                   if (m_recognizeBtn) {
-                                                                                       m_recognizeBtn->SetLabel(L"重新开始文档解析");
-                                                                                   }
-                                                                                   wxMessageBox(L"PaddleOCR-VL 两阶段文档解析完成！\n\n"
-                                                                                                L"• 结构化 Markdown 已生成并在右侧渲染\n"
-                                                                                                L"• 结果已实时自动保存至: " +
-                                                                                                    m_lastOutputDir +
-                                                                                                    L"\n"
-                                                                                                    L"• 表格、插图、公式均已按阅读顺序结构化重构",
-                                                                                                L"文档解析完成", wxOK | wxICON_INFORMATION, this);
-                                                                               } else {
-                                                                                   // 中断或失败状态完全由独立进度组件展示，彻底避免冲掉 m_resultCard 识别结果
-                                                                                   m_lastRenderedMarkdown = fullMarkdown;
-                                                                                   m_lastMarkdownResult = wxString::FromUTF8(fullMarkdown);
-                                                                                   m_lastJsonResult = wxString::FromUTF8(jsonStructured);
-                                                                                   if (m_resultCard) {
-                                                                                       m_resultCard->SetMarkdown(fullMarkdown, std::string(m_lastOutputDir.ToUTF8().data()), true);
-                                                                                       m_resultCard->SetCharacterCount(m_lastMarkdownResult.Length());
-                                                                                   }
-                                                                                   if (m_openFolderBtn) {
-                                                                                       m_openFolderBtn->Show();
-                                                                                       if (GetSizer())
-                                                                                           GetSizer()->Layout();
-                                                                                   }
-
-                                                                                   int targetPage = 0;
-                                                                                   int fullyDone = 0;
-                                                                                   try {
-                                                                                       if (!jsonStructured.empty()) {
-                                                                                           auto j = nlohmann::json::parse(jsonStructured);
-                                                                                           int comp = j.value("completed_pages", 0);
-                                                                                           int lastPIdx = 0;
-                                                                                           bool lastPComp = true;
-                                                                                           if (j.contains("pages") && j["pages"].is_array() && !j["pages"].empty()) {
-                                                                                               lastPIdx = j["pages"].back().value("page_index", static_cast<int>(j["pages"].size()));
-                                                                                               lastPComp = j["pages"].back().value("is_page_completed", true);
-                                                                                           }
-                                                                                           if (j.contains("last_interrupted_page")) {
-                                                                                               targetPage = j.value("last_interrupted_page", 0);
-                                                                                           } else if (!lastPComp && lastPIdx > 0) {
-                                                                                               targetPage = lastPIdx;
-                                                                                           } else {
-                                                                                               targetPage = (std::max)(lastPIdx, comp);
-                                                                                           }
-                                                                                           fullyDone = (std::max)(0, targetPage - 1);
-                                                                                       }
-                                                                                   } catch (...) {}
-
-                                                                                   int total = m_pdfTotalPages > 0 ? m_pdfTotalPages : 1;
-                                                                                   if (targetPage > 0 && targetPage <= total) {
-                                                                                       m_resumeFromPage = fullyDone; // 0-indexed: 例如第 26 页对应 0-indexed 为 25
-                                                                                       m_resumeInitialMarkdown = fullMarkdown;
-                                                                                       m_resumeInitialJson = jsonStructured;
-                                                                                       if (m_recognizeBtn) {
-                                                                                           m_recognizeBtn->SetLabel(wxString::Format(L"继续文档解析 (第 %d-%d 页)", targetPage, total));
-                                                                                       }
-                                                                                       if (GetSizer()) {
-                                                                                           GetSizer()->Layout();
-                                                                                       }
-                                                                                   }
-
-                                                                                   if (error == "用户已取消解析") {
-                                                                                       if (m_progressPanel) {
-                                                                                           m_progressPanel->SetCancelled(fullyDone > 0 ? fullyDone : (m_pdfCurrentPage + 1), total,
-                                                                                                                         L"用户已取消解析，已实时保存已生成的 Markdown 与 JSON 结果");
-                                                                                       }
-                                                                                   } else {
-                                                                                       if (m_progressPanel) {
-                                                                                           m_progressPanel->SetError(wxString::FromUTF8("文档解析中断或异常: " + error + " (已实时保存已完成部分)"));
-                                                                                       }
-                                                                                   }
-                                                                                   UpdateTranslateButtonVisibility();
-                                                                               }
-                                                                           }),
-                                                                           m_resumeFromPage,
-                                                                           m_resumeInitialMarkdown,
-                                                                           m_resumeInitialJson);
-                                             }));
-                                     }));
+                    if (enableTranslate) {
+                        // 3. 若启用了双语对照翻译，确保 翻译大模型服务就绪 (Hy-MT2 via llama.cpp)
+                        m_modelManager->EnsureModelAsync(
+                            TargetModelType::Translation,
+                            BindUi([this, totalPages](const std::string& statusMsg) {
+                                if (m_progressPanel) {
+                                    m_progressPanel->SetProgress(0, totalPages, 12, L"视觉识别服务已就绪，正在准备翻译大模型 (llama.cpp): " + wxString::FromUTF8(statusMsg));
+                                }
+                            }),
+                            BindUi([this, launchPipeline](bool transOk, const ServerStatusInfo& transInfo) {
+                                launchPipeline();
+                            })
+                        );
+                    } else {
+                        // 未开启翻译，直接执行 OCR 结构化流水线
+                        launchPipeline();
+                    }
+                })
+            );
+        })
+    );
 }
 
 void OcrView::OnStopClicked(wxCommandEvent& WXUNUSED(event)) {
@@ -1822,56 +1883,5 @@ void OcrView::OnStopClicked(wxCommandEvent& WXUNUSED(event)) {
         m_progressPanel->SetCancelled(m_pdfCurrentPage + 1, m_pdfTotalPages, L"已停止解析，已保留当前生成的 Markdown 结果");
     }
 }
-
-void OcrView::UpdateTranslateButtonVisibility() {
-    if (!m_translateBtn)
-        return;
-    bool hasContent = false;
-    if (m_resultCard && m_resultCard->GetTextCtrl()) {
-        wxString text = m_resultCard->GetTextCtrl()->GetValue().Trim(true).Trim(false);
-        if (m_currentState == OcrTaskState::Idle && !text.IsEmpty() && !text.StartsWith(L"正在") && !text.StartsWith(L"错误:") && !text.StartsWith(L"识别出现提示/错误:")) {
-            hasContent = true;
-        }
-    }
-    if (hasContent) {
-        if (!m_translateBtn->IsShown()) {
-            m_translateBtn->Show();
-            if (GetSizer())
-                GetSizer()->Layout();
-        }
-    } else {
-        if (m_translateBtn->IsShown()) {
-            m_translateBtn->Hide();
-            if (GetSizer())
-                GetSizer()->Layout();
-        }
-    }
-}
-
-void OcrView::OnTranslateClicked(wxCommandEvent& WXUNUSED(event)) {
-    if (m_currentState != OcrTaskState::Idle)
-        return;
-
-    wxString text;
-    if (m_resultCard && m_resultCard->GetTextCtrl()) {
-        text = m_resultCard->GetTextCtrl()->GetValue().Trim(true).Trim(false);
-    }
-
-    if (text.IsEmpty() || text.StartsWith(L"正在") || text.StartsWith(L"错误:")) {
-        return;
-    }
-
-    WinTtsHelper::GetInstance().Stop();
-
-    if (m_onTranslateCallback) {
-        m_onTranslateCallback(text);
-    } else {
-        wxWindow* topWin = wxGetTopLevelParent(this);
-        MainFrame* mainFrame = dynamic_cast<MainFrame*>(topWin);
-        if (mainFrame) {
-            mainFrame->NavigateToTextView(text, true);
-        }
-    }
-}
-
 } // namespace LinguaAlpaca::UI
+

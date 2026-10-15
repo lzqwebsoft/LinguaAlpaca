@@ -284,7 +284,10 @@ elseif(APPLE)
         COMMAND ${CMAKE_COMMAND} -E create_symlink
             "libonnxruntime.dylib"
             "$<TARGET_FILE_DIR:${PROJECT_NAME}>/../Frameworks/libonnxruntime.1.dylib"
-        COMMENT "[LinguaAlpaca] Created libonnxruntime.1.dylib symlink in Frameworks"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_CURRENT_SOURCE_DIR}/resources/web"
+            "$<TARGET_FILE_DIR:${PROJECT_NAME}>/../Resources/resources/web"
+        COMMENT "[LinguaAlpaca] Provisioned macOS runtime assets and symlinks"
     )
     set_target_properties(${PROJECT_NAME} PROPERTIES
         INSTALL_RPATH "@executable_path/../Frameworks"

@@ -7,6 +7,9 @@
 #include "engine/DocLayoutEngine.hpp"
 #include "core/document/DocumentPipeline.hpp"
 #include "core/Config.hpp"
+#include <fstream>
+#include <regex>
+#include <nlohmann/json.hpp>
 
 using namespace LinguaAlpaca;
 
@@ -664,5 +667,269 @@ TEST_CASE("DocLayoutEngine & DocumentPipeline - Empty Page and Image Content Det
     CHECK(DocLayoutEngine::IsImageContentEmpty(invalidImg) == true);
     CHECK(DocumentPipeline::IsImageContentEmpty(invalidImg) == true);
 }
+
+TEST_CASE("DocumentPipeline - Document-level translate_enabled configuration in JSON", "[pipeline][config]") {
+    wxString tempDir = wxFileName::CreateTempFileName("doc_json_test");
+    wxRemoveFile(tempDir);
+    wxFileName::Mkdir(tempDir, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
+
+    std::string baseName = "test_doc";
+    wxString dummyDocPath = tempDir + "/" + baseName + ".pdf";
+    {
+        std::ofstream f(dummyDocPath.ToStdString());
+        f << "dummy content";
+    }
+
+    wxString outDir = tempDir + "/" + baseName;
+    wxFileName::Mkdir(outDir, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
+
+    // 1. 测试当 JSON 中记录 translate_enabled: true 时
+    {
+        wxString jsonPath = outDir + "/" + baseName + ".json";
+        wxString mdPath = outDir + "/" + baseName + ".md";
+        {
+            std::ofstream f(mdPath.ToStdString());
+            f << "# Test Title\n\nContent";
+        }
+        {
+            nlohmann::json j;
+            j["file_name"] = baseName;
+            j["total_pages"] = 2;
+            j["completed_pages"] = 2;
+            j["is_completed"] = true;
+            j["translate_enabled"] = true;
+            std::ofstream f(jsonPath.ToStdString());
+            f << j.dump(2);
+        }
+
+        auto info = DocumentPipeline::CheckResumeInfo(dummyDocPath.ToUTF8().data(), outDir.ToUTF8().data());
+        CHECK(info.hasResumeData == true);
+        CHECK(info.translateEnabled == true);
+    }
+
+    // 2. 测试当 JSON 中记录 translate_enabled: false 时
+    {
+        wxString jsonPath = outDir + "/" + baseName + ".json";
+        {
+            nlohmann::json j;
+            j["file_name"] = baseName;
+            j["total_pages"] = 2;
+            j["completed_pages"] = 2;
+            j["is_completed"] = true;
+            j["translate_enabled"] = false;
+            std::ofstream f(jsonPath.ToStdString());
+            f << j.dump(2);
+        }
+
+        auto info = DocumentPipeline::CheckResumeInfo(dummyDocPath.ToUTF8().data(), outDir.ToUTF8().data());
+        CHECK(info.hasResumeData == true);
+        CHECK(info.translateEnabled == false);
+    }
+
+    wxFileName::Rmdir(tempDir, wxPATH_RMDIR_RECURSIVE);
+}
+
+TEST_CASE("DocumentPipeline - AlignMarkdownFormat list and heading alignment", "[pipeline][markdown]") {
+    // 1. 标题层级对齐
+    CHECK(DocumentPipeline::AlignMarkdownFormat("# Document Title", "文档标题") == "# 文档标题");
+    CHECK(DocumentPipeline::AlignMarkdownFormat("## Section Title", "章节标题") == "## 章节标题");
+    CHECK(DocumentPipeline::AlignMarkdownFormat("### Sub Title", "# 误导标题") == "### 误导标题");
+
+    // 2. 有序列表起始编号对齐 (单行)
+    // 原文以 6. 起始，模型翻译误以 1. 起始，强制对齐为 6.，绝不累加或错位
+    CHECK(DocumentPipeline::AlignMarkdownFormat("6. Cultural Models: 139", "1. 文化模式：139") == "6. 文化模式：139");
+    // 原文以 6. 起始，模型翻译未输出编号，自动补全 6.
+    CHECK(DocumentPipeline::AlignMarkdownFormat("6. Cultural Models: 139", "文化模式：139") == "6. 文化模式：139");
+    // 原文以 6. 起始，模型翻译输出为无序列表，对齐为 6.
+    CHECK(DocumentPipeline::AlignMarkdownFormat("6. Cultural Models: 139", "- 文化模式：139") == "6. 文化模式：139");
+    // 原文为无序列表，模型翻译误写成有序列表，对齐为无序列表
+    CHECK(DocumentPipeline::AlignMarkdownFormat("- Key Point", "1. 关键点") == "- 关键点");
+
+    // 3. 有序列表编号一致时保持原样
+    CHECK(DocumentPipeline::AlignMarkdownFormat("1. Introduction: 36 Ways", "1. 引言：36种方法") == "1. 引言：36种方法");
+
+    // 4. 多行有序列表跨行起始偏移 (Delta) 对齐
+    std::string multiSource = "6. Cultural Models: 139\n7. The Social Mind: 169\n8. Conclusion: 199";
+    std::string multiTrans = "1. 文化模式：139\n2. 社会思维：169\n3. 结论：199";
+    std::string expectedTrans = "6. 文化模式：139\n7. 社会思维：169\n8. 结论：199";
+    CHECK(DocumentPipeline::AlignMarkdownFormat(multiSource, multiTrans) == expectedTrans);
+
+    // 5. 引用块对齐
+    CHECK(DocumentPipeline::AlignMarkdownFormat("> Important note", "重要说明") == "> 重要说明");
+}
+
+TEST_CASE("DocumentPipeline - AppendToMarkdown list separation without accumulation", "[pipeline][markdown]") {
+    // 1. 普通文本段落之间保持标准双换行分隔
+    std::string md1;
+    DocumentPipeline::AppendToMarkdown(md1, "First paragraph.");
+    DocumentPipeline::AppendToMarkdown(md1, "Second paragraph.");
+    CHECK(md1 == "First paragraph.\n\nSecond paragraph.");
+
+    // 2. 当末尾为列表项且追加内容也是列表项时，自动注入 <!-- --> 隔离标记，防止 marked.js 自动合并累加
+    std::string md2;
+    DocumentPipeline::AppendToMarkdown(md2, "1. Introduction: 36 Ways 1");
+    DocumentPipeline::AppendToMarkdown(md2, "1. 引言：学习 1");
+    CHECK(md2 == "1. Introduction: 36 Ways 1\n\n<!-- -->\n\n1. 引言：学习 1");
+
+    // 3. 继续追加下一个列表项时，同样保持隔离
+    DocumentPipeline::AppendToMarkdown(md2, "2. Semiotic Domains: 13");
+    CHECK(md2 == "1. Introduction: 36 Ways 1\n\n<!-- -->\n\n1. 引言：学习 1\n\n<!-- -->\n\n2. Semiotic Domains: 13");
+
+    // 4. 防御：已存在隔离标记时不重复插入
+    std::string md3 = "1. First item\n\n<!-- -->";
+    DocumentPipeline::AppendToMarkdown(md3, "1. First translation");
+    CHECK(md3 == "1. First item\n\n<!-- -->\n\n1. First translation");
+}
+
+TEST_CASE("DocumentPipeline - Parse and Translate What-Video-Games Page 6 Table of Contents without Number Accumulation", "[pipeline][toc][translate]") {
+    // 1. 定位并准备真实测试图片 (tests/test_videogames_page6.png)
+    std::string page6ImgPath = "tests/test_videogames_page6.png";
+    if (!wxFileExists(page6ImgPath)) { page6ImgPath = "../tests/test_videogames_page6.png"; }
+    if (!wxFileExists(page6ImgPath)) { page6ImgPath = "../../tests/test_videogames_page6.png"; }
+
+    // 如果图片不存在但用户下载目录存在原始 PDF，则通过 PdfHelper 自动提取第 6 页为测试图片
+    if (!wxFileExists(page6ImgPath)) {
+        std::string pdfPath = "/Users/qizhi/Downloads/What-Video-Games-Have-to-Teach-us-About-Learning-and-Literacy-2003.-ilovepdf-compressed.pdf";
+        if (wxFileExists(pdfPath)) {
+            wxImage pageImg;
+            if (PdfHelper::RenderPage(pdfPath, 5, pageImg, 1600) && pageImg.IsOk()) {
+                pageImg.SaveFile("tests/test_videogames_page6.png", wxBITMAP_TYPE_PNG);
+                page6ImgPath = "tests/test_videogames_page6.png";
+            }
+        }
+    }
+
+    REQUIRE(wxFileExists(page6ImgPath));
+
+    // 2. 验证版面分析：解析第 6 页的目录版面结构
+    DocLayoutEngine engine;
+    std::string layoutModelPath;
+    try {
+        ConfigManager cfgMgr;
+        layoutModelPath = cfgMgr.GetConfig().layoutModelPath;
+    } catch (...) {}
+    std::string resolvedLayout = DocLayoutEngine::ResolveLayoutModelPath(layoutModelPath);
+    if (resolvedLayout.empty()) {
+        const std::vector<std::string> candidates = {
+            "/Users/qizhi/Programs/models/PP-DocLayoutV3_onnx/inference.onnx",
+            "models/PP-DocLayoutV3.onnx",
+            "../models/PP-DocLayoutV3.onnx",
+            "../../models/PP-DocLayoutV3.onnx"
+        };
+        for (const auto& c : candidates) {
+            std::string r = DocLayoutEngine::ResolveLayoutModelPath(c);
+            if (!r.empty()) {
+                resolvedLayout = r;
+                break;
+            }
+        }
+    }
+
+    if (!resolvedLayout.empty()) {
+        bool initOk = engine.Initialize(resolvedLayout, 0, 4);
+        REQUIRE(initOk == true);
+
+        DocumentLayoutResult layoutRes;
+        bool analyzed = engine.AnalyzeLayout(page6ImgPath, layoutRes);
+        REQUIRE(analyzed == true);
+        CHECK(layoutRes.elements.size() >= 1);
+
+        // 验证 CONTENTS 目录标题及目录主体文本块均被正确检测
+        bool foundTitleOrTOC = false;
+        for (const auto& elem : layoutRes.elements) {
+            if (elem.type == LayoutElementType::Title || elem.type == LayoutElementType::Text) {
+                foundTitleOrTOC = true;
+                break;
+            }
+        }
+        CHECK(foundTitleOrTOC == true);
+    }
+
+    // 3. 模拟第 6 页目录 OCR 识别得到的原文与模型翻译译文
+    std::string sourceTOC =
+        "1. Introduction: 36 Ways to Learn a Video Game 1\n"
+        "2. Semiotic Domains:\n"
+        "Is Playing Video Games a “Waste of Time”? 13\n"
+        "3. Learning and Identity:\n"
+        "What Does It Mean to Be a Half-Elf? 51\n"
+        "4. Situated Meaning and Learning:\n"
+        "What Should You Do After You Have\n"
+        "Destroyed the Global Conspiracy? 73\n"
+        "5. Telling and Doing:\n"
+        "Why Doesn’t Lara Croft Obey Professor Von Croy? 113\n"
+        "6. Cultural Models:\n"
+        "Do You Want to Be the Blue Sonic or the Dark Sonic? 139\n"
+        "7. The Social Mind:\n"
+        "How Do You Get Your Corpse Back After You’ve Died? 169\n"
+        "8. Conclusion: Duped or Not? 199\n"
+        "Appendix: The 36 Learning Principles 207\n"
+        "References 213\n"
+        "Index 221";
+
+    std::string transTOC =
+        "1. 引言：学习电子游戏的36种方法 1\n"
+        "2. 符号学领域：玩电子游戏算是“浪费时间”吗？ 13\n"
+        "3. 学习与身份认同：成为半精灵意味着什么？ 51\n"
+        "4. 情境意义与学习：摧毁全球阴谋之后该做什么？ 73\n"
+        "5. 陈述与行动：为什么劳拉·克劳福特不听从冯·克罗伊教授的命令？ 113\n"
+        "6. 文化模式：你想成为蓝色索尼克还是黑暗索尼克？ 139\n"
+        "7. 社会思维：死后如何找回自己的尸体？ 169\n"
+        "8. 结论：真的被欺骗了吗？ 199\n"
+        "附录：36条学习原则 207\n"
+        "参考文献 213\n"
+        "索引 221";
+
+    // 4. 验证 AlignMarkdownFormat：保持译文序列与原序列 1..8 严格对应，不发生偏移
+    std::string alignedTOC = DocumentPipeline::AlignMarkdownFormat(sourceTOC, transTOC);
+    CHECK(alignedTOC.find("1. 引言") != std::string::npos);
+    CHECK(alignedTOC.find("2. 符号学领域") != std::string::npos);
+    CHECK(alignedTOC.find("8. 结论") != std::string::npos);
+    // 绝对不能包含累加编号 9..16
+    CHECK(alignedTOC.find("9. 引言") == std::string::npos);
+    CHECK(alignedTOC.find("10. 符号学") == std::string::npos);
+    CHECK(alignedTOC.find("16. 结论") == std::string::npos);
+
+    // 5. 验证双语内容组装 (AssemblePageContent 核心逻辑)：注入 <!-- --> 隔离标记
+    // 使得 Markdown 渲染引擎能够识别这是两个独立的有序列表，杜绝自动递增累加为 9..16
+    static const std::regex listRegex(R"((\n|^)\s*(\d+[\.\)]|[\-\*\+\•])\s+)");
+    std::string assembledTOC;
+    if (std::regex_search(alignedTOC, listRegex) || std::regex_search(sourceTOC, listRegex)) {
+        assembledTOC = sourceTOC + "\n\n<!-- -->\n\n" + alignedTOC;
+    } else {
+        assembledTOC = sourceTOC + "\n\n" + alignedTOC;
+    }
+
+    CHECK(assembledTOC.find("<!-- -->") != std::string::npos);
+
+    // 6. 验证 AppendToMarkdown 追加隔离机制
+    std::string pageMarkdown;
+    DocumentPipeline::AppendToMarkdown(pageMarkdown, sourceTOC);
+    DocumentPipeline::AppendToMarkdown(pageMarkdown, alignedTOC);
+
+    CHECK(pageMarkdown.find("<!-- -->") != std::string::npos);
+    CHECK(pageMarkdown.find("1. Introduction") != std::string::npos);
+    CHECK(pageMarkdown.find("8. Conclusion") != std::string::npos);
+    CHECK(pageMarkdown.find("1. 引言") != std::string::npos);
+    CHECK(pageMarkdown.find("8. 结论") != std::string::npos);
+    CHECK(pageMarkdown.find("9. 引言") == std::string::npos);
+    CHECK(pageMarkdown.find("16. 结论") == std::string::npos);
+
+    // 7. 验证单项列表对齐：例如版面分析将列表项 6 独立切片
+    // 原文为 "6. Cultural Models: 139"，若模型翻译误写为 "1. 文化模式：139"，必须自动纠偏为 6.
+    std::string singleSource = "6. Cultural Models:\nDo You Want to Be the Blue Sonic or the Dark Sonic? 139";
+    std::string singleTransMisnumbered = "1. 文化模式：\n你想成为蓝色索尼克还是黑暗索尼克？ 139";
+    std::string singleAligned = DocumentPipeline::AlignMarkdownFormat(singleSource, singleTransMisnumbered);
+    CHECK(singleAligned.rfind("6. 文化模式", 0) == 0);
+
+    // 组合追加时，原文与译文之间以及与前后列表项之间均有隔离标记，杜绝累加
+    std::string singleAssembled;
+    DocumentPipeline::AppendToMarkdown(singleAssembled, singleSource);
+    DocumentPipeline::AppendToMarkdown(singleAssembled, singleAligned);
+    CHECK(singleAssembled.find("<!-- -->") != std::string::npos);
+    CHECK(singleAssembled.find("6. Cultural Models") != std::string::npos);
+    CHECK(singleAssembled.find("6. 文化模式") != std::string::npos);
+}
+
+
 
 

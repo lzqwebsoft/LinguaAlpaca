@@ -63,8 +63,6 @@ private:
     void OnDropzoneMouseWheel(wxMouseEvent& event);
     void OnRecognizeClicked(wxCommandEvent& event);
     void OnStopClicked(wxCommandEvent& event);
-    void OnTranslateClicked(wxCommandEvent& event);
-    void UpdateTranslateButtonVisibility();
 
     void SetPdfPage(int page);
     void RequestPdfPageAsync(int page);
@@ -176,10 +174,10 @@ private:
     // Dedicated Progress & Status Bar (独立的进度与状态展示组件)
     OcrProgressPanel* m_progressPanel{nullptr};
 
-    // Bottom Action Bar Buttons
+    // Bottom Action Bar Controls
     CustomButton* m_recognizeBtn{nullptr};
     CustomButton* m_stopBtn{nullptr};
-    CustomButton* m_translateBtn{nullptr};
+    wxCheckBox* m_enableTranslateCheck{nullptr};
     CustomButton* m_openFolderBtn{nullptr};
 
     std::function<void(const wxString&)> m_onTranslateCallback;

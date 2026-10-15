@@ -370,7 +370,83 @@
         return s;
     }
 
-    // 9. 核心 Markdown、OTSL 表格与数学公式渲染接口
+    // 9. 隔离由于空行未断开而导致 marked.js 自动将数字累加合并的相邻有序列表
+    function separateAdjacentLists(text) {
+        if (!text || typeof text !== 'string') return text;
+
+        // 规范化各种形态的 HTML 注释 (包含中文输入法或 macOS 智能标点自动转换的 em-dash/en-dash 如 <!— —>)
+        text = text.replace(/<![\-—–\s]+>/g, "<!-- -->");
+
+        var lines = text.split('\n');
+        var result = [];
+        var inList = false;
+        var lastListNum = -1;
+        var blankCount = 0;
+
+        for (var i = 0; i < lines.length; i++) {
+            var line = lines[i];
+            var trimmed = line.trim();
+
+            if (trimmed === '') {
+                blankCount++;
+                continue;
+            }
+
+            if (trimmed === '<!-- -->' || trimmed === '<!-- separator -->') {
+                // 确保 <!-- --> 前方有独立空行（至少一行空行），绝不能紧挨上一行被 marked.js 误当做 inline HTML 吞噬进 <li>
+                if (result.length > 0 && result[result.length - 1] !== '') {
+                    result.push('');
+                }
+                result.push('<!-- -->');
+                result.push('');
+                inList = false;
+                lastListNum = -1;
+                blankCount = 0;
+                continue;
+            }
+
+            var match = line.match(/^(\s*)(\d+)[\.\)]\s+/);
+            if (match) {
+                var currentNum = parseInt(match[2], 10);
+                // 当在列表中，遇到空行分隔，且新列表项编号 <= 上一项编号（例如 8->1 或 1->1）
+                if (inList && blankCount > 0 && currentNum <= lastListNum) {
+                    if (result.length > 0 && result[result.length - 1] !== '') {
+                        result.push('');
+                    }
+                    result.push('<!-- -->');
+                    result.push('');
+                } else if (blankCount > 0) {
+                    for (var b = 0; b < blankCount; b++) {
+                        result.push('');
+                    }
+                }
+                lastListNum = currentNum;
+                inList = true;
+            } else {
+                if (blankCount > 0) {
+                    for (var b = 0; b < blankCount; b++) {
+                        result.push('');
+                    }
+                    if (!line.match(/^\s{2,}/)) {
+                        inList = false;
+                        lastListNum = -1;
+                    }
+                }
+            }
+
+            blankCount = 0;
+            result.push(line);
+        }
+
+        while (blankCount > 0) {
+            result.push('');
+            blankCount--;
+        }
+
+        return result.join('\n');
+    }
+
+    // 10. 核心 Markdown、OTSL 表格与数学公式渲染接口
     function renderMarkdown(rawMarkdown, baseHref, preserveScroll) {
         var savedScrollY = preserveScroll ? window.scrollY : 0;
 
@@ -460,6 +536,9 @@
 
         // 实体转义未知伪标签与 NLP 特殊标记
         text = sanitizeNlpTokensAndPseudoTags(text);
+
+        // 隔离由于空行未断开而导致 marked.js 自动将数字累加合并的相邻有序列表
+        text = separateAdjacentLists(text);
 
         // 还原受保护的代码块供 marked 解析
         for (var k = 0; k < codeBlocks.length; k++) {

@@ -13,6 +13,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <sstream>
 #include <future>
 #include <thread>
 #include <algorithm>
@@ -44,6 +45,7 @@ std::string TrimString(std::string_view str) {
     size_t last = str.find_last_not_of(" \t\r\n");
     return std::string(str.substr(first, (last - first + 1)));
 }
+
 
 std::filesystem::path ToFsPath(const wxString& path) {
 #ifdef _WIN32
@@ -186,17 +188,7 @@ std::string CleanAndFormatFormula(const std::string& rawFormula) {
     return "$$\n" + std::string(sv) + "\n$$";
 }
 
-// 规范追加段落内容至 Markdown 字符串，自动保证统一空行分隔
-void AppendToMarkdown(std::string& md, const std::string& content) {
-    if (content.empty()) return;
-    if (!md.empty()) {
-        while (!md.empty() && (md.back() == '\n' || md.back() == '\r')) {
-            md.pop_back();
-        }
-        md += "\n\n";
-    }
-    md += content;
-}
+
 
 // 单例共享的页码正则表达式
 const std::regex& GetPageNumPattern() {
@@ -439,7 +431,7 @@ std::shared_ptr<DocumentPipeline::PreprocessedPage> PreprocessStageOne(
     const std::shared_ptr<std::atomic<bool>>& aliveToken,
     const std::atomic<bool>& shouldStop,
     DocProgressCallback onProgress = nullptr,
-    const std::string& currentFullMarkdown = ""
+    const std::string& currentMarkdown = ""
 ) {
     if (shouldStop.load() || !aliveToken->load()) {
         return nullptr;
@@ -450,7 +442,7 @@ std::shared_ptr<DocumentPipeline::PreprocessedPage> PreprocessStageOne(
 
     if (onProgress && aliveToken->load() && !shouldStop.load()) {
         std::string status = "第 " + std::to_string(p + 1) + " / " + std::to_string(totalPages) + " 页: 正在光栅化...";
-        onProgress(p, totalPages, status, currentFullMarkdown);
+        onProgress(p, totalPages, status, currentMarkdown);
     }
 
     wxImage pageImg;
@@ -482,7 +474,7 @@ std::shared_ptr<DocumentPipeline::PreprocessedPage> PreprocessStageOne(
 
     if (onProgress && aliveToken->load() && !shouldStop.load()) {
         std::string status = "第 " + std::to_string(p + 1) + " / " + std::to_string(totalPages) + " 页: 版面分析中 (检测标题/表格/公式/分栏)...";
-        onProgress(p, totalPages, status, currentFullMarkdown);
+        onProgress(p, totalPages, status, currentMarkdown);
     }
 
     pageData->layoutResult.pageIndex = p + 1;
@@ -554,11 +546,11 @@ std::future<std::shared_ptr<DocumentPipeline::PreprocessedPage>> LaunchPreproces
     const std::shared_ptr<std::atomic<bool>>& aliveToken,
     const std::atomic<bool>& shouldStop,
     DocProgressCallback onProgress = nullptr,
-    const std::string& currentFullMarkdown = ""
+    const std::string& currentMarkdown = ""
 ) {
     return std::async(std::launch::async, [=, &shouldStop]() {
         try {
-            return PreprocessStageOne(p, totalPages, inputFilePath, tempCacheDir, figuresDir, layoutEngine, aliveToken, shouldStop, onProgress, currentFullMarkdown);
+            return PreprocessStageOne(p, totalPages, inputFilePath, tempCacheDir, figuresDir, layoutEngine, aliveToken, shouldStop, onProgress, currentMarkdown);
         } catch (const std::exception& e) {
             LOG_ERROR("DocumentPipeline", std::string("PreprocessStageOne exception: ") + e.what());
             return std::shared_ptr<DocumentPipeline::PreprocessedPage>(nullptr);
@@ -1015,6 +1007,114 @@ bool DocumentPipeline::SaveToJson(const std::string& saveDir, const std::string&
     }
 }
 
+std::string DocumentPipeline::AlignMarkdownFormat(const std::string& source, const std::string& translated) {
+    if (source.empty() || translated.empty()) return translated;
+
+    // 1. 检查标题前缀 (# , ## , ### 等)
+    size_t sHash = 0;
+    while (sHash < source.size() && source[sHash] == '#') {
+        sHash++;
+    }
+    if (sHash > 0 && sHash < source.size() && source[sHash] == ' ') {
+        std::string headingPrefix = source.substr(0, sHash + 1);
+        size_t tHash = 0;
+        while (tHash < translated.size() && translated[tHash] == '#') tHash++;
+        while (tHash < translated.size() && translated[tHash] == ' ') tHash++;
+        return headingPrefix + translated.substr(tHash);
+    }
+
+    // 2. 检查有序列表或无序列表前缀 (例如 "1. ", "2. ", "- ", "* ", "+ ", "• ")
+    static const std::regex listPrefixRegex(R"(^(\s*(\d+[\.\)]|[\-\*\+\•])\s+))");
+    static const std::regex orderedRegex(R"(^(\s*)(\d+)([\.\)]\s+))");
+    static const std::regex lineOrderedRegex(R"(^(\s*)(\d+)([\.\)]\s+)(.*)$)");
+
+    std::smatch smSource;
+    if (std::regex_search(source, smSource, listPrefixRegex)) {
+        std::string listPrefix = smSource.str(1);
+        std::smatch smTrans;
+        if (!std::regex_search(translated, smTrans, listPrefixRegex)) {
+            // translated 完全没有列表前缀，统一为其补全与 source 一致的前缀
+            return listPrefix + translated;
+        }
+
+        std::smatch smOrderSource;
+        std::smatch smOrderTrans;
+        bool sourceIsOrdered = std::regex_search(source, smOrderSource, orderedRegex);
+        bool transIsOrdered = std::regex_search(translated, smOrderTrans, orderedRegex);
+
+        if (sourceIsOrdered && transIsOrdered) {
+            int sStart = std::stoi(smOrderSource.str(2));
+            int tStart = std::stoi(smOrderTrans.str(2));
+            int delta = sStart - tStart;
+
+            if (delta != 0) {
+                // 如果存在跨行多项列表，根据起始数字偏差调整译文中各有序项编号，保持完全对齐
+                std::istringstream iss(translated);
+                std::string line;
+                std::string result;
+                bool firstLine = true;
+                while (std::getline(iss, line)) {
+                    if (!firstLine) {
+                        result += "\n";
+                    }
+                    firstLine = false;
+
+                    std::smatch smLine;
+                    if (std::regex_match(line, smLine, lineOrderedRegex)) {
+                        int oldNum = std::stoi(smLine.str(2));
+                        int newNum = oldNum + delta;
+                        result += smLine.str(1) + std::to_string(newNum) + smLine.str(3) + smLine.str(4);
+                    } else {
+                        result += line;
+                    }
+                }
+                return result;
+            }
+        } else if (sourceIsOrdered && !transIsOrdered) {
+            // source 是有序列表，而 translated 是无序列表（如 "- "），将其起始符号替换为 source 的有序编号
+            return listPrefix + translated.substr(smTrans[0].length());
+        } else if (!sourceIsOrdered && transIsOrdered) {
+            // source 是无序列表（如 "- ", "* "），而 translated 误写成了有序编号（如 "1. "），替换为无序符号
+            return listPrefix + translated.substr(smTrans[0].length());
+        }
+    }
+
+    // 3. 检查引用块前缀 ("> ")
+    if (source.rfind("> ", 0) == 0 && translated.rfind("> ", 0) != 0) {
+        return "> " + translated;
+    }
+
+    return translated;
+}
+
+void DocumentPipeline::AppendToMarkdown(std::string& md, const std::string& content) {
+    if (content.empty()) return;
+    if (!md.empty()) {
+        while (!md.empty() && (md.back() == '\n' || md.back() == '\r')) {
+            md.pop_back();
+        }
+        std::string_view trimmedMd(md);
+        while (!trimmedMd.empty() && (trimmedMd.back() == ' ' || trimmedMd.back() == '\t' || trimmedMd.back() == '\r' || trimmedMd.back() == '\n')) {
+            trimmedMd.remove_suffix(1);
+        }
+        bool alreadyHasComment = EndsWith(trimmedMd, "<!-- -->");
+
+        // 提取 md 最后一个段落块，检查该段落块是否包含列表项
+        // 若最后一个段落块包含列表项，且追加内容以列表项开头，注入 <!-- --> 阻断 CommonMark 的跨空行自动累加
+        size_t lastBreak = md.rfind("\n\n");
+        std::string lastBlock = (lastBreak == std::string::npos) ? md : md.substr(lastBreak + 2);
+
+        static const std::regex listStartRegex(R"(^\s*(\d+[\.\)]|[\-\*\+\•])\s+)");
+        static const std::regex listAnyRegex(R"((\n|^)\s*(\d+[\.\)]|[\-\*\+\•])\s+)");
+        if (!alreadyHasComment && std::regex_search(content, listStartRegex) && std::regex_search(lastBlock, listAnyRegex)) {
+            md += "\n\n<!-- -->\n\n";
+        } else {
+            md += "\n\n";
+        }
+    }
+    md += content;
+}
+
 DocumentPipeline::ResumeInfo DocumentPipeline::CheckResumeInfo(const std::string& inputFilePath, const std::string& outputDir) {
     ResumeInfo info;
     if (inputFilePath.empty())
@@ -1066,6 +1166,7 @@ DocumentPipeline::ResumeInfo DocumentPipeline::CheckResumeInfo(const std::string
         }
 
         info.isCompleted = j.value("is_completed", false);
+        info.translateEnabled = j.value("translate_enabled", false);
         if (!info.isCompleted && info.totalPages > 0 && completedInJson >= info.totalPages && lastPageCompleted) {
             info.isCompleted = true;
         }
@@ -1125,13 +1226,38 @@ std::string DocumentPipeline::ExtractMarkdownUpToPage(const std::string& fullMd,
     return fullMd;
 }
 
+bool DocumentPipeline::NeedsTranslation(const std::string& text) {
+    if (text.empty())
+        return false;
+    int latinCount = 0;
+    int cjkCount = 0;
+    for (size_t i = 0; i < text.size(); ++i) {
+        unsigned char c = static_cast<unsigned char>(text[i]);
+        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')) {
+            latinCount++;
+        } else if (c >= 0xE4 && c <= 0xE9 && i + 2 < text.size()) {
+            cjkCount++;
+            i += 2;
+        }
+    }
+    // 若主要为中文/CJK且外文字符极少，则无需翻译
+    if (cjkCount > 8 && cjkCount > latinCount * 2) {
+        return false;
+    }
+    // 存在有效外文字符，需要翻译
+    return (latinCount > 3 || (latinCount + cjkCount > 3 && cjkCount <= latinCount));
+}
+
 std::string DocumentPipeline::TranslateEnglishIfNeeded(const std::string& text, bool enableTranslation) {
-    if (!enableTranslation || !m_modelManager || !IsPredominantlyEnglish(text)) {
+    if (!enableTranslation || !m_modelManager || !NeedsTranslation(text)) {
+        return text;
+    }
+    if (m_shouldStop.load()) {
         return text;
     }
 
     try {
-        TranslationTask transTask(text, LanguageCode::English, LanguageCode::Chinese);
+        TranslationTask transTask(text, LanguageCode::AutoDetect, LanguageCode::Chinese);
         auto transPromise = std::make_shared<std::promise<std::string>>();
         auto transSet = std::make_shared<std::atomic<bool>>(false);
         auto transFuture = transPromise->get_future();
@@ -1148,7 +1274,9 @@ std::string DocumentPipeline::TranslateEnglishIfNeeded(const std::string& text, 
 
         std::string transResult;
         try {
-            transResult = transFuture.get();
+            if (transFuture.wait_for(std::chrono::seconds(45)) == std::future_status::ready) {
+                transResult = transFuture.get();
+            }
         } catch (...) {}
         return transResult.empty() ? text : transResult;
     } catch (...) {
@@ -1228,6 +1356,7 @@ bool DocumentPipeline::InitParseSession(
     }
     session.fullDocJson["file_name"] = session.baseDocName;
     session.fullDocJson["total_pages"] = session.totalPages;
+    session.fullDocJson["translate_enabled"] = translateEnglishToChinese;
     if (!session.fullDocJson.contains("pages") || !session.fullDocJson["pages"].is_array()) {
         session.fullDocJson["pages"] = json::array();
     }
@@ -1281,7 +1410,7 @@ std::shared_ptr<DocumentPipeline::PreprocessedPage> DocumentPipeline::FetchOrWai
     int totalPages,
     std::future<std::shared_ptr<PreprocessedPage>>& nextPageFuture,
     DocProgressCallback onProgress,
-    const std::string& fullMarkdown
+    const std::string& currentMarkdown
 ) {
     if (!nextPageFuture.valid()) {
         return nullptr;
@@ -1290,7 +1419,7 @@ std::shared_ptr<DocumentPipeline::PreprocessedPage> DocumentPipeline::FetchOrWai
     if (nextPageFuture.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready) {
         if (m_aliveToken->load() && onProgress) {
             std::string stageMsg = "第 " + std::to_string(p + 1) + " / " + std::to_string(totalPages) + " 页: 正在完成版面分析与切片...";
-            onProgress(p, totalPages, stageMsg, fullMarkdown);
+            onProgress(p, totalPages, stageMsg, currentMarkdown);
         }
     }
 
@@ -1310,7 +1439,7 @@ DocumentPipeline::OcrDispatchResult DocumentPipeline::DispatchParallelOcrWorkers
     int totalPages,
     const std::shared_ptr<PreprocessedPage>& curPageData,
     DocProgressCallback onProgress,
-    const std::string& fullMarkdown
+    const std::string& currentMarkdown
 ) {
     OcrDispatchResult res;
     res.recognizedResults.resize(curPageData->elements.size());
@@ -1345,7 +1474,7 @@ DocumentPipeline::OcrDispatchResult DocumentPipeline::DispatchParallelOcrWorkers
         if (m_aliveToken->load() && onProgress) {
             std::string stageMsg = "第 " + std::to_string(p + 1) + " / " + std::to_string(totalPages) + " 页: 开始并发识别 (0/" +
                                    std::to_string(ocrIndices.size()) + ")...";
-            onProgress(p, totalPages, stageMsg, fullMarkdown);
+            onProgress(p, totalPages, stageMsg, currentMarkdown);
         }
 
         std::vector<std::thread> workers;
@@ -1465,20 +1594,20 @@ DocumentPipeline::OcrDispatchResult DocumentPipeline::DispatchParallelOcrWorkers
                                         }
                                     }
 
-                                    std::string streamedMarkdown = fullMarkdown;
+                                    std::string streamedMd = currentMarkdown;
                                     if (!currentTempPageMd.empty()) {
-                                        if (!streamedMarkdown.empty()) {
-                                            streamedMarkdown += "\n\n---\n\n";
+                                        if (!streamedMd.empty()) {
+                                            streamedMd += "\n\n---\n\n";
                                         }
-                                        streamedMarkdown += currentTempPageMd;
+                                        streamedMd += currentTempPageMd;
                                     }
 
                                     try {
-                                        onProgress(p, totalPages, stageMsg, streamedMarkdown);
+                                        onProgress(p, totalPages, stageMsg, streamedMd);
                                     } catch (...) {}
                                 } else {
                                     try {
-                                        onProgress(p, totalPages, stageMsg, fullMarkdown);
+                                        onProgress(p, totalPages, stageMsg, currentMarkdown);
                                     } catch (...) {}
                                 }
                             }
@@ -1589,35 +1718,68 @@ DocumentPipeline::AssembledPage DocumentPipeline::AssemblePageContent(
             }
         }
 
-        std::string formattedContent;
+        std::string elementMarkdown;
+        std::string pureTranslated;
 
         if (elem.elem.type == LayoutElementType::Formula) {
-            formattedContent = CleanAndFormatFormula(recognizedText);
+            std::string formattedContent = CleanAndFormatFormula(recognizedText);
             size_t startPos = formattedContent.find('\n');
             size_t endPos = formattedContent.rfind('\n');
             if (startPos != std::string::npos && endPos != std::string::npos && endPos > startPos) {
                 recognizedText = formattedContent.substr(startPos + 1, endPos - startPos - 1);
             }
+            elementMarkdown = formattedContent;
         } else if (elem.elem.type == LayoutElementType::Title ||
                    (elem.elem.type == LayoutElementType::Text && (recognizedText == "目录 Contents" ||
                                                                   recognizedText == "目录" ||
                                                                   recognizedText.rfind("目录 ", 0) == 0))) {
-            if (elem.elem.labelName == "doc_title") {
-                formattedContent = "# " + recognizedText;
+            std::string prefix = (elem.elem.labelName == "doc_title" ? "# " : "## ");
+            std::string titleSource = prefix + recognizedText;
+            if (translateEnglishToChinese) {
+                pureTranslated = TranslateEnglishIfNeeded(recognizedText, true);
+                std::string transTitle = prefix + pureTranslated;
+                if (!pureTranslated.empty() && pureTranslated != recognizedText) {
+                    elementMarkdown = titleSource + "\n\n" + transTitle;
+                } else {
+                    elementMarkdown = titleSource;
+                }
             } else {
-                formattedContent = "## " + recognizedText;
+                elementMarkdown = titleSource;
             }
         } else if (elem.elem.type == LayoutElementType::Table) {
-            formattedContent = ConvertOtslToHtml(recognizedText);
+            elementMarkdown = ConvertOtslToHtml(recognizedText);
         } else {
-            formattedContent = TranslateEnglishIfNeeded(recognizedText, translateEnglishToChinese);
+            if (translateEnglishToChinese) {
+                pureTranslated = TranslateEnglishIfNeeded(recognizedText, true);
+                std::string alignedTrans = AlignMarkdownFormat(recognizedText, pureTranslated);
+                if (!pureTranslated.empty() && pureTranslated != recognizedText) {
+                    static const std::regex listRegex(R"((\n|^)\s*(\d+[\.\)]|[\-\*\+\•])\s+)");
+                    if (std::regex_search(alignedTrans, listRegex) || std::regex_search(recognizedText, listRegex)) {
+                        elementMarkdown = recognizedText + "\n\n<!-- -->\n\n" + alignedTrans;
+                    } else {
+                        elementMarkdown = recognizedText + "\n\n" + alignedTrans;
+                    }
+                } else {
+                    elementMarkdown = recognizedText;
+                }
+            } else {
+                elementMarkdown = recognizedText;
+            }
         }
 
-        AppendToMarkdown(assembled.pageMarkdown, formattedContent);
+        AppendToMarkdown(assembled.pageMarkdown, elementMarkdown);
 
         std::string finalType = isFootnote ? "footnote" : elem.elem.labelName;
         json elJson = {
-            {"id", elem.elem.id}, {"type", finalType}, {"reading_order", elem.elem.readingOrder}, {"box", {elem.x1, elem.y1, elem.x2, elem.y2}}, {"content", recognizedText}};
+            {"id", elem.elem.id},
+            {"type", finalType},
+            {"reading_order", elem.elem.readingOrder},
+            {"box", {elem.x1, elem.y1, elem.x2, elem.y2}},
+            {"content", recognizedText}
+        };
+        if (translateEnglishToChinese && !pureTranslated.empty() && pureTranslated != recognizedText) {
+            elJson["translated_content"] = pureTranslated;
+        }
         assembled.pageJson["elements"].push_back(elJson);
     }
 
@@ -1643,6 +1805,7 @@ void DocumentPipeline::HandlePipelineInterruption(
     session.fullDocJson["completed_pages"] = p;
     session.fullDocJson["last_interrupted_page"] = p + 1;
     session.fullDocJson["is_completed"] = false;
+    session.fullDocJson["translate_enabled"] = session.translateEnglish;
 
     std::string interruptedJsonStr = SafeDumpJson(session.fullDocJson);
     SaveToMarkdown(session.actualOutputDir, session.baseDocName, session.fullMarkdown);
@@ -1666,6 +1829,7 @@ void DocumentPipeline::PersistPageSnapshot(
 
     session.fullDocJson["completed_pages"] = p + 1;
     session.fullDocJson["is_completed"] = isCompleted;
+    session.fullDocJson["translate_enabled"] = session.translateEnglish;
 
     std::string currentJsonDump = SafeDumpJson(session.fullDocJson, -1);
     SaveToMarkdown(session.actualOutputDir, session.baseDocName, session.fullMarkdown);
@@ -1748,14 +1912,14 @@ void DocumentPipeline::ExecutePipeline(
             }
             LOG_ERROR("DocumentPipeline", "Failed to preprocess stage 1 for page: " + std::to_string(p + 1));
             if (p + 1 < session.totalPages && !m_shouldStop.load() && aliveToken->load()) {
-                nextPageFuture = LaunchPreprocessStageOneAsync(p + 1, session.totalPages, session.inputFilePath, session.tempCacheDir, session.figuresDir, m_layoutEngine, aliveToken, m_shouldStop);
+                nextPageFuture = LaunchPreprocessStageOneAsync(p + 1, session.totalPages, session.inputFilePath, session.tempCacheDir, session.figuresDir, m_layoutEngine, aliveToken, m_shouldStop, onProgress, session.fullMarkdown);
             }
             continue;
         }
 
         // 核心提速重叠：在当前页进入耗时的阶段 2 OCR 之前，立刻在后台启动下一页阶段 1 预处理
         if (p + 1 < session.totalPages && !m_shouldStop.load() && aliveToken->load()) {
-            nextPageFuture = LaunchPreprocessStageOneAsync(p + 1, session.totalPages, session.inputFilePath, session.tempCacheDir, session.figuresDir, m_layoutEngine, aliveToken, m_shouldStop);
+            nextPageFuture = LaunchPreprocessStageOneAsync(p + 1, session.totalPages, session.inputFilePath, session.tempCacheDir, session.figuresDir, m_layoutEngine, aliveToken, m_shouldStop, onProgress, session.fullMarkdown);
         }
 
         // 阶段 2：多 Worker 并发切片推理

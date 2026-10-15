@@ -53,7 +53,7 @@ using DocCompleteCallback = std::function<void(
  * 4. 阶段 1：DocLayoutEngine (PP-DocLayoutV2 ONNX Runtime) 进行目标定位与阅读顺序拓扑排序；
  * 5. 阶段 2：裁剪子图并通过 PaddleOCR-VL (llama-server VLM) 针对性推理表格、公式、标题及正文；
  * 6. 阶段 3：restructure_pages 页面重构，支持 Markdown/JSON 结构化自动生成与落盘；
- * 7. 英文文档支持自动触发 Hy-MT2 模型流式翻译为中文。
+ * 7. 英文及外语段落支持自动触发 Hy-MT2 模型流式翻译为中文，生成源文与译文双版本并保存为独立 HTML/Markdown。
  */
 class DocumentPipeline : public std::enable_shared_from_this<DocumentPipeline> {
 public:
@@ -69,7 +69,8 @@ public:
         int lastProcessedPage{0};   // 1-indexed: 上次处理到的最后一页 (即旧一页)
         int completedPages{0};       // 已经完全确认完成的页数 (lastProcessedPage - 1)
         bool isCompleted{false};
-        std::string markdown;
+        bool translateEnabled{false}; // 文档专属翻译配置 (从历史解析 JSON 中恢复)
+        std::string markdown;       // 完整 Markdown 结果 (未翻译为原文，双语翻译为对照文本)
         std::string jsonStructured;
     };
 
@@ -79,7 +80,7 @@ public:
     // 提取指定页数前（包含第 pageCount 页）的 Markdown 内容
     static std::string ExtractMarkdownUpToPage(const std::string& fullMd, int pageCount);
 
-    // 启动或断点恢复解析任务 (在后台异步线程运行)
+    // 启动或断点恢复解析任务
     void StartParseAsync(
         const std::string& inputFilePath,
         const std::string& outputDir,
@@ -97,6 +98,12 @@ public:
     // 结构化落盘辅助方法
     static bool SaveToMarkdown(const std::string& saveDir, const std::string& baseName, const std::string& markdownContent);
     static bool SaveToJson(const std::string& saveDir, const std::string& baseName, const std::string& jsonContent);
+
+    // 对齐译文与原文的 Markdown 格式（如标题级别、列表前缀与起始编号、引用前缀等，确保数字完全一致不累加）
+    static std::string AlignMarkdownFormat(const std::string& source, const std::string& translated);
+
+    // 规范追加段落内容至 Markdown 字符串，自动保证统一空行分隔与列表防累加隔离
+    static void AppendToMarkdown(std::string& md, const std::string& content);
 
     // PaddleOCR OTSL 表格转标准 HTML 表格辅助方法
     static std::string ConvertOtslToHtml(const std::string& otslStr);
@@ -157,7 +164,7 @@ private:
         int totalPages,
         std::future<std::shared_ptr<PreprocessedPage>>& nextPageFuture,
         DocProgressCallback onProgress,
-        const std::string& fullMarkdown
+        const std::string& currentMarkdown
     );
 
     OcrDispatchResult DispatchParallelOcrWorkers(
@@ -165,7 +172,7 @@ private:
         int totalPages,
         const std::shared_ptr<PreprocessedPage>& curPageData,
         DocProgressCallback onProgress,
-        const std::string& fullMarkdown
+        const std::string& currentMarkdown
     );
 
     AssembledPage AssemblePageContent(
@@ -201,6 +208,7 @@ private:
     );
 
     std::string TranslateEnglishIfNeeded(const std::string& text, bool enableTranslation);
+    static bool NeedsTranslation(const std::string& text);
 };
 
 } // namespace LinguaAlpaca

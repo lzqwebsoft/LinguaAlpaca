@@ -557,6 +557,38 @@ bool DocLayoutEngine::ShouldFilterElement(const LayoutElement& elem,
     return false;
 }
 
+bool DocLayoutEngine::IsDuplicateOfFilteredHeaderFooter(const LayoutElement& elem,
+                                                        const std::vector<LayoutElement>& filteredHeaderFooterBoxes) {
+    if (filteredHeaderFooterBoxes.empty()) return false;
+    const int areaA = (elem.x2 - elem.x1) * (elem.y2 - elem.y1);
+    if (areaA <= 0) return false;
+
+    for (const auto& hfBox : filteredHeaderFooterBoxes) {
+        const int areaB = (hfBox.x2 - hfBox.x1) * (hfBox.y2 - hfBox.y1);
+        if (areaB <= 0) continue;
+
+        const int ix1 = (std::max)(elem.x1, hfBox.x1);
+        const int iy1 = (std::max)(elem.y1, hfBox.y1);
+        const int ix2 = (std::min)(elem.x2, hfBox.x2);
+        const int iy2 = (std::min)(elem.y2, hfBox.y2);
+        const int iw = (std::max)(0, ix2 - ix1);
+        const int ih = (std::max)(0, iy2 - iy1);
+        const int interArea = iw * ih;
+
+        if (interArea > 0) {
+            const float iou = static_cast<float>(interArea) / static_cast<float>(areaA + areaB - interArea);
+            const float coverageA = static_cast<float>(interArea) / static_cast<float>(areaA);
+            // 重影副标签必须与被过滤的页眉/页脚/页码在同一物理位置 (IoU >= 0.50)，
+            // 或自身绝大部分落在页眉/页脚区域内且面积相当 (coverageA >= 0.70 且 areaA <= areaB * 1.5)
+            // 严禁将偶然包含页码/页脚的大块正文/表格判定为页眉页脚的重影！
+            if (iou >= 0.50f || (coverageA >= 0.70f && areaA <= areaB * 1.5f)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 void DocLayoutEngine::SuppressContainedOrDuplicateBoxes(std::vector<LayoutElement>& elements, const DocLayoutFilterConfig& cfg) {
     if (elements.size() <= 1) return;
 
@@ -979,33 +1011,12 @@ bool DocLayoutEngine::AnalyzeLayout(const wxImage& img, DocumentLayoutResult& ou
                         continue;
                     }
 
-                    // 重影抑制：若当前候选框与已被模型标签或几何过滤的页眉/页脚/页码候选框高度重叠 (IoU >= 0.50 或 IoS >= 0.70)，
+                    // 重影抑制：若当前候选框与已被模型标签或几何过滤的页眉/页脚/页码候选框高度重叠 (IoU >= 0.50 或 coverageA >= 0.70)，
                     // 说明是模型多类别输出导致的同区域重影副标签（例如同一页眉同时输出了 header 与 paragraph_title），予以同步过滤
-                    bool isDuplicateOfFiltered = false;
-                    int areaA = (elem.x2 - elem.x1) * (elem.y2 - elem.y1);
-                    for (const auto& hfBox : filteredHeaderFooterBoxes) {
-                        int areaB = (hfBox.x2 - hfBox.x1) * (hfBox.y2 - hfBox.y1);
-                        int ix1 = (std::max)(elem.x1, hfBox.x1);
-                        int iy1 = (std::max)(elem.y1, hfBox.y1);
-                        int ix2 = (std::min)(elem.x2, hfBox.x2);
-                        int iy2 = (std::min)(elem.y2, hfBox.y2);
-                        int iw = (std::max)(0, ix2 - ix1);
-                        int ih = (std::max)(0, iy2 - iy1);
-                        int interArea = iw * ih;
-                        if (interArea > 0 && areaA > 0 && areaB > 0) {
-                            float ios = static_cast<float>(interArea) / (std::min)(areaA, areaB);
-                            float iou = static_cast<float>(interArea) / static_cast<float>(areaA + areaB - interArea);
-                            if (iou >= 0.50f || ios >= 0.70f) {
-                                isDuplicateOfFiltered = true;
-                                LOG_DEBUG("DocLayoutEngine", 
-                                    wxString::Format("Filter: dropped duplicate of filtered header/footer [%s score=%.2f] matching [%s score=%.2f], IoU=%.2f, IoS=%.2f",
-                                                     elem.labelName.c_str(), elem.score, hfBox.labelName.c_str(), hfBox.score, iou, ios).ToStdString());
-                                break;
-                            }
-                        }
-                    }
-
-                    if (isDuplicateOfFiltered) {
+                    if (IsDuplicateOfFilteredHeaderFooter(elem, filteredHeaderFooterBoxes)) {
+                        LOG_DEBUG("DocLayoutEngine", 
+                            wxString::Format("Filter: dropped duplicate of filtered header/footer [%s score=%.2f]",
+                                             elem.labelName.c_str(), elem.score).ToStdString());
                         continue;
                     }
 

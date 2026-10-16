@@ -50,6 +50,9 @@ public:
     // 判断当前候选版面元素是否属于应该被过滤的页眉/页脚/页码 (双重过滤与几何兜底策略)
     static bool ShouldFilterElement(const LayoutElement& elem, int origW, int origH, const DocLayoutFilterConfig& cfg);
 
+    // 重影抑制判定：判断候选框是否属于已被过滤的页眉/页脚/页码的重影副标签 (防止多标签输出重影，同时严禁误杀包含页码的正文大块)
+    static bool IsDuplicateOfFilteredHeaderFooter(const LayoutElement& elem, const std::vector<LayoutElement>& filteredHeaderFooterBoxes);
+
     // 对整页文档图像进行版面分析与元素定位 (支持自定义过滤参数，默认使用引擎内嵌配置)
     bool AnalyzeLayout(const std::string& imagePath, DocumentLayoutResult& outResult, const DocLayoutFilterConfig& filterConfig);
     bool AnalyzeLayout(const std::string& imagePath, DocumentLayoutResult& outResult) {

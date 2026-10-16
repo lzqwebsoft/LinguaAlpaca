@@ -13,6 +13,62 @@
 
 using namespace LinguaAlpaca;
 
+namespace {
+
+std::string FindTestAsset(const std::string& relativePath) {
+    if (wxFileExists(wxString::FromUTF8(relativePath))) return relativePath;
+    std::string cand1 = "../" + relativePath;
+    if (wxFileExists(wxString::FromUTF8(cand1))) return cand1;
+    std::string cand2 = "../../" + relativePath;
+    if (wxFileExists(wxString::FromUTF8(cand2))) return cand2;
+    return relativePath;
+}
+
+std::string ResolveTestLayoutModelPath() {
+    std::string modelPath;
+    try {
+        ConfigManager cfgMgr;
+        modelPath = cfgMgr.GetConfig().layoutModelPath;
+    } catch (...) {}
+
+    std::string resolvedPath = DocLayoutEngine::ResolveLayoutModelPath(modelPath);
+    if (!resolvedPath.empty()) return resolvedPath;
+
+    wxString userDir = wxStandardPaths::Get().GetUserConfigDir() + wxFileName::GetPathSeparator() + "LinguaAlpaca";
+    wxString iniPath = userDir + wxFileName::GetPathSeparator() + "config.ini";
+    if (wxFileExists(iniPath)) {
+        wxFileConfig fileConfig("LinguaAlpaca", "", iniPath);
+        std::string pathInFile = fileConfig.Read("/LayoutModel/Path", "").ToUTF8().data();
+        resolvedPath = DocLayoutEngine::ResolveLayoutModelPath(pathInFile);
+        if (!resolvedPath.empty()) return resolvedPath;
+    }
+
+    wxString envPath;
+    if (wxGetEnv("LINGUA_LAYOUT_MODEL_PATH", &envPath) && !envPath.IsEmpty()) {
+        resolvedPath = DocLayoutEngine::ResolveLayoutModelPath(envPath.ToUTF8().data());
+        if (!resolvedPath.empty()) return resolvedPath;
+    }
+
+    const std::vector<std::string> defaultCandidates = {
+        "models/PP-DocLayoutV3.onnx",
+        "../models/PP-DocLayoutV3.onnx",
+        "../../models/PP-DocLayoutV3.onnx",
+        "models/PP-DocLayoutV3_onnx/inference.onnx",
+        "../models/PP-DocLayoutV3_onnx/inference.onnx",
+        "../../models/PP-DocLayoutV3_onnx/inference.onnx",
+        "models/PP-DocLayoutV2.onnx",
+        "../models/PP-DocLayoutV2.onnx",
+        "../../models/PP-DocLayoutV2.onnx"
+    };
+    for (const auto& cand : defaultCandidates) {
+        std::string res = DocLayoutEngine::ResolveLayoutModelPath(cand);
+        if (!res.empty()) return res;
+    }
+    return "";
+}
+
+} // namespace
+
 TEST_CASE("PdfHelper - Extension and file detection", "[pdf]") {
     REQUIRE(PdfHelper::IsPdfFile("document.pdf") == true);
     REQUIRE(PdfHelper::IsPdfFile("DOCUMENT.PDF") == true);
@@ -87,50 +143,7 @@ TEST_CASE("DocLayoutEngine - Heuristic layout fallback", "[layout]") {
 
 TEST_CASE("DocLayoutEngine - Test with User Newspaper Image", "[layout]") {
     DocLayoutEngine engine;
-
-    // 动态从配置、环境变量或项目默认模型路径读取，绝不硬编码机器绝对路径
-    std::string modelPath;
-    try {
-        ConfigManager configManager;
-        modelPath = configManager.GetConfig().layoutModelPath;
-    } catch (...) {}
-
-    std::string resolvedPath = DocLayoutEngine::ResolveLayoutModelPath(modelPath);
-
-    if (resolvedPath.empty()) {
-        wxString userDir = wxStandardPaths::Get().GetUserConfigDir() + wxFileName::GetPathSeparator() + "LinguaAlpaca";
-        wxString iniPath = userDir + wxFileName::GetPathSeparator() + "config.ini";
-        if (wxFileExists(iniPath)) {
-            wxFileConfig fileConfig("LinguaAlpaca", "", iniPath);
-            std::string pathInFile = fileConfig.Read("/LayoutModel/Path", "").ToUTF8().data();
-            resolvedPath = DocLayoutEngine::ResolveLayoutModelPath(pathInFile);
-        }
-    }
-
-    if (resolvedPath.empty()) {
-        wxString envPath;
-        if (wxGetEnv("LINGUA_LAYOUT_MODEL_PATH", &envPath) && !envPath.IsEmpty()) {
-            resolvedPath = DocLayoutEngine::ResolveLayoutModelPath(envPath.ToUTF8().data());
-        }
-    }
-
-    if (resolvedPath.empty()) {
-        const std::vector<std::string> defaultCandidates = {
-            "models/PP-DocLayoutV3.onnx",
-            "../models/PP-DocLayoutV3.onnx",
-            "../../models/PP-DocLayoutV3.onnx",
-            "models/PP-DocLayoutV2.onnx",
-            "../models/PP-DocLayoutV2.onnx",
-            "../../models/PP-DocLayoutV2.onnx"
-        };
-        for (const auto& cand : defaultCandidates) {
-            std::string res = DocLayoutEngine::ResolveLayoutModelPath(cand);
-            if (!res.empty()) {
-                resolvedPath = res;
-                break;
-            }
-        }
-    }
+    std::string resolvedPath = ResolveTestLayoutModelPath();
 
     if (!resolvedPath.empty()) {
         bool initOk = engine.Initialize(resolvedPath, 0, 4);
@@ -139,14 +152,7 @@ TEST_CASE("DocLayoutEngine - Test with User Newspaper Image", "[layout]") {
     }
 
     DocumentLayoutResult result;
-
-    std::string imgPath = "tests/test_newspaper.jpg";
-    if (!wxFileExists(imgPath)) {
-        imgPath = "../tests/test_newspaper.jpg";
-    }
-    if (!wxFileExists(imgPath)) {
-        imgPath = "../../tests/test_newspaper.jpg";
-    }
+    std::string imgPath = FindTestAsset("tests/test_newspaper.jpg");
 
     if (wxFileExists(imgPath)) {
         bool ok = engine.AnalyzeLayout(imgPath, result);
@@ -821,9 +827,7 @@ TEST_CASE("DocumentPipeline - AppendToMarkdown list separation without accumulat
 
 TEST_CASE("DocumentPipeline - Parse and Translate What-Video-Games Page 6 Table of Contents without Number Accumulation", "[pipeline][toc][translate]") {
     // 1. 定位并准备真实测试图片 (tests/test_videogames_page6.png)
-    std::string page6ImgPath = "tests/test_videogames_page6.png";
-    if (!wxFileExists(page6ImgPath)) { page6ImgPath = "../tests/test_videogames_page6.png"; }
-    if (!wxFileExists(page6ImgPath)) { page6ImgPath = "../../tests/test_videogames_page6.png"; }
+    std::string page6ImgPath = FindTestAsset("tests/test_videogames_page6.png");
 
     // 如果图片不存在但用户下载目录存在原始 PDF，则通过 PdfHelper 自动提取第 6 页为测试图片
     if (!wxFileExists(page6ImgPath)) {
@@ -841,27 +845,7 @@ TEST_CASE("DocumentPipeline - Parse and Translate What-Video-Games Page 6 Table 
 
     // 2. 验证版面分析：解析第 6 页的目录版面结构
     DocLayoutEngine engine;
-    std::string layoutModelPath;
-    try {
-        ConfigManager cfgMgr;
-        layoutModelPath = cfgMgr.GetConfig().layoutModelPath;
-    } catch (...) {}
-    std::string resolvedLayout = DocLayoutEngine::ResolveLayoutModelPath(layoutModelPath);
-    if (resolvedLayout.empty()) {
-        const std::vector<std::string> candidates = {
-            "/Users/qizhi/Programs/models/PP-DocLayoutV3_onnx/inference.onnx",
-            "models/PP-DocLayoutV3.onnx",
-            "../models/PP-DocLayoutV3.onnx",
-            "../../models/PP-DocLayoutV3.onnx"
-        };
-        for (const auto& c : candidates) {
-            std::string r = DocLayoutEngine::ResolveLayoutModelPath(c);
-            if (!r.empty()) {
-                resolvedLayout = r;
-                break;
-            }
-        }
-    }
+    std::string resolvedLayout = ResolveTestLayoutModelPath();
 
     if (!resolvedLayout.empty()) {
         bool initOk = engine.Initialize(resolvedLayout, 0, 4);
@@ -1036,6 +1020,68 @@ TEST_CASE("SanitizeInlineLatex: Repair unclosed braces and LaTeX decoration comm
     std::string formulaInline = "公式为 $x + y = z$ 以及 $f(x) = \\sqrt{x^2 + 1}$ 无需额外修改";
     CHECK(DocumentPipeline::SanitizeInlineLatex(formulaInline) == formulaInline);
 }
+
+TEST_CASE("DocLayoutEngine - Duplicate Header/Footer Suppression Protection", "[layout][filter]") {
+    // 模拟真实被过滤的页眉/页脚/页码候选框
+    std::vector<LayoutElement> filteredBoxes = {
+        // 1. 顶部页眉
+        LayoutElement{1, LayoutElementType::Header, "header", 0.92f, 200, 100, 1400, 160, 1},
+        // 2. 底部页码 (小框，位于页面底部中央: [1459, 4293, 1519, 4353])
+        LayoutElement{2, LayoutElementType::Text, "number", 0.63f, 1459, 4293, 1519, 4353, 2}
+    };
+
+    // 场景 1: 模型在同一物理位置多类别输出的重影副标签 (例如在顶部页眉位置同时输出了 paragraph_title)
+    // 物理位置高度重合 (IoU >= 0.50)，必须被抑制！
+    LayoutElement ghostHeaderTitle{3, LayoutElementType::Title, "paragraph_title", 0.85f, 210, 102, 1395, 158, 1};
+    CHECK(DocLayoutEngine::IsDuplicateOfFilteredHeaderFooter(ghostHeaderTitle, filteredBoxes) == true);
+
+    // 场景 2: 面积相近且大部分落在页眉区域内的同位副标签 (coverageA >= 0.70 且 areaA <= areaB * 1.5)
+    LayoutElement ghostHeaderFragment{4, LayoutElementType::Text, "text", 0.70f, 250, 105, 1200, 155, 1};
+    CHECK(DocLayoutEngine::IsDuplicateOfFilteredHeaderFooter(ghostHeaderFragment, filteredBoxes) == true);
+
+    // 场景 3 (核心 Bug 修复防护): 正文大段落/目录汇总块偶然包含或覆盖底部的页码小框
+    // (例如 authenticaccount02stau.pdf 第 11 页：正文大块 [144, 2159, 2699, 4360]，内部恰好包含了页码 [1459, 4293, 1519, 4353])
+    // 正文块面积 560 万像素，页码仅 3600 像素，coverageA 仅 0.06%，绝不能判定为页码的重影而误杀！
+    LayoutElement largeBodyText{5, LayoutElementType::Text, "text", 0.86f, 144, 2159, 2699, 4360, 3};
+    CHECK(DocLayoutEngine::IsDuplicateOfFilteredHeaderFooter(largeBodyText, filteredBoxes) == false);
+
+    // 场景 4: 普通正文段落，与页眉页脚无任何交集
+    LayoutElement regularParagraph{6, LayoutElementType::Text, "text", 0.95f, 200, 300, 1400, 800, 4};
+    CHECK(DocLayoutEngine::IsDuplicateOfFilteredHeaderFooter(regularParagraph, filteredBoxes) == false);
+
+    // 场景 5: 表格区域覆盖下半区
+    LayoutElement tableBlock{7, LayoutElementType::Table, "table", 0.90f, 150, 2000, 1450, 4200, 5};
+    CHECK(DocLayoutEngine::IsDuplicateOfFilteredHeaderFooter(tableBlock, filteredBoxes) == false);
+}
+
+TEST_CASE("DocLayoutEngine - Page 11 Layout Analysis Regression", "[layout][page11]") {
+    std::string testImage = FindTestAsset("tests/test_authenticaccount_page11.png");
+    std::string resolvedModel = ResolveTestLayoutModelPath();
+
+    if (!resolvedModel.empty() && wxFileExists(wxString::FromUTF8(resolvedModel)) && wxFileExists(wxString::FromUTF8(testImage))) {
+        DocLayoutEngine engine;
+        REQUIRE(engine.Initialize(resolvedModel, 0, 4) == true);
+
+        DocumentLayoutResult res;
+        REQUIRE(engine.AnalyzeLayout(testImage, res) == true);
+
+        // 第 11 页共有 6 个元素：doc_title, text("OF THE"), text("SECOND VOLUME"),
+        // paragraph_title("CHAPTER I."), text("PROGRESS OF THE EMBASSY..."), 以及大正文块！
+        CHECK(res.elements.size() == 6);
+
+        // 验证正文大块成功被保留，未被当做页码的重影误杀
+        bool foundLargeBodyText = false;
+        for (const auto& el : res.elements) {
+            int area = (el.x2 - el.x1) * (el.y2 - el.y1);
+            if (area > 1000000 && el.labelName == "text") {
+                foundLargeBodyText = true;
+                break;
+            }
+        }
+        CHECK(foundLargeBodyText == true);
+    }
+}
+
 
 
 

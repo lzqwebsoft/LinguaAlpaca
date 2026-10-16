@@ -153,7 +153,136 @@ std::string StripMarkdownFences(const std::string& text) {
     return std::string(sv.substr(first, last - first + 1));
 }
 
-// 高效 O(1) 剥离公式外层包裹的 $$、\[\]、\(\)、$ 并格式化为标准独立公式块
+// 自动检测并截断模型自回归输出的失控重复循环与幻觉噪音 (如 }\mathrm{C}^{\star}\mathrm{D}\mathrm{A}\mathrm{B 重复数百次)
+std::string TruncateRunawayRepetitions(std::string_view s) {
+    if (s.size() < 40) return std::string(s);
+
+    size_t cutPos = std::string::npos;
+    const size_t len = s.size();
+
+    for (size_t patLen = 4; patLen <= 120; ++patLen) {
+        if (patLen * 3 > len) break;
+        bool found = false;
+        for (size_t i = 0; i + patLen * 3 <= len; ++i) {
+            std::string_view pat = s.substr(i, patLen);
+            // 避免全部字符相同的伪循环 (如 ----- 或 .....)
+            if (pat.find_first_not_of(pat[0]) == std::string_view::npos) {
+                continue;
+            }
+            size_t count = 1;
+            size_t pos = i + patLen;
+            while (pos + patLen <= len && s.substr(pos, patLen) == pat) {
+                count++;
+                pos += patLen;
+            }
+            if ((count >= 3 && patLen * count >= 30) || count >= 5) {
+                cutPos = i;
+                found = true;
+                break;
+            }
+        }
+        if (found) break;
+    }
+
+    if (cutPos == std::string::npos) {
+        return std::string(s);
+    }
+
+    std::string result(s.substr(0, cutPos));
+
+    // 剔除截断点前残留的幻觉文本宏 (例如 \mathrm{~a n d~}\mathrm{b a s s i s i o n~t o~})
+    static const std::regex s_trailingNoiseRegex(
+        R"((?:\\mathrm|\\text)\s*\{\s*~?\s*(?:a\s*n\s*d|o\s*r|b\s*a\s*s\s*s|and|or|to|the|is|in|of|where|with)\b[\s\S]*$)",
+        std::regex::icase
+    );
+    result = std::regex_replace(result, s_trailingNoiseRegex, "");
+
+    // 剔除末尾截断不完整的反斜杠命令 (如末尾残留的 \ 或 \mathrm 或 \lef)
+    static const std::regex s_trailingIncompleteCmd(R"(\\[a-zA-Z]*$)");
+    result = std::regex_replace(result, s_trailingIncompleteCmd, "");
+
+    // 去除尾部空白
+    size_t last = result.find_last_not_of(" \t\r\n");
+    if (last != std::string::npos) {
+        result.erase(last + 1);
+    } else {
+        result.clear();
+    }
+
+    return result;
+}
+
+// 自动补齐闭合未闭合的花括号 {} 与 \left ... \right.，规范化单引号实体，防止 KaTeX 语法崩溃
+std::string BalanceFormulaBracesAndDelimiters(std::string s) {
+    if (s.empty()) return s;
+
+    // 1. 规范化 HTML 实体与 Unicode prime 为标准 prime 符号 '
+    static const std::regex s_quoteEntities(R"(&#0*39;|&apos;|&#x0*27;)", std::regex::icase);
+    s = std::regex_replace(s, s_quoteEntities, "'");
+    static const std::string s_singleQuoteRight = u8"’";
+    static const std::string s_primeChar = u8"′";
+    size_t qPos = 0;
+    while ((qPos = s.find(s_singleQuoteRight, qPos)) != std::string::npos) {
+        s.replace(qPos, s_singleQuoteRight.size(), "'");
+        qPos += 1;
+    }
+    qPos = 0;
+    while ((qPos = s.find(s_primeChar, qPos)) != std::string::npos) {
+        s.replace(qPos, s_primeChar.size(), "'");
+        qPos += 1;
+    }
+
+    // 2. 检查是否有末尾环境结束标如 \end{array} 等
+    static const std::regex s_endEnvRegex(R"(\\end\{[a-zA-Z]+\*?\}\s*$)");
+    std::smatch match;
+    size_t insertPos = s.size();
+    if (std::regex_search(s, match, s_endEnvRegex)) {
+        insertPos = match.position();
+    }
+
+    // 3. 统计未转义的花括号
+    int openBraces = 0;
+    int closeBraces = 0;
+    for (size_t i = 0; i < s.size(); ++i) {
+        if (s[i] == '{' && (i == 0 || s[i - 1] != '\\')) {
+            openBraces++;
+        } else if (s[i] == '}' && (i == 0 || s[i - 1] != '\\')) {
+            closeBraces++;
+        }
+    }
+
+    if (openBraces > closeBraces) {
+        std::string missing(openBraces - closeBraces, '}');
+        s.insert(insertPos, missing);
+        if (std::regex_search(s, match, s_endEnvRegex)) {
+            insertPos = match.position();
+        } else {
+            insertPos = s.size();
+        }
+    }
+
+    // 4. 统计 \left 与 \right
+    static const std::regex s_leftRegex(R"(\\left\b)");
+    static const std::regex s_rightRegex(R"(\\right\b)");
+    auto leftBegin = std::sregex_iterator(s.begin(), s.end(), s_leftRegex);
+    auto rightBegin = std::sregex_iterator(s.begin(), s.end(), s_rightRegex);
+    auto leftEnd = std::sregex_iterator();
+    auto rightEnd = std::sregex_iterator();
+    ptrdiff_t leftCount = std::distance(leftBegin, leftEnd);
+    ptrdiff_t rightCount = std::distance(rightBegin, rightEnd);
+
+    if (leftCount > rightCount) {
+        std::string missingRight;
+        for (ptrdiff_t k = 0; k < leftCount - rightCount; ++k) {
+            missingRight += "\\right.";
+        }
+        s.insert(insertPos, missingRight);
+    }
+
+    return s;
+}
+
+// 高效剥离公式外层包裹的 $$、\[\]、\(\)、$ 并格式化为标准独立公式块，同时自动截断重复与平衡定界符
 std::string CleanAndFormatFormula(const std::string& rawFormula) {
     std::string_view sv = rawFormula;
     size_t first = sv.find_first_not_of(" \t\r\n");
@@ -163,19 +292,35 @@ std::string CleanAndFormatFormula(const std::string& rawFormula) {
     size_t last = sv.find_last_not_of(" \t\r\n");
     sv = sv.substr(first, last - first + 1);
 
-    bool stripped = true;
-    while (stripped && sv.size() >= 2) {
-        stripped = false;
+    bool changed = true;
+    while (changed && sv.size() >= 2) {
+        changed = false;
+        // 成对定界符剥离
         if (sv.size() >= 4 && ((StartsWith(sv, "$$") && EndsWith(sv, "$$")) ||
                                (StartsWith(sv, "\\[") && EndsWith(sv, "\\]")) ||
                                (StartsWith(sv, "\\(") && EndsWith(sv, "\\)")))) {
             sv = sv.substr(2, sv.size() - 4);
-            stripped = true;
+            changed = true;
         } else if (sv.size() >= 2 && sv.front() == '$' && sv.back() == '$' && sv[1] != '$') {
             sv = sv.substr(1, sv.size() - 2);
-            stripped = true;
+            changed = true;
         }
-        if (stripped) {
+        // 单侧残留定界符剥离 (防止模型因达到 token 限制未输出闭合标，导致前端 KaTeX 遇到嵌套 \[ 崩溃)
+        else if (sv.size() >= 2 && (StartsWith(sv, "$$") || StartsWith(sv, "\\[") || StartsWith(sv, "\\("))) {
+            sv = sv.substr(2);
+            changed = true;
+        } else if (sv.size() >= 1 && sv.front() == '$' && (sv.size() == 1 || sv[1] != '$')) {
+            sv = sv.substr(1);
+            changed = true;
+        } else if (sv.size() >= 2 && (EndsWith(sv, "$$") || EndsWith(sv, "\\]") || EndsWith(sv, "\\)"))) {
+            sv = sv.substr(0, sv.size() - 2);
+            changed = true;
+        } else if (sv.size() >= 1 && sv.back() == '$' && (sv.size() == 1 || sv[sv.size() - 2] != '$')) {
+            sv = sv.substr(0, sv.size() - 1);
+            changed = true;
+        }
+
+        if (changed) {
             first = sv.find_first_not_of(" \t\r\n");
             if (first == std::string_view::npos) {
                 sv = {};
@@ -185,10 +330,141 @@ std::string CleanAndFormatFormula(const std::string& rawFormula) {
             sv = sv.substr(first, last - first + 1);
         }
     }
-    return "$$\n" + std::string(sv) + "\n$$";
+
+    // 检测自回归循环截断
+    std::string formulaStr = TruncateRunawayRepetitions(sv);
+
+    // 平衡花括号与定界符
+    formulaStr = BalanceFormulaBracesAndDelimiters(std::move(formulaStr));
+
+    first = formulaStr.find_first_not_of(" \t\r\n");
+    if (first == std::string::npos) {
+        return "$$\n\n$$";
+    }
+    last = formulaStr.find_last_not_of(" \t\r\n");
+    return "$$\n" + formulaStr.substr(first, last - first + 1) + "\n$$";
 }
 
+// 规范化与修复行内 LaTeX 数学与排版标记（如 \(\underline{\text{URL}\) 自动补齐闭合花括号）
+std::string SanitizeInlineLatex(const std::string& text) {
+    if (text.empty()) return "";
 
+    // 1. 修复 \( ... \) 与 $ ... $ 行内公式块中未闭合的花括号
+    std::string intermediate;
+    intermediate.reserve(text.size() + 16);
+
+    size_t i = 0;
+    const size_t n = text.size();
+    while (i < n) {
+        if (i + 1 < n && text[i] == '\\' && text[i + 1] == '(') {
+            size_t endDelim = text.find("\\)", i + 2);
+            if (endDelim != std::string::npos) {
+                std::string mathContent = text.substr(i + 2, endDelim - (i + 2));
+                // 防止跨越段落空行
+                if (mathContent.find("\n\n") == std::string::npos) {
+                    int depth = 0;
+                    size_t j = 0;
+                    while (j < mathContent.size()) {
+                        if (mathContent[j] == '\\') {
+                            j += 2;
+                            continue;
+                        }
+                        if (mathContent[j] == '{') {
+                            depth++;
+                        } else if (mathContent[j] == '}') {
+                            if (depth > 0) depth--;
+                        }
+                        j++;
+                    }
+                    intermediate += "\\(" + mathContent;
+                    if (depth > 0) {
+                        intermediate.append(depth, '}');
+                    }
+                    intermediate += "\\)";
+                    i = endDelim + 2;
+                    continue;
+                }
+            }
+        }
+        intermediate += text[i];
+        i++;
+    }
+
+    // 2. 修复排版修饰命令外层丢失闭合花括号的情况（例如 \underline{\text{URL} 下载）
+    static const std::regex s_cmdRegex(R"(\\((?:underline|uline|uwave|uuline|dashuline|dotuline|sout|xout|textbf|textit|textrm|mathrm|text))\s*\{)");
+
+    std::string result;
+    result.reserve(intermediate.size() + 16);
+
+    size_t pos = 0;
+    std::smatch m;
+    std::string::const_iterator searchStart(intermediate.cbegin());
+
+    while (std::regex_search(searchStart, intermediate.cend(), m, s_cmdRegex)) {
+        size_t matchOffset = m.position();
+        size_t matchPos = pos + matchOffset;
+        result.append(intermediate, pos, matchOffset);
+
+        size_t cmdStart = matchPos;
+        size_t braceStart = matchPos + m.length() - 1; // '{' 的位置
+
+        // 检查这个命令是否包含嵌套 \text{...} 等已闭合子结构
+        int depth = 0;
+        size_t j = braceStart;
+        bool closed = false;
+        bool hasInnerClosed = false;
+
+        while (j < intermediate.size()) {
+            if (intermediate[j] == '\\') {
+                j += 2;
+                continue;
+            }
+            if (intermediate[j] == '{') {
+                depth++;
+            } else if (intermediate[j] == '}') {
+                depth--;
+                if (depth == 0) {
+                    closed = true;
+                    j++;
+                    break;
+                } else if (depth == 1) {
+                    // 内层子结构已闭合 (例如 \text{...})
+                    hasInnerClosed = true;
+                }
+            } else if (depth == 1 && hasInnerClosed) {
+                // 如果内层已闭合，且遇到空白、中文标点或 CJK 字符，说明外层闭合花括号被遗漏
+                unsigned char c = static_cast<unsigned char>(intermediate[j]);
+                if (c == ' ' || c == '\t' || c == '\r' || c == '\n' || c >= 0x80) {
+                    break;
+                }
+            }
+            j++;
+        }
+
+        if (closed) {
+            result.append(intermediate, cmdStart, j - cmdStart);
+            pos = j;
+        } else if (hasInnerClosed && depth > 0) {
+            result.append(intermediate, cmdStart, j - cmdStart);
+            result.append(depth, '}');
+            pos = j;
+        } else {
+            result.append(intermediate, cmdStart, j - cmdStart);
+            pos = j;
+        }
+
+        if (pos <= matchPos) {
+            pos = matchPos + m.length();
+        }
+        if (pos >= intermediate.size()) break;
+        searchStart = intermediate.cbegin() + pos;
+    }
+
+    if (pos < intermediate.size()) {
+        result.append(intermediate, pos, intermediate.size() - pos);
+    }
+    return result;
+}
 
 // 单例共享的页码正则表达式
 const std::regex& GetPageNumPattern() {
@@ -569,6 +845,14 @@ std::future<std::shared_ptr<DocumentPipeline::PreprocessedPage>> LaunchPreproces
 
 bool DocumentPipeline::IsImageContentEmpty(const wxImage& img) {
     return DocLayoutEngine::IsImageContentEmpty(img);
+}
+
+std::string DocumentPipeline::CleanAndFormatFormula(const std::string& rawFormula) {
+    return ::LinguaAlpaca::CleanAndFormatFormula(rawFormula);
+}
+
+std::string DocumentPipeline::SanitizeInlineLatex(const std::string& text) {
+    return ::LinguaAlpaca::SanitizeInlineLatex(text);
 }
 
 std::string DocumentPipeline::ConvertOtslToHtml(const std::string& otslStr) {
@@ -1330,7 +1614,11 @@ std::string DocumentPipeline::TranslateEnglishIfNeeded(const std::string& text, 
                 transResult = transFuture.get();
             }
         } catch (...) {}
-        return transResult.empty() ? text : transResult;
+        if (!transResult.empty()) {
+            transResult = SanitizeInlineLatex(transResult);
+            return transResult;
+        }
+        return text;
     } catch (...) {
         return text;
     }
@@ -1785,6 +2073,7 @@ DocumentPipeline::AssembledPage DocumentPipeline::AssemblePageContent(
                    (elem.elem.type == LayoutElementType::Text && (recognizedText == "目录 Contents" ||
                                                                   recognizedText == "目录" ||
                                                                   recognizedText.rfind("目录 ", 0) == 0))) {
+            recognizedText = SanitizeInlineLatex(recognizedText);
             std::string prefix = (elem.elem.labelName == "doc_title" ? "# " : "## ");
             std::string titleSource = prefix + recognizedText;
             if (translateEnglishToChinese) {
@@ -1801,6 +2090,7 @@ DocumentPipeline::AssembledPage DocumentPipeline::AssemblePageContent(
         } else if (elem.elem.type == LayoutElementType::Table) {
             elementMarkdown = ConvertOtslToHtml(recognizedText);
         } else {
+            recognizedText = SanitizeInlineLatex(recognizedText);
             if (translateEnglishToChinese) {
                 pureTranslated = TranslateEnglishIfNeeded(recognizedText, true);
                 std::string alignedTrans = AlignMarkdownFormat(recognizedText, pureTranslated);

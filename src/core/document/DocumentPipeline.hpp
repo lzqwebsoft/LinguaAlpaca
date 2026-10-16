@@ -108,6 +108,12 @@ public:
     // PaddleOCR OTSL 表格转标准 HTML 表格辅助方法
     static std::string ConvertOtslToHtml(const std::string& otslStr);
 
+    // 规范化与清理 LaTeX 数学公式（剥离外层冗余/单侧定界符、截断自回归失控重复、平衡花括号与 \left...\right.）
+    static std::string CleanAndFormatFormula(const std::string& rawFormula);
+
+    // 规范化与修复行内 LaTeX 数学与排版标记（如 \(\underline{\text{URL}\) 自动补齐闭合花括号）
+    static std::string SanitizeInlineLatex(const std::string& text);
+
     // 判定位图是否为空白内容（无有效笔墨或文字符号）
     static bool IsImageContentEmpty(const wxImage& img);
 

@@ -38,9 +38,9 @@ public:
         return wxString();
     }
 
-    void SetContent(const std::string& text, bool preserveScroll = false);
-    void SetMarkdown(const std::string& markdown, const std::string& baseDir = "", bool preserveScroll = false);
-    void SetMarkdown(const wxString& markdown, const wxString& baseDir = wxEmptyString, bool preserveScroll = false);
+    void SetContent(const std::string& text, bool preserveScroll = true);
+    void SetMarkdown(const std::string& markdown, const std::string& baseDir = "", bool preserveScroll = true);
+    void SetMarkdown(const wxString& markdown, const wxString& baseDir = wxEmptyString, bool preserveScroll = true);
     void SetViewMode(CardViewMode mode);
     CardViewMode GetViewMode() const { return m_currentMode; }
     void Clear();

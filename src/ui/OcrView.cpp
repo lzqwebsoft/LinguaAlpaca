@@ -1699,7 +1699,7 @@ void OcrView::DoExecuteDocumentPipeline(const std::string& docPath) {
                     m_lastRenderTimestamp = nowMs;
                     m_lastRenderedPage = curPage;
                     m_lastRenderedMarkdown = currentMd;
-                    m_resultCard->SetMarkdown(currentMd, std::string(m_lastOutputDir.ToUTF8().data()), false);
+                    m_resultCard->SetMarkdown(currentMd, std::string(m_lastOutputDir.ToUTF8().data()), true);
                 }
             }
         });
@@ -1714,7 +1714,7 @@ void OcrView::DoExecuteDocumentPipeline(const std::string& docPath) {
                 m_lastMarkdownResult = wxString::FromUTF8(fullMd);
                 m_lastJsonResult = wxString::FromUTF8(jsonStructured);
                 if (m_resultCard) {
-                    m_resultCard->SetMarkdown(fullMd, std::string(m_lastOutputDir.ToUTF8().data()), false);
+                    m_resultCard->SetMarkdown(fullMd, std::string(m_lastOutputDir.ToUTF8().data()), true);
                     m_resultCard->SetCharacterCount(fullMd.size());
                 }
                 if (m_progressPanel) {
@@ -1749,7 +1749,7 @@ void OcrView::DoExecuteDocumentPipeline(const std::string& docPath) {
                 m_lastMarkdownResult = wxString::FromUTF8(fullMd);
                 m_lastJsonResult = wxString::FromUTF8(jsonStructured);
                 if (m_resultCard) {
-                    m_resultCard->SetMarkdown(fullMd, std::string(m_lastOutputDir.ToUTF8().data()), false);
+                    m_resultCard->SetMarkdown(fullMd, std::string(m_lastOutputDir.ToUTF8().data()), true);
                     m_resultCard->SetCharacterCount(fullMd.size());
                 }
                 if (m_openFolderBtn) {

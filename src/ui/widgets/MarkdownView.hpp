@@ -37,8 +37,8 @@ public:
     ~MarkdownView() override = default;
 
     // 内容设置
-    void SetMarkdown(const std::string& markdown, const std::string& baseDir = "", bool preserveScroll = false);
-    void SetMarkdown(const wxString& markdown, const wxString& baseDir = wxEmptyString, bool preserveScroll = false);
+    void SetMarkdown(const std::string& markdown, const std::string& baseDir = "", bool preserveScroll = true);
+    void SetMarkdown(const wxString& markdown, const wxString& baseDir = wxEmptyString, bool preserveScroll = true);
     void Clear();
 
     // 视图模式 (渲染 vs. 源码)

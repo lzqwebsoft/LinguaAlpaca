@@ -968,6 +968,77 @@ TEST_CASE("DocumentPipeline - Parse and Translate What-Video-Games Page 6 Table 
     CHECK(singleAssembled.find("6. 文化模式") != std::string::npos);
 }
 
+TEST_CASE("CleanAndFormatFormula: Runaway repetition truncation and delimiter/brace balancing", "[formula][pipeline]") {
+    // 1. 验证数字电路第 59 页自回归失控重复与单侧 \[ 定界符截断
+    std::string repeatingFormula = "\\[\\mathrm{A p}~=~\\left(\\mathrm{A}^{\\star}\\mathrm{B}\\right)^{\\star}\\left(\\mathrm{C}^{\\star}\\mathrm{D}\\right)\\quad\\mathrm{X p}~=~\\left(\\mathrm{A}^{\\star}\\mathrm{B}\\right)^{\\star}\\left(\\mathrm{C}^{\\star}\\mathrm{D}\\right)\\quad\\mathrm{N O p}~=~\\mathrm{!}\\left(\\right.\\left(\\mathrm{!}\\left(\\mathrm{A}+\\mathrm{B}\\right)+\\mathrm{!}\\left(\\mathrm{C}+\\mathrm{D}\\right)\\right)\\mathrm{~a n d~}\\mathrm{b a s s i s i o n~t o~}";
+    for (int k = 0; k < 50; ++k) {
+        repeatingFormula += "}\\mathrm{C}^{\\star}\\mathrm{D}\\mathrm{A}\\mathrm{B";
+    }
+
+    std::string cleaned1 = DocumentPipeline::CleanAndFormatFormula(repeatingFormula);
+
+    // 必须剥离单侧开头的 \[
+    CHECK(cleaned1.find("\\[") == std::string::npos);
+    // 必须截断自回归死循环模式
+    CHECK(cleaned1.find("b a s s i s i o n") == std::string::npos);
+    CHECK(cleaned1.find("~a n d~") == std::string::npos);
+    // 必须完整保留有效核心公式
+    CHECK(cleaned1.find("\\mathrm{A p}") != std::string::npos);
+    CHECK(cleaned1.find("\\mathrm{X p}") != std::string::npos);
+    CHECK(cleaned1.find("\\mathrm{N O p}") != std::string::npos);
+    // 必须包裹在标准独立公式块 $$ ... $$ 中
+    CHECK(cleaned1.rfind("$$\n", 0) == 0);
+    CHECK(cleaned1.find("\n$$") != std::string::npos);
+
+    // 2. 验证多行公式环境未闭合花括号自动平衡 (如第 59 页 El 4 的 \\begin{array} 缺少闭合 })
+    std::string unclosedArray = "\\begin{array}{r l r l}{\\mathrm{O p}}&{=}&{\\left(\\mathrm{A}+\\mathrm{B}\\right)+\\left(\\mathrm{C}+\\mathrm{D}\\right)}&{\\quad\\mathrm{N A p}}\\\\ &{}&{=}&{\\mathrm{!}\\left(\\right.\\left.\\left(\\mathrm{A}^{\\star}\\mathrm{B}\\right)^{\\star}\\right.\\left.\\mathrm{!}\\left(\\mathrm{C}^{\\star}\\mathrm{D}\\right)\\right.\\mathrm{)}\\end{array}";
+    std::string cleanedArray = DocumentPipeline::CleanAndFormatFormula(unclosedArray);
+
+    int openBraces = 0, closeBraces = 0;
+    for (size_t i = 0; i < cleanedArray.size(); ++i) {
+        if (cleanedArray[i] == '{' && (i == 0 || cleanedArray[i-1] != '\\')) openBraces++;
+        if (cleanedArray[i] == '}' && (i == 0 || cleanedArray[i-1] != '\\')) closeBraces++;
+    }
+    CHECK(openBraces == closeBraces);
+    CHECK(cleanedArray.find("\\end{array}") != std::string::npos);
+
+    // 3. 验证未闭合的 \\left 自动追加 \\right.
+    std::string unclosedLeft = "f(x) = \\left( \\frac{1}{2} + x";
+    std::string cleanedLeft = DocumentPipeline::CleanAndFormatFormula(unclosedLeft);
+    CHECK(cleanedLeft.find("\\right.") != std::string::npos);
+
+    // 4. 验证 HTML 实体与 Unicode prime 正确规范化为 '
+    std::string entityFormula = "x + x&#039; = 1 \\quad y + y’ = 1 \\quad z + z′ = 1";
+    std::string cleanedEntity = DocumentPipeline::CleanAndFormatFormula(entityFormula);
+    CHECK(cleanedEntity.find("x + x' = 1") != std::string::npos);
+    CHECK(cleanedEntity.find("y + y' = 1") != std::string::npos);
+    CHECK(cleanedEntity.find("z + z' = 1") != std::string::npos);
+    CHECK(cleanedEntity.find("&#039;") == std::string::npos);
+}
+
+TEST_CASE("SanitizeInlineLatex: Repair unclosed braces and LaTeX decoration commands", "[latex][pipeline]") {
+    // 1. 验证第 14 页翻译中缺失闭合花括号的 \(\underline{\text{URL}\) 自动补齐闭合花括号
+    std::string unclosedMath1 = "该文本可从 \\(\\underline{\\text{http://cupola.gettysburg.edu/oer/1}\\) 下载。关于该文本的更多资料，可访问 \\(\\underline{\\text{http://chuckkann.com}\\)。";
+    std::string sanitized1 = DocumentPipeline::SanitizeInlineLatex(unclosedMath1);
+    CHECK(sanitized1 == "该文本可从 \\(\\underline{\\text{http://cupola.gettysburg.edu/oer/1}}\\) 下载。关于该文本的更多资料，可访问 \\(\\underline{\\text{http://chuckkann.com}}\\)。");
+
+    // 2. 验证已闭合的双花括号保持不变
+    std::string closedMath = "This text can be downloaded from \\(\\underline{\\text{http://cupola.gettysburg.edu/oer/1}}\\).";
+    CHECK(DocumentPipeline::SanitizeInlineLatex(closedMath) == closedMath);
+
+    // 3. 验证无 \\( \\) 定界符但外层丢失闭合花括号的排版命令自动补齐
+    std::string nakedCmd = "该文本可从 \\underline{\\text{http://cupola.gettysburg.edu/oer/1} 下载。可访问 \\underline{\\text{http://chuckkann.com}。";
+    std::string sanitizedNaked = DocumentPipeline::SanitizeInlineLatex(nakedCmd);
+    CHECK(sanitizedNaked.find("\\underline{\\text{http://cupola.gettysburg.edu/oer/1}} 下载") != std::string::npos);
+    CHECK(sanitizedNaked.find("\\underline{\\text{http://chuckkann.com}}。") != std::string::npos);
+
+    // 4. 验证行内普通公式与多层嵌套正常保留
+    std::string formulaInline = "公式为 $x + y = z$ 以及 $f(x) = \\sqrt{x^2 + 1}$ 无需额外修改";
+    CHECK(DocumentPipeline::SanitizeInlineLatex(formulaInline) == formulaInline);
+}
+
+
+
 
 
 

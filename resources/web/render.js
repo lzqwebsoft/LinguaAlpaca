@@ -24,6 +24,15 @@
             .replace(/"/g, "&quot;");
     }
 
+    // 3. 保护数学公式内部换行，将表格单元格公式外的 \n 统一转为 <br> 并规范化单引号
+    function formatCellContent(content) {
+        if (!content) return "";
+        content = content.replace(/&#0*39;|&apos;|&#x0*27;/gi, "'");
+        return content.replace(/(\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|\$\$[\s\S]*?\$\$|\$[^\$]+?\$)|(\\r\\n|\\n|\r\n|[\r\n])/g, function(m, math, nl) {
+            return math ? math : "<br>";
+        });
+    }
+
     // 3. LaTeX 嵌套花括号匹配提取
     function extractBalancedBraces(str, startIdx) {
         if (startIdx >= str.length || str[startIdx] !== '{') return null;
@@ -72,6 +81,7 @@
     }
 
     var decorationMap = {
+        "underline": "single-underline",
         "uwave": "wavy-underline",
         "uline": "single-underline",
         "uuline": "double-underline",
@@ -81,11 +91,11 @@
         "xout": "xout-line"
     };
 
-    // 5. 预处理 LaTeX 专名与排版修饰 (波浪下划线 \uwave, 普通下划线 \uline 等)
+    // 5. 预处理 LaTeX 专名与排版修饰 (普通下划线 \underline / \uline, 波浪下划线 \uwave 等)
     function preprocessLatexDecorations(raw) {
         if (!raw) return "";
 
-        var cmdRegex = /\\(uwave|uline|uuline|dashuline|dotuline|sout|xout)\b/g;
+        var cmdRegex = /\\(underline|uwave|uline|uuline|dashuline|dotuline|sout|xout)\b/g;
         var result = "";
         var lastIdx = 0;
         var match;
@@ -127,6 +137,36 @@
                 if (extracted) {
                     innerText = unwrapLatexText(extracted.content);
                     replaceEnd = extracted.endIdx + 1;
+                } else {
+                    // 容错：处理嵌套 \text{...} 但外层丢失闭合花括号的情况 (如 \underline{\text{URL} 或 \underline{\text{URL}\))
+                    var innerTextMatch = raw.substring(braceIdx + 1).match(/^\\(?:text|textrm|mathrm)\s*\{/);
+                    if (innerTextMatch) {
+                        var innerBraceStart = braceIdx + 1 + innerTextMatch[0].length - 1;
+                        var innerExtracted = extractBalancedBraces(raw, innerBraceStart);
+                        if (innerExtracted) {
+                            innerText = innerExtracted.content.trim();
+                            replaceEnd = innerExtracted.endIdx + 1;
+                            if (replaceEnd < raw.length && raw[replaceEnd] === '}') {
+                                replaceEnd++;
+                            }
+                        }
+                    } else if (hasParen) {
+                        var endParenIdx = raw.indexOf("\\)", braceIdx);
+                        if (endParenIdx !== -1) {
+                            var innerRaw = raw.substring(braceIdx + 1, endParenIdx).trim();
+                            if (innerRaw.endsWith("}")) innerRaw = innerRaw.slice(0, -1).trim();
+                            innerText = unwrapLatexText(innerRaw);
+                            replaceEnd = endParenIdx + 2;
+                            hasParen = false;
+                        }
+                    } else {
+                        var nextTerminator = raw.substring(braceIdx).search(/[\s,，。；！？\)\$]/);
+                        var endIdx = nextTerminator !== -1 ? braceIdx + nextTerminator : raw.length;
+                        var innerRaw = raw.substring(braceIdx + 1, endIdx).trim();
+                        if (innerRaw.endsWith("}")) innerRaw = innerRaw.slice(0, -1).trim();
+                        innerText = unwrapLatexText(innerRaw);
+                        replaceEnd = endIdx;
+                    }
                 }
             } else {
                 // 无大括号情况
@@ -265,40 +305,9 @@
                     if (cell.rowspan > 1) attrs += ' rowspan="' + cell.rowspan + '"';
                     if (cell.colspan > 1) attrs += ' colspan="' + cell.colspan + '"';
                     var rawCell = (cell.text || "").replace(/\\\(\s*$/, '').replace(/^\s*\\\)/, '');
-                    rawCell = rawCell.replace(/&#0*39;|&apos;|&#x0*27;/gi, "'");
                     var content = escapeHtmlText(rawCell)
                         .replace(/(?:\\\(|\$)?\^\{+([^{}]+?)\}+(?:\\\)|\$)?|(?:\\\(|\$)?\^([0-9①-⑩\*]+)(?:\\\)|\$)?/g, "<sup>$1$2</sup>");
-
-                    var inMathParen = false;
-                    var inMathDollar = false;
-                    var formatted = "";
-                    for (var ci = 0; ci < content.length; ci++) {
-                        if (!inMathDollar && content.substring(ci, ci + 2) === "\\(") {
-                            inMathParen = true;
-                            formatted += "\\(";
-                            ci++;
-                        } else if (inMathParen && content.substring(ci, ci + 2) === "\\)") {
-                            inMathParen = false;
-                            formatted += "\\)";
-                            ci++;
-                        } else if (!inMathParen && content[ci] === '$') {
-                            inMathDollar = !inMathDollar;
-                            formatted += '$';
-                        } else if (!inMathParen && !inMathDollar && content.substring(ci, ci + 2) === "\\n") {
-                            formatted += "<br>";
-                            ci++;
-                        } else if (!inMathParen && !inMathDollar && content.substring(ci, ci + 4) === "\\r\\n") {
-                            formatted += "<br>";
-                            ci += 3;
-                        } else if (!inMathParen && !inMathDollar && (content[ci] === '\n' || content[ci] === '\r')) {
-                            if (content[ci] === '\r' && ci + 1 < content.length && content[ci + 1] === '\n') {
-                                ci++;
-                            }
-                            formatted += "<br>";
-                        } else {
-                            formatted += content[ci];
-                        }
-                    }
+                    var formatted = formatCellContent(content);
                     rowHtml += "    <" + tag + attrs + ">" + formatted + "</" + tag + ">\n";
                 }
             }
@@ -373,32 +382,38 @@
         var changed = true;
         while (changed) {
             changed = false;
-            // 剥离外层冗余的 $$ ... $$
+            // 剥离成对外层冗余定界符
             if (s.startsWith("$$") && s.endsWith("$$") && s.length >= 4) {
                 s = s.substring(2, s.length - 2).trim();
                 changed = true;
-            }
-            // 剥离外层冗余的 \[ ... \]
-            else if (s.startsWith("\\[") && s.endsWith("\\]") && s.length >= 4) {
+            } else if (s.startsWith("\\[") && s.endsWith("\\]") && s.length >= 4) {
                 s = s.substring(2, s.length - 2).trim();
                 changed = true;
-            }
-            // 剥离外层冗余的 \( ... \)
-            else if (s.startsWith("\\(") && s.endsWith("\\)") && s.length >= 4) {
+            } else if (s.startsWith("\\(") && s.endsWith("\\)") && s.length >= 4) {
                 s = s.substring(2, s.length - 2).trim();
                 changed = true;
-            }
-            // 剥离外层冗余的单美元符号 $ ... $
-            else if (s.startsWith("$") && s.endsWith("$") && s.length >= 2 && !s.startsWith("$$")) {
+            } else if (s.startsWith("$") && s.endsWith("$") && s.length >= 2 && !s.startsWith("$$")) {
                 s = s.substring(1, s.length - 1).trim();
                 changed = true;
-            }
-            // 剥离 \begin{equation} ... \end{equation}
-            else if (s.startsWith("\\begin{equation}") && s.endsWith("\\end{equation}") && s.length >= 30) {
+            } else if (s.startsWith("\\begin{equation}") && s.endsWith("\\end{equation}") && s.length >= 30) {
                 s = s.substring(16, s.length - 14).trim();
                 changed = true;
             } else if (s.startsWith("\\begin{equation*}") && s.endsWith("\\end{equation*}") && s.length >= 32) {
                 s = s.substring(17, s.length - 15).trim();
+                changed = true;
+            }
+            // 剥离单侧残留定界符
+            else if (s.startsWith("$$") || s.startsWith("\\[") || s.startsWith("\\(")) {
+                s = s.substring(2).trim();
+                changed = true;
+            } else if (s.startsWith("$") && !s.startsWith("$$")) {
+                s = s.substring(1).trim();
+                changed = true;
+            } else if (s.endsWith("$$") || s.endsWith("\\]") || s.endsWith("\\)")) {
+                s = s.substring(0, s.length - 2).trim();
+                changed = true;
+            } else if (s.endsWith("$") && !s.endsWith("$$")) {
+                s = s.substring(0, s.length - 1).trim();
                 changed = true;
             }
         }
@@ -483,7 +498,22 @@
 
     // 10. 核心 Markdown、OTSL 表格与数学公式渲染接口
     function renderMarkdown(rawMarkdown, baseHref, preserveScroll) {
-        var savedScrollY = preserveScroll ? window.scrollY : 0;
+        var getScrollY = function() {
+            if (typeof window.scrollY !== 'undefined' && window.scrollY > 0) return window.scrollY;
+            if (typeof window.pageYOffset !== 'undefined' && window.pageYOffset > 0) return window.pageYOffset;
+            if (document.documentElement && document.documentElement.scrollTop > 0) return document.documentElement.scrollTop;
+            if (document.body && document.body.scrollTop > 0) return document.body.scrollTop;
+            return 0;
+        };
+
+        var restoreScroll = function(y) {
+            if (y <= 0) return;
+            window.scrollTo(0, y);
+            if (document.documentElement) document.documentElement.scrollTop = y;
+            if (document.body) document.body.scrollTop = y;
+        };
+
+        var savedScrollY = preserveScroll ? getScrollY() : 0;
 
         if (baseHref) {
             var baseTag = document.getElementById('baseTag');
@@ -505,7 +535,7 @@
         // 内容完全一致时短路退出，杜绝无意义的 DOM 重建与重绘
         if (container._lastRawMarkdown === rawMarkdown && container._lastBaseDir === baseHref) {
             if (preserveScroll && savedScrollY > 0) {
-                window.scrollTo(0, savedScrollY);
+                restoreScroll(savedScrollY);
             }
             return;
         }
@@ -520,42 +550,9 @@
         var processedMarkdown = preprocessOtslTables(rawMarkdown);
         processedMarkdown = preprocessLatexDecorations(processedMarkdown);
 
-        // 处理已转为 HTML 的表格单元格：将 <td> 与 <th> 内在公式外的字面量 \n 转换为 <br>，并规范化单引号实体
+        // 处理已转为 HTML 的表格单元格：统一规范化单引号与公式外换行
         processedMarkdown = processedMarkdown.replace(/(<t[dh]\b[^>]*>)([\s\S]*?)(<\/t[dh]>)/gi, function(match, openTag, cellContent, closeTag) {
-            if (cellContent.indexOf('\\n') === -1 && cellContent.indexOf('\n') === -1 && cellContent.indexOf('&#039;') === -1) {
-                return match;
-            }
-            cellContent = cellContent.replace(/&#0*39;|&apos;|&#x0*27;/gi, "'");
-            var inMath = false;
-            var res = "";
-            for (var idx = 0; idx < cellContent.length; idx++) {
-                if (cellContent.substring(idx, idx + 2) === "\\(") {
-                    inMath = true;
-                    res += "\\(";
-                    idx++;
-                } else if (inMath && cellContent.substring(idx, idx + 2) === "\\)") {
-                    inMath = false;
-                    res += "\\)";
-                    idx++;
-                } else if (cellContent[idx] === '$') {
-                    inMath = !inMath;
-                    res += '$';
-                } else if (!inMath && cellContent.substring(idx, idx + 2) === "\\n") {
-                    res += "<br>";
-                    idx++;
-                } else if (!inMath && cellContent.substring(idx, idx + 4) === "\\r\\n") {
-                    res += "<br>";
-                    idx += 3;
-                } else if (!inMath && (cellContent[idx] === '\n' || cellContent[idx] === '\r')) {
-                    if (cellContent[idx] === '\r' && idx + 1 < cellContent.length && cellContent[idx + 1] === '\n') {
-                        idx++;
-                    }
-                    res += "<br>";
-                } else {
-                    res += cellContent[idx];
-                }
-            }
-            return openTag + res + closeTag;
+            return openTag + formatCellContent(cellContent) + closeTag;
         });
 
         // 保护代码块免受公式标记与实体转义影响
@@ -656,6 +653,7 @@
                             trust: true,
                             output: "htmlAndMathml",
                             macros: {
+                                "\\underline": "\\htmlClass{single-underline}{#1}",
                                 "\\uwave": "\\htmlClass{wavy-underline}{#1}",
                                 "\\uline": "\\htmlClass{single-underline}{#1}",
                                 "\\uuline": "\\htmlClass{double-underline}{#1}",
@@ -710,9 +708,23 @@
 
         // 恢复视口滚动高度，杜绝跳动
         if (preserveScroll && savedScrollY > 0) {
-            window.scrollTo(0, savedScrollY);
+            restoreScroll(savedScrollY);
+            if (typeof requestAnimationFrame === 'function') {
+                requestAnimationFrame(function() {
+                    restoreScroll(savedScrollY);
+                    setTimeout(function() {
+                        restoreScroll(savedScrollY);
+                    }, 40);
+                });
+            } else {
+                setTimeout(function() {
+                    restoreScroll(savedScrollY);
+                }, 40);
+            }
         } else if (!preserveScroll) {
             window.scrollTo(0, 0);
+            if (document.documentElement) document.documentElement.scrollTop = 0;
+            if (document.body) document.body.scrollTop = 0;
         }
     }
 

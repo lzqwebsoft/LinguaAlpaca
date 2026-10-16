@@ -1082,9 +1082,47 @@ TEST_CASE("DocLayoutEngine - Page 11 Layout Analysis Regression", "[layout][page
     }
 }
 
+TEST_CASE("PdfHelper & DocLayoutEngine - Page 56 PDFium Engine Rendering & Empty Filter", "[pdf][layout][page56]") {
+    // 1. 验证空纸张渐变图像被正确识别为空白页 (Scheme 1)
+    wxImage blankParchment(800, 1000);
+    blankParchment.SetRGB(wxRect(0, 0, 800, 1000), 242, 227, 191);
+    // 模拟轻微扫描仪阴影与纸张渐变 (无深色文字墨迹)
+    for (int y = 0; y < 1000; ++y) {
+        for (int x = 0; x < 50; ++x) {
+            blankParchment.SetRGB(x, y, 225, 210, 175);
+        }
+    }
+    CHECK(DocLayoutEngine::IsImageContentEmpty(blankParchment) == true);
 
+    // 2. 验证受 JBIG2 解码异常影响的 PDF 第 56 页能够被 PdfHelper 成功保底渲染出文本 (Scheme 2)
+    std::string pdfPath = "/Volumes/SHARE FILES/authenticaccount02stau.pdf";
+    if (wxFileExists(wxString::FromUTF8(pdfPath))) {
+        wxImage page56Img;
+        // 第 56 页对应 pageIndex = 55
+        bool renderOk = PdfHelper::RenderPage(pdfPath, 55, page56Img, 1000);
+        REQUIRE(renderOk == true);
+        REQUIRE(page56Img.IsOk() == true);
+        CHECK(page56Img.GetWidth() == 1000);
 
+        // 统计渲染图像中的有效深色笔墨像素
+        int w = page56Img.GetWidth();
+        int h = page56Img.GetHeight();
+        const unsigned char* data = page56Img.GetData();
+        int darkPixels = 0;
+        int totalPixels = w * h;
+        for (int i = 0; i < totalPixels; ++i) {
+            int r = data[i * 3];
+            int g = data[i * 3 + 1];
+            int b = data[i * 3 + 2];
+            if (r < 140 && g < 140 && b < 140) {
+                darkPixels++;
+            }
+        }
 
+        // 验证文本层成功合成到了光栅化图像上，包含大量深色笔墨
+        CHECK(darkPixels > 10000);
 
-
-
+        // 验证合成文本后的页面不会被 IsImageContentEmpty 视为空白页
+        CHECK(DocLayoutEngine::IsImageContentEmpty(page56Img) == false);
+    }
+}

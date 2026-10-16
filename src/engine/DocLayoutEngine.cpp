@@ -759,6 +759,7 @@ bool DocLayoutEngine::IsImageContentEmpty(const wxImage& img) {
     // 2. 步长采样统计前景有效笔墨像素
     const int step = 2;
     int fgCount = 0;
+    int darkInkCount = 0;
     int totalSampled = 0;
     for (int y = 0; y < h; y += step) {
         size_t rowOffset = static_cast<size_t>(y) * w * 3;
@@ -777,9 +778,17 @@ bool DocLayoutEngine::IsImageContentEmpty(const wxImage& img) {
                 if (diff > 40 && gray < 225) {
                     isForeground = true;
                 }
+                // 深色印刷/手写笔墨判断：不仅要求灰度值明显深 (<= 145)，且与纸张背景有明显反差
+                if (gray <= 145 && (bgGray - gray) >= 40) {
+                    darkInkCount++;
+                }
             } else {
                 if (diff > 40 && gray > 50) {
                     isForeground = true;
+                }
+                // 深底白字场景
+                if (gray >= 180 && (gray - bgGray) >= 40) {
+                    darkInkCount++;
                 }
             }
 
@@ -791,13 +800,24 @@ bool DocLayoutEngine::IsImageContentEmpty(const wxImage& img) {
 
     if (totalSampled == 0) return true;
     double fgRatio = static_cast<double>(fgCount) / static_cast<double>(totalSampled);
+    double darkRatio = static_cast<double>(darkInkCount) / static_cast<double>(totalSampled);
 
     // 对于极小尺寸子图 (<500 个采样点)，要求至多 2 个笔墨点或占比低于 1%
     if (totalSampled < 500) {
         return (fgCount <= 2 || fgRatio < 0.01);
     }
-    // 对于整页大图，要求笔墨像素少于 60 个或占比低于 0.02% (排除偶发细微噪点或扫描仪边框污渍)
-    return (fgCount < 60 || fgRatio < 0.0002);
+    // 对于整页大图：
+    // 1. 如果前景像素本身极少 (< 60 或 < 0.02%)，直接视为空白
+    if (fgCount < 60 || fgRatio < 0.0002) {
+        return true;
+    }
+    // 2. 如果虽然有微弱色差像素(如发黄古纸渐变、扫描仪阴影)，但真实高对比笔墨几乎为 0 (< 30 或 < 0.01%)，
+    //    则属于无实际印刷文字的背景纸张/空白页，应视为空白页，防止排版引擎错误合成全页伪块并诱发 VLM 幻觉
+    if (darkInkCount < 30 || darkRatio < 0.0001) {
+        return true;
+    }
+
+    return false;
 }
 
 bool DocLayoutEngine::AnalyzeLayout(const std::string& imagePath, DocumentLayoutResult& outResult, const DocLayoutFilterConfig& filterConfig) {

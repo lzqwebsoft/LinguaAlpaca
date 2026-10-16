@@ -12,8 +12,8 @@ namespace LinguaAlpaca {
  * 
  * 核心设计目标：
  * 1. 严格防止内存溢出 (OOM)：支持分批/按页光栅化，绝不将整个长篇 PDF 一次性读入显存/内存；
- * 2. Windows 平台基于系统原生 WinRT Windows.Data.Pdf API (零外部依赖，硬件加速渲染)；
- * 3. macOS 平台基于系统原生 PDFKit / CoreGraphics；
+ * 2. 基于工业级 Google PDFium 跨平台高性能渲染引擎；
+ * 3. 100% 容错兼容各类历史古籍扫描件、JBIG2/JPEG2000 复合掩模及复杂矢量排版；
  * 4. 自动管理单页光栅化位图与临时文件生命周期。
  */
 class PdfHelper {

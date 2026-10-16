@@ -46,6 +46,7 @@ third_party/llama.cpp/build/
 
 # Ignore precompiled ONNX Runtime library
 third_party/onnxruntime/
+third_party/pdfium/
 
 # Ignore layout analysis model weights
 models/*.onnx

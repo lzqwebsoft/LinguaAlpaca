@@ -97,6 +97,7 @@ search_paths = [
     os.path.join(build_dir, "bin"),
     os.path.join(build_dir, "third_party/wxWidgets/lib"),
     os.path.join(project_root, "third_party/onnxruntime/lib"),
+    os.path.join(project_root, "third_party/pdfium/lib"),
     "/opt/homebrew/opt/openssl@3/lib",
     "/usr/local/opt/openssl@3/lib"
 ]

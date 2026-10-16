@@ -83,6 +83,9 @@ add_subdirectory(third_party/llama.cpp)
 # 自动检测并载入官方 ONNX Runtime 预编译库 (支持 Windows/macOS/Linux)
 include(cmake/setup_onnxruntime.cmake)
 
+# 自动检测并载入官方 Google PDFium 预编译库 (支持 Windows/macOS/Linux)
+include(cmake/setup_pdfium.cmake)
+
 # 模块化源码组织
 set(CORE_SOURCES
     src/core/Types.hpp
@@ -252,6 +255,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     cpp-httplib
     mtmd
     onnxruntime
+    pdfium
 )
 
 if(TARGET wxzlib)
@@ -264,22 +268,22 @@ endif()
 
 if(WIN32)
     target_link_libraries(${PROJECT_NAME} PRIVATE ole32 oleaut32 windowsapp)
-    # 自动仅复制 Windows 程序实际依赖的动态链接库 (Runtime DLLs) 及 llama-server, onnxruntime.dll, WebView2Loader.dll
+    # 自动仅复制 Windows 程序实际依赖的动态链接库 (Runtime DLLs) 及 llama-server, onnxruntime.dll, pdfium.dll, WebView2Loader.dll
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND}
             -DDEST_DIR=$<TARGET_FILE_DIR:${PROJECT_NAME}>
-            "-DDLLS=$<TARGET_RUNTIME_DLLS:${PROJECT_NAME}>;$<TARGET_RUNTIME_DLLS:llama-server>;${ORT_BIN};${CMAKE_BINARY_DIR}/third_party/wxWidgets/lib/vc_x64_dll/WebView2Loader.dll"
+            "-DDLLS=$<TARGET_RUNTIME_DLLS:${PROJECT_NAME}>;$<TARGET_RUNTIME_DLLS:llama-server>;${ORT_BIN};${PDFIUM_BIN};${CMAKE_BINARY_DIR}/third_party/wxWidgets/lib/vc_x64_dll/WebView2Loader.dll"
             -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_runtime_deps.cmake"
         COMMAND ${CMAKE_COMMAND} -E copy_directory
             "${CMAKE_CURRENT_SOURCE_DIR}/resources/web"
             "$<TARGET_FILE_DIR:${PROJECT_NAME}>/resources/web"
     )
 elseif(APPLE)
-    # 针对 macOS App Bundle，自动将 libonnxruntime.dylib 打包进 Frameworks
-    set_source_files_properties("${ORT_BIN}" PROPERTIES
+    # 针对 macOS App Bundle，自动将 libonnxruntime.dylib 和 libpdfium.dylib 打包进 Frameworks
+    set_source_files_properties("${ORT_BIN}" "${PDFIUM_BIN}" PROPERTIES
         MACOSX_PACKAGE_LOCATION "Frameworks"
     )
-    target_sources(${PROJECT_NAME} PRIVATE "${ORT_BIN}")
+    target_sources(${PROJECT_NAME} PRIVATE "${ORT_BIN}" "${PDFIUM_BIN}")
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E create_symlink
             "libonnxruntime.dylib"

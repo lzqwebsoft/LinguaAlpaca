@@ -55,6 +55,7 @@ target_link_libraries(unit_tests PRIVATE
     cpp-httplib
     mtmd
     onnxruntime
+    pdfium
 )
 
 if(TARGET wxzlib)
@@ -70,7 +71,7 @@ if(WIN32)
     add_custom_command(TARGET unit_tests POST_BUILD
         COMMAND ${CMAKE_COMMAND}
             -DDEST_DIR=$<TARGET_FILE_DIR:unit_tests>
-            "-DDLLS=$<TARGET_RUNTIME_DLLS:unit_tests>;${ORT_BIN}"
+            "-DDLLS=$<TARGET_RUNTIME_DLLS:unit_tests>;${ORT_BIN};${PDFIUM_BIN}"
             -P "${CMAKE_SOURCE_DIR}/cmake/copy_runtime_deps.cmake"
     )
 elseif(APPLE)
@@ -91,6 +92,9 @@ elseif(APPLE)
         "-framework ApplicationServices"
         "-framework Carbon"
         "-framework AVFoundation"
+    )
+    set_target_properties(unit_tests PROPERTIES
+        BUILD_RPATH "${PDFIUM_LIB_DIR};${ORT_LIB_DIR}"
     )
 endif()
 

@@ -692,25 +692,77 @@ std::string DocumentPipeline::ConvertOtslToHtml(const std::string& otslStr) {
             text = TrimString(text.substr(2));
         }
 
-        // 2. 基础 HTML 实体转义
+        // 规范化单引号 HTML 实体与 Unicode prime，确保数学公式与上单引号保真
+        static const std::regex s_quoteEntityRegex(R"(&#0*39;|&apos;|&#x0*27;)");
+        text = std::regex_replace(text, s_quoteEntityRegex, "'");
+
+        // 2. 基础 HTML 实体转义 (注意：单引号 ' 在 HTML 表格文本节点与 LaTeX 公式中必须保留，绝不得转义为 &#039;，否则破坏 KaTeX 解析并导致报错)
         std::string escaped;
-        if (text.find_first_of("&<>\"'") == std::string::npos) {
+        if (text.find_first_of("&<>\"") == std::string::npos) {
             escaped = text;
         } else {
             escaped.reserve(text.size() + 16);
-            for (char ch : text) {
-                if (ch == '&') escaped += "&amp;";
+            for (size_t i = 0; i < text.size(); ++i) {
+                char ch = text[i];
+                if (ch == '&') {
+                    if (text.compare(i, 5, "&amp;") == 0 ||
+                        text.compare(i, 4, "&lt;") == 0 ||
+                        text.compare(i, 4, "&gt;") == 0 ||
+                        text.compare(i, 6, "&quot;") == 0 ||
+                        text.compare(i, 6, "&nbsp;") == 0) {
+                        escaped += ch;
+                    } else {
+                        escaped += "&amp;";
+                    }
+                }
                 else if (ch == '<') escaped += "&lt;";
                 else if (ch == '>') escaped += "&gt;";
                 else if (ch == '"') escaped += "&quot;";
-                else if (ch == '\'') escaped += "&#039;";
                 else escaped += ch;
             }
         }
 
         // 3. 将常见注解/上标模式转换为语义化 <sup> 标签 (如 7.5^{①}, 7.5\(^{①}\), 7.5^①, \(^{[1]}\) 等)
         static const std::regex s_supRegex(R"((?:\\\(|\$)?\^\{+([^{}]+?)\}+(?:\\\)|\$)?|(?:\\\(|\$)?\^([0-9①-⑩\*]+)(?:\\\)|\$)?)");
-        return std::regex_replace(escaped, s_supRegex, "<sup>$1$2</sup>");
+        std::string processed = std::regex_replace(escaped, s_supRegex, "<sup>$1$2</sup>");
+
+        // 4. 将表格单元格中的换行符 (\n、\r\n、字面量 \n、\r\n) 转换为 <br>
+        // 注意：需保护公式 \( ... \) 与 $ ... $ 内的内容，避免误触 LaTeX 命令 (如 \neq, \nabla)
+        std::string finalHtml;
+        finalHtml.reserve(processed.size() + 16);
+        bool inMathParen = false;
+        bool inMathDollar = false;
+        size_t len = processed.size();
+        for (size_t i = 0; i < len; ++i) {
+            if (!inMathDollar && i + 1 < len && processed[i] == '\\' && processed[i + 1] == '(') {
+                inMathParen = true;
+                finalHtml += "\\(";
+                ++i;
+            } else if (inMathParen && i + 1 < len && processed[i] == '\\' && processed[i + 1] == ')') {
+                inMathParen = false;
+                finalHtml += "\\)";
+                ++i;
+            } else if (!inMathParen && processed[i] == '$') {
+                inMathDollar = !inMathDollar;
+                finalHtml += '$';
+            } else if (!inMathParen && !inMathDollar && processed[i] == '\\' && i + 1 < len && processed[i + 1] == 'n') {
+                finalHtml += "<br>";
+                ++i;
+            } else if (!inMathParen && !inMathDollar && processed[i] == '\\' && i + 3 < len &&
+                       processed[i + 1] == 'r' && processed[i + 2] == '\\' && processed[i + 3] == 'n') {
+                finalHtml += "<br>";
+                i += 3;
+            } else if (!inMathParen && !inMathDollar && (processed[i] == '\n' || processed[i] == '\r')) {
+                if (processed[i] == '\r' && i + 1 < len && processed[i + 1] == '\n') {
+                    ++i;
+                }
+                finalHtml += "<br>";
+            } else {
+                finalHtml += processed[i];
+            }
+        }
+
+        return finalHtml;
     };
 
     std::string theadHtml;

@@ -509,6 +509,44 @@ TEST_CASE("DocumentPipeline - Convert PaddleOCR OTSL table to HTML table", "[tab
     // 核心断言：7.5^{①}\( 必须转为 7.5<sup>①</sup>，绝不得泄漏未闭合的 \(
     REQUIRE(htmlZxgb.find("<td>7.5<sup>①</sup></td>") != std::string::npos);
     REQUIRE(htmlZxgb.find("\\(") == std::string::npos);
+
+    // 验证数字电路文档第 16 页表格项中的 \n 转换为 <br>
+    std::string otslPage16Table =
+        "<ecel><fcel>2. Decoders<ecel><nl>"
+        "<fcel>6<fcel>1. Program Control Structures (branches and loops)\\n2. Multiplexers<fcel>Chapter 8: Exercises 1, 2, 3 & 4<nl>"
+        "<fcel>7<fcel>1. Reentrant subprograms and program stack\n2. Latches and flip-flops<fcel>Chapter 9: Exercise 1<nl>";
+    std::string htmlPage16 = DocumentPipeline::ConvertOtslToHtml(otslPage16Table);
+    REQUIRE_FALSE(htmlPage16.empty());
+    // 单元格中的字面量 \n 必须转换为 <br>
+    REQUIRE(htmlPage16.find("<td>1. Program Control Structures (branches and loops)<br>2. Multiplexers</td>") != std::string::npos);
+    // 单元格中的实际换行符 \n 也必须转换为 <br>
+    REQUIRE(htmlPage16.find("<td>1. Reentrant subprograms and program stack<br>2. Latches and flip-flops</td>") != std::string::npos);
+    // 实体 & 必须正确转义为 &amp;
+    REQUIRE(htmlPage16.find("<td>Chapter 8: Exercises 1, 2, 3 &amp; 4</td>") != std::string::npos);
+
+    // 验证数字电路文档第 26 页表格中的布尔运算上单引号 (prime) 与公式
+    // 单引号 ' 绝不能被转义为 &#039;，已有 &#039; 需自动还原为 '
+    std::string otslPage26Table =
+        "<fcel>Relationship<fcel>Rule No.<fcel>Relationship<fcel>Rule No.<nl>"
+        "<fcel>\\(x + x' = 1\\)<fcel>7<fcel>\\(x \\times x' = 0\\)<fcel>8<nl>"
+        "<fcel>\\(x + x&#039; = 1\\)<fcel>7<fcel>\\((x + y)' = x'y'\\)<fcel>15<nl>"
+        "<fcel>x + x&#039; = 1<fcel>7<fcel>A'B'C'<fcel>Minterm<nl>";
+    std::string htmlPage26 = DocumentPipeline::ConvertOtslToHtml(otslPage26Table);
+    REQUIRE_FALSE(htmlPage26.empty());
+    REQUIRE(htmlPage26.find("<td>\\(x + x' = 1\\)</td>") != std::string::npos);
+    REQUIRE(htmlPage26.find("<td>\\(x \\times x' = 0\\)</td>") != std::string::npos);
+    REQUIRE(htmlPage26.find("<td>\\((x + y)' = x'y'\\)</td>") != std::string::npos);
+    REQUIRE(htmlPage26.find("<td>x + x' = 1</td>") != std::string::npos);
+    REQUIRE(htmlPage26.find("<td>A'B'C'</td>") != std::string::npos);
+    // 绝对不能存在破坏公式的 &#039; 实体泄漏
+    REQUIRE(htmlPage26.find("&#039;") == std::string::npos);
+
+    // 验证公式内部的 \neq 等以 \n 开头的 LaTeX 宏命令不会被误转为 <br>
+    std::string otslFormulaWithNeq =
+        "<fcel>Condition<fcel>Action<nl>"
+        "<fcel>\\(x \\neq 0\\)\\nNext row<fcel>Execute<nl>";
+    std::string htmlFormula = DocumentPipeline::ConvertOtslToHtml(otslFormulaWithNeq);
+    REQUIRE(htmlFormula.find("\\(x \\neq 0\\)<br>Next row") != std::string::npos);
 }
 
 TEST_CASE("DocLayoutEngine - Filter Header and Footer Page Numbers", "[layout][filter]") {

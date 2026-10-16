@@ -21,8 +21,7 @@
             .replace(/&/g, "&amp;")
             .replace(/</g, "&lt;")
             .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;")
-            .replace(/'/g, "&#039;");
+            .replace(/"/g, "&quot;");
     }
 
     // 3. LaTeX 嵌套花括号匹配提取
@@ -266,10 +265,41 @@
                     if (cell.rowspan > 1) attrs += ' rowspan="' + cell.rowspan + '"';
                     if (cell.colspan > 1) attrs += ' colspan="' + cell.colspan + '"';
                     var rawCell = (cell.text || "").replace(/\\\(\s*$/, '').replace(/^\s*\\\)/, '');
+                    rawCell = rawCell.replace(/&#0*39;|&apos;|&#x0*27;/gi, "'");
                     var content = escapeHtmlText(rawCell)
-                        .replace(/(?:\\\(|\$)?\^\{+([^{}]+?)\}+(?:\\\)|\$)?|(?:\\\(|\$)?\^([0-9①-⑩\*]+)(?:\\\)|\$)?/g, "<sup>$1$2</sup>")
-                        .replace(/\r?\n/g, "<br>");
-                    rowHtml += "    <" + tag + attrs + ">" + content + "</" + tag + ">\n";
+                        .replace(/(?:\\\(|\$)?\^\{+([^{}]+?)\}+(?:\\\)|\$)?|(?:\\\(|\$)?\^([0-9①-⑩\*]+)(?:\\\)|\$)?/g, "<sup>$1$2</sup>");
+
+                    var inMathParen = false;
+                    var inMathDollar = false;
+                    var formatted = "";
+                    for (var ci = 0; ci < content.length; ci++) {
+                        if (!inMathDollar && content.substring(ci, ci + 2) === "\\(") {
+                            inMathParen = true;
+                            formatted += "\\(";
+                            ci++;
+                        } else if (inMathParen && content.substring(ci, ci + 2) === "\\)") {
+                            inMathParen = false;
+                            formatted += "\\)";
+                            ci++;
+                        } else if (!inMathParen && content[ci] === '$') {
+                            inMathDollar = !inMathDollar;
+                            formatted += '$';
+                        } else if (!inMathParen && !inMathDollar && content.substring(ci, ci + 2) === "\\n") {
+                            formatted += "<br>";
+                            ci++;
+                        } else if (!inMathParen && !inMathDollar && content.substring(ci, ci + 4) === "\\r\\n") {
+                            formatted += "<br>";
+                            ci += 3;
+                        } else if (!inMathParen && !inMathDollar && (content[ci] === '\n' || content[ci] === '\r')) {
+                            if (content[ci] === '\r' && ci + 1 < content.length && content[ci + 1] === '\n') {
+                                ci++;
+                            }
+                            formatted += "<br>";
+                        } else {
+                            formatted += content[ci];
+                        }
+                    }
+                    rowHtml += "    <" + tag + attrs + ">" + formatted + "</" + tag + ">\n";
                 }
             }
             rowHtml += "  </tr>\n";
@@ -331,10 +361,15 @@
         return sanitized;
     }
 
-    // 8. 清理和规范化 LaTeX 数学公式中的多余/嵌套定界符
+    // 8. 清理和规范化 LaTeX 数学公式中的多余/嵌套定界符与单引号实体
     function cleanMathFormula(f) {
         if (!f) return "";
         var s = f.trim();
+
+        // 还原 HTML 实体单引号与 Unicode prime 为 LaTeX 认可的标准 prime 符号 '
+        s = s.replace(/&#0*39;|&apos;|&#x0*27;/gi, "'");
+        s = s.replace(/[’′]/g, "'");
+
         var changed = true;
         while (changed) {
             changed = false;
@@ -484,6 +519,44 @@
 
         var processedMarkdown = preprocessOtslTables(rawMarkdown);
         processedMarkdown = preprocessLatexDecorations(processedMarkdown);
+
+        // 处理已转为 HTML 的表格单元格：将 <td> 与 <th> 内在公式外的字面量 \n 转换为 <br>，并规范化单引号实体
+        processedMarkdown = processedMarkdown.replace(/(<t[dh]\b[^>]*>)([\s\S]*?)(<\/t[dh]>)/gi, function(match, openTag, cellContent, closeTag) {
+            if (cellContent.indexOf('\\n') === -1 && cellContent.indexOf('\n') === -1 && cellContent.indexOf('&#039;') === -1) {
+                return match;
+            }
+            cellContent = cellContent.replace(/&#0*39;|&apos;|&#x0*27;/gi, "'");
+            var inMath = false;
+            var res = "";
+            for (var idx = 0; idx < cellContent.length; idx++) {
+                if (cellContent.substring(idx, idx + 2) === "\\(") {
+                    inMath = true;
+                    res += "\\(";
+                    idx++;
+                } else if (inMath && cellContent.substring(idx, idx + 2) === "\\)") {
+                    inMath = false;
+                    res += "\\)";
+                    idx++;
+                } else if (cellContent[idx] === '$') {
+                    inMath = !inMath;
+                    res += '$';
+                } else if (!inMath && cellContent.substring(idx, idx + 2) === "\\n") {
+                    res += "<br>";
+                    idx++;
+                } else if (!inMath && cellContent.substring(idx, idx + 4) === "\\r\\n") {
+                    res += "<br>";
+                    idx += 3;
+                } else if (!inMath && (cellContent[idx] === '\n' || cellContent[idx] === '\r')) {
+                    if (cellContent[idx] === '\r' && idx + 1 < cellContent.length && cellContent[idx + 1] === '\n') {
+                        idx++;
+                    }
+                    res += "<br>";
+                } else {
+                    res += cellContent[idx];
+                }
+            }
+            return openTag + res + closeTag;
+        });
 
         // 保护代码块免受公式标记与实体转义影响
         var codeBlocks = [];

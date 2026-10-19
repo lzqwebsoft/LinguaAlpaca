@@ -51,7 +51,8 @@ public:
     void ExecuteTranslationStream(
         const TranslationTask& task,
         StreamTokenCallback onToken,
-        StreamCompleteCallback onComplete
+        StreamCompleteCallback onComplete,
+        std::shared_ptr<std::atomic<bool>> taskCancelToken = nullptr
     );
 
     void ExecuteOcrStream(

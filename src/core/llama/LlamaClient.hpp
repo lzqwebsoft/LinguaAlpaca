@@ -23,7 +23,8 @@ public:
 
     bool IsModelLoaded() const;
 
-    void TranslateStreamAsync(const TranslationTask& task, StreamTokenCallback onToken, StreamCompleteCallback onComplete);
+    void TranslateStreamAsync(const TranslationTask& task, StreamTokenCallback onToken, StreamCompleteCallback onComplete,
+                              std::shared_ptr<std::atomic<bool>> taskCancelToken = nullptr);
 
     void RecognizeStream(const std::string& imagePath, const std::string& taskType, const std::string& modelPath, const std::string& mmprojPath, OcrTokenCallback onToken,
                          OcrCompleteCallback onComplete, std::shared_ptr<std::atomic<bool>> taskCancelToken = nullptr);

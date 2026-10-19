@@ -77,7 +77,7 @@ namespace LinguaAlpaca {
         Save();
     }
 
-    void ConfigManager::SaveModelConfig(const std::string& path, int gpuLayers, int port, int ctxSize, int threads) {
+    void ConfigManager::SaveModelConfig(const std::string& path, int gpuLayers, int port, int ctxSize, int threads, int parallel) {
         {
             std::lock_guard<std::mutex> lock(m_mutex);
             m_config.modelPath = path;
@@ -85,6 +85,9 @@ namespace LinguaAlpaca {
             m_config.translationPort = port;
             m_config.translationCtxSize = ctxSize;
             m_config.translationThreads = threads;
+            if (parallel < 1) parallel = 1;
+            if (parallel > 4) parallel = 4;
+            m_config.transParallel = parallel;
         }
         Save();
     }
@@ -200,6 +203,9 @@ namespace LinguaAlpaca {
         m_config.ocrCtxSize = fileConfig.ReadLong("/OCRModel/CtxSize", 4096);
         m_config.ocrThreads = fileConfig.ReadLong("/OCRModel/Threads", 0);
         m_config.ocrParallel = fileConfig.ReadLong("/OCRModel/Parallel", 2);
+        m_config.transParallel = fileConfig.ReadLong("/TranslationModel/Parallel", 1);
+        if (m_config.transParallel < 1) m_config.transParallel = 1;
+        if (m_config.transParallel > 4) m_config.transParallel = 4;
 
         // 划词翻译配置
         m_config.selectionTranslateEnabled = fileConfig.ReadBool("/Selection/Enabled", true);
@@ -246,6 +252,7 @@ namespace LinguaAlpaca {
         fileConfig.Write("/OCRModel/CtxSize", (long)m_config.ocrCtxSize);
         fileConfig.Write("/OCRModel/Threads", (long)m_config.ocrThreads);
         fileConfig.Write("/OCRModel/Parallel", (long)m_config.ocrParallel);
+        fileConfig.Write("/TranslationModel/Parallel", (long)m_config.transParallel);
         fileConfig.Write("/LayoutModel/Path", wxString::FromUTF8(m_config.layoutModelPath));
         fileConfig.Write("/LayoutModel/ExecutionProvider", (long)m_config.layoutExecutionProvider);
         fileConfig.Write("/LayoutModel/Threads", (long)m_config.layoutThreads);

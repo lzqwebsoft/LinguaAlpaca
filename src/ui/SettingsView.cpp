@@ -249,6 +249,23 @@ void SettingsView::InitUI() {
 
     m_modelCtxCtrl = new CustomInputBox(m_modelCard, wxID_ANY, L"2048", L"2048", wxDefaultPosition, dip(80, 34));
 
+    m_modelParallelLabel = new wxStaticText(m_modelCard, wxID_ANY, L"翻译并发：");
+    m_modelParallelLabel->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+    m_modelParallelLabel->SetForegroundColour(palette.textPrimary);
+
+    wxArrayString transParallelModes;
+    transParallelModes.Add(L"1 - 串行（省显存）");
+    transParallelModes.Add(L"2 - 并行 x2");
+    transParallelModes.Add(L"3 - 并行 x3");
+    transParallelModes.Add(L"4 - 并行 x4");
+    m_modelParallelChoice = new CustomChoice(m_modelCard, wxID_ANY, wxDefaultPosition, dip(150, 34), transParallelModes);
+    m_modelParallelChoice->SetSelection(0);
+    m_modelParallelChoice->SetToolTip(L"文档双语翻译时并发提交的元素数量：数值越大速度越快，但每槽可用上下文越小。\n建议与翻译服务并发槽位数保持一致（默认 1 为串行）。");
+
+    m_modelParallelHint = new wxStaticText(m_modelCard, wxID_ANY, L"（文档翻译并行度，越大越快；修改后需重启翻译服务生效）");
+    m_modelParallelHint->SetFont(wxFont(8, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+    m_modelParallelHint->SetForegroundColour(palette.textSecondary);
+
     modelParamSizer->Add(m_modelGpuLabel, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 16_dip);
     modelParamSizer->Add(m_modelGpuModeChoice, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 14_dip);
     modelParamSizer->Add(m_modelNglLabel, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6_dip);
@@ -258,7 +275,14 @@ void SettingsView::InitUI() {
     modelParamSizer->Add(m_modelCtxLabel, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6_dip);
     modelParamSizer->Add(m_modelCtxCtrl, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 16_dip);
 
-    modelCardSizer->Add(modelParamSizer, 0, wxEXPAND | wxBOTTOM, 12_dip);
+    modelCardSizer->Add(modelParamSizer, 0, wxEXPAND | wxBOTTOM, 10_dip);
+
+    // 并发参数设置行（翻译服务槽位 / 文档翻译并发度）
+    wxBoxSizer* modelParallelSizer = new wxBoxSizer(wxHORIZONTAL);
+    modelParallelSizer->Add(m_modelParallelLabel, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 16_dip);
+    modelParallelSizer->Add(m_modelParallelChoice, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10_dip);
+    modelParallelSizer->Add(m_modelParallelHint, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 16_dip);
+    modelCardSizer->Add(modelParallelSizer, 0, wxEXPAND | wxBOTTOM, 12_dip);
 
     // 本地 API 访问端点展示卡片
     m_modelApiPanel = new wxPanel(m_modelCard, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE);
@@ -938,6 +962,12 @@ void SettingsView::InitUI() {
             m_modelPortCtrl->SetValue(wxString::Format("%d", cfg.translationPort));
         if (m_modelCtxCtrl)
             m_modelCtxCtrl->SetValue(wxString::Format("%d", cfg.translationCtxSize));
+        if (m_modelParallelChoice) {
+            int tp = cfg.transParallel;
+            if (tp < 1) tp = 1;
+            if (tp > 4) tp = 4;
+            m_modelParallelChoice->SetSelection(tp - 1);
+        }
         if (m_modelGpuModeChoice) {
             int sel = (cfg.gpuLayers >= 99) ? 0 : (cfg.gpuLayers == 0 ? 1 : 2);
             m_modelGpuModeChoice->SetSelection(sel);
@@ -1303,9 +1333,14 @@ void SettingsView::OnSaveConfig(wxCommandEvent& WXUNUSED(event)) {
     long ctxSize = 2048;
     if (m_modelCtxCtrl)
         m_modelCtxCtrl->GetValue().ToLong(&ctxSize);
+    long transParallel = 1;
+    if (m_modelParallelChoice) {
+        int sel = m_modelParallelChoice->GetSelection();
+        transParallel = (sel < 0) ? 1 : (sel + 1);
+    }
 
     if (m_configManager) {
-        m_configManager->SaveModelConfig(path.ToUTF8().data(), (int)ngl, (int)port, (int)ctxSize);
+        m_configManager->SaveModelConfig(path.ToUTF8().data(), (int)ngl, (int)port, (int)ctxSize, 0, (int)transParallel);
     }
 
     m_lastTransPath.clear();
@@ -1642,6 +1677,10 @@ void SettingsView::UpdateTheme() {
         m_modelPortLabel->SetForegroundColour(palette.textPrimary);
     if (m_modelCtxLabel)
         m_modelCtxLabel->SetForegroundColour(palette.textPrimary);
+    if (m_modelParallelLabel)
+        m_modelParallelLabel->SetForegroundColour(palette.textPrimary);
+    if (m_modelParallelHint)
+        m_modelParallelHint->SetForegroundColour(palette.textSecondary);
 
     if (m_ocrGpuLabel)
         m_ocrGpuLabel->SetForegroundColour(palette.textPrimary);
@@ -1769,6 +1808,8 @@ void SettingsView::UpdateTheme() {
         m_modelCtxCtrl->UpdateTheme();
     if (m_modelGpuModeChoice)
         m_modelGpuModeChoice->UpdateTheme();
+    if (m_modelParallelChoice)
+        m_modelParallelChoice->UpdateTheme();
     if (m_modelCopyApiBtn)
         m_modelCopyApiBtn->Refresh();
 

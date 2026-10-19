@@ -30,6 +30,12 @@ namespace LinguaAlpaca {
 // ============================================================================
 namespace {
 
+// ---- 可调参数集中定义（便于按机器/场景统一调优，避免魔法值散落） ----
+constexpr int kPageRenderWidth = 1600;          // PDF 页面光栅化目标宽度
+constexpr int kCropJpegQuality = 92;            // 元素切片 JPEG 编码质量
+constexpr int kTranslationTimeoutSeconds = 45;  // 单段翻译最长等待时间
+constexpr int kProgressThrottleMs = 150;        // 页内进度回调节流间隔
+
 inline bool StartsWith(std::string_view sv, std::string_view prefix) {
     return sv.size() >= prefix.size() && sv.substr(0, prefix.size()) == prefix;
 }
@@ -53,23 +59,6 @@ std::filesystem::path ToFsPath(const wxString& path) {
 #else
     return std::filesystem::path(path.ToUTF8().data());
 #endif
-}
-
-bool IsPredominantlyEnglish(const std::string& text) {
-    if (text.empty())
-        return false;
-    int latinCount = 0;
-    int cjkCount = 0;
-    for (size_t i = 0; i < text.size(); ++i) {
-        unsigned char c = static_cast<unsigned char>(text[i]);
-        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')) {
-            latinCount++;
-        } else if (c >= 0xE4 && c <= 0xE9 && i + 2 < text.size()) {
-            cjkCount++;
-            i += 2;
-        }
-    }
-    return (latinCount > 15 && latinCount > cjkCount * 2);
 }
 
 // 严格判断两路径是否指向同一物理文件 (处理 Windows 大小写、正反斜杠及符号链接)
@@ -533,7 +522,10 @@ struct DocumentPipeline::ParseSession {
     std::string normalizedTempCacheDir;
     int totalPages{0};
     int actualStartPage{0};
-    json fullDocJson;
+    json docMeta;                              // 文档级元数据（不含 pages 数组）
+    std::vector<std::string> pageFragments;    // 各已完成页对象的预序列化片段（避免每页重复序列化整棵 JSON 树）
+    std::ofstream mdStream;                    // 增量追加写出的 Markdown 流
+    size_t mdWrittenLen{0};                    // 已落盘的 Markdown 净字节数（剥离尾部换行后）
     std::string fullMarkdown;
     bool translateEnglish{false};
 };
@@ -586,6 +578,43 @@ struct DocumentPipeline::PreprocessedPage {
 
 namespace {
 
+// 将单个页面对象序列化为可缓存的 JSON 片段
+std::string SerializePageFragment(const json& pageJson) {
+    return SafeDumpJson(pageJson, 2, "{}");
+}
+
+// 组装完整文档 JSON：文档级元数据 + 已缓存页面片段。
+// 通过预序列化片段拼接，避免每次落盘都重新序列化整棵（不断增长）的 JSON 树。
+std::string AssembleSessionJson(const json& docMeta, const std::vector<std::string>& pageFragments) {
+    static constexpr const char* kPagesPlaceholder = "\"__LA_PAGES_PLACEHOLDER__\"";
+    json meta = docMeta; // 元数据不含 pages，拷贝开销极小
+    meta["pages"] = "__LA_PAGES_PLACEHOLDER__";
+    std::string text = SafeDumpJson(meta, 2);
+
+    std::string pagesArr;
+    if (pageFragments.empty()) {
+        pagesArr = "[]";
+    } else {
+        size_t total = 2;
+        for (const auto& f : pageFragments) {
+            total += f.size() + 2;
+        }
+        pagesArr.reserve(total);
+        pagesArr += "[\n";
+        for (size_t i = 0; i < pageFragments.size(); ++i) {
+            pagesArr += pageFragments[i];
+            pagesArr += (i + 1 < pageFragments.size()) ? ",\n" : "\n";
+        }
+        pagesArr += "  ]";
+    }
+
+    size_t pos = text.find(kPagesPlaceholder);
+    if (pos != std::string::npos) {
+        text.replace(pos, std::char_traits<char>::length(kPagesPlaceholder), pagesArr);
+    }
+    return text;
+}
+
 bool CropAndSaveElement(
     const wxImage& pageImg,
     const LayoutElement& elem,
@@ -618,7 +647,7 @@ bool CropAndSaveElement(
             pElem.isImage = true;
             wxString figFileName = wxString::Format("img_p%d_box_%d_%d_%d_%d.jpg", p + 1, x1, y1, x2, y2);
             wxString absFigPath = figuresDir + "/" + figFileName;
-            crop.SetOption(wxIMAGE_OPTION_QUALITY, 92);
+            crop.SetOption(wxIMAGE_OPTION_QUALITY, kCropJpegQuality);
             if (!crop.SaveFile(absFigPath, wxBITMAP_TYPE_JPEG)) {
                 LOG_WARN("DocumentPipeline", "Failed to save figure image to: " + absFigPath.ToStdString());
                 return false;
@@ -640,7 +669,7 @@ bool CropAndSaveElement(
             pElem.isImage = false;
             // ★★★ 核心性能优化：内存直通编码为 JPEG 92 质量 Base64 URI，彻底消除磁盘临时文件与 I/O 开销
             wxMemoryOutputStream memStream;
-            crop.SetOption(wxIMAGE_OPTION_QUALITY, 92);
+            crop.SetOption(wxIMAGE_OPTION_QUALITY, kCropJpegQuality);
             bool encodedOk = false;
             if (crop.SaveFile(memStream, wxBITMAP_TYPE_JPEG)) {
                 wxStreamBuffer* buf = memStream.GetOutputStreamBuffer();
@@ -722,7 +751,7 @@ std::shared_ptr<DocumentPipeline::PreprocessedPage> PreprocessStageOne(
     }
 
     wxImage pageImg;
-    if (!PdfHelper::RenderPage(inputFilePath, p, pageImg, 1600) || !pageImg.IsOk()) {
+    if (!PdfHelper::RenderPage(inputFilePath, p, pageImg, kPageRenderWidth) || !pageImg.IsOk()) {
         LOG_ERROR("DocumentPipeline", "Failed to rasterize page: " + std::to_string(p + 1));
         pageData->success = false;
         pageData->error = "光栅化失败";
@@ -1584,11 +1613,11 @@ bool DocumentPipeline::NeedsTranslation(const std::string& text) {
     return (latinCount > 3 || (latinCount + cjkCount > 3 && cjkCount <= latinCount));
 }
 
-std::string DocumentPipeline::TranslateEnglishIfNeeded(const std::string& text, bool enableTranslation) {
+std::string DocumentPipeline::TranslateEnglishIfNeeded(const std::string& text, bool enableTranslation, std::shared_ptr<std::atomic<bool>> cancelToken) {
     if (!enableTranslation || !m_modelManager || !NeedsTranslation(text)) {
         return text;
     }
-    if (m_shouldStop.load()) {
+    if (m_shouldStop.load() || (cancelToken && cancelToken->load())) {
         return text;
     }
 
@@ -1606,11 +1635,12 @@ std::string DocumentPipeline::TranslateEnglishIfNeeded(const std::string& text, 
                         transPromise->set_value(success ? fullText : "");
                     } catch (...) {}
                 }
-            });
+            },
+            cancelToken);
 
         std::string transResult;
         try {
-            if (transFuture.wait_for(std::chrono::seconds(45)) == std::future_status::ready) {
+            if (transFuture.wait_for(std::chrono::seconds(kTranslationTimeoutSeconds)) == std::future_status::ready) {
                 transResult = transFuture.get();
             }
         } catch (...) {}
@@ -1684,57 +1714,62 @@ bool DocumentPipeline::InitParseSession(
     }
     session.normalizedTempCacheDir = normTemp.Lower().ToStdString();
 
+    json initialMeta = json::object();
+    json initialPages = json::array();
     if (!initialJson.empty()) {
         try {
-            session.fullDocJson = json::parse(initialJson);
+            json parsed = json::parse(initialJson);
+            if (parsed.is_object()) {
+                if (parsed.contains("pages") && parsed["pages"].is_array()) {
+                    initialPages = std::move(parsed["pages"]);
+                }
+                parsed.erase("pages");
+                initialMeta = std::move(parsed);
+            }
         } catch (...) {
-            session.fullDocJson = json::object();
+            initialMeta = json::object();
+            initialPages = json::array();
         }
     }
-    if (!session.fullDocJson.is_object()) {
-        session.fullDocJson = json::object();
-    }
-    session.fullDocJson["file_name"] = session.baseDocName;
-    session.fullDocJson["total_pages"] = session.totalPages;
-    session.fullDocJson["translate_enabled"] = translateEnglishToChinese;
-    if (!session.fullDocJson.contains("pages") || !session.fullDocJson["pages"].is_array()) {
-        session.fullDocJson["pages"] = json::array();
-    }
+    session.docMeta = std::move(initialMeta);
+    session.docMeta["file_name"] = session.baseDocName;
+    session.docMeta["total_pages"] = session.totalPages;
+    session.docMeta["translate_enabled"] = translateEnglishToChinese;
 
     session.actualStartPage = (std::clamp)(startFromPage, 0, session.totalPages);
     if (session.actualStartPage >= session.totalPages) {
         session.actualStartPage = 0;
-        session.fullDocJson["pages"] = json::array();
+        initialPages = json::array();
     }
 
     // 截断历史旧页残片
-    if (session.fullDocJson.contains("pages") && session.fullDocJson["pages"].is_array()) {
-        auto& pagesArr = session.fullDocJson["pages"];
-        for (auto it = pagesArr.begin(); it != pagesArr.end();) {
-            int pIdx = it->value("page_index", 0);
-            if (pIdx >= session.actualStartPage + 1) {
-                it = pagesArr.erase(it);
-            } else {
-                ++it;
-            }
+    for (auto it = initialPages.begin(); it != initialPages.end();) {
+        int pIdx = it->value("page_index", 0);
+        if (pIdx >= session.actualStartPage + 1) {
+            it = initialPages.erase(it);
+        } else {
+            ++it;
         }
     }
 
+    // 将保留的历史页预序列化为片段缓存，并重建可用 Markdown 前缀
     std::string cleanMd;
-    bool allHaveMd = false;
-    if (session.fullDocJson.contains("pages") && session.fullDocJson["pages"].is_array() && !session.fullDocJson["pages"].empty()) {
-        allHaveMd = true;
-        for (const auto& pObj : session.fullDocJson["pages"]) {
-            if (!pObj.contains("markdown") || pObj["markdown"].get<std::string>().empty()) {
-                allHaveMd = false;
-                break;
-            }
+    bool allHaveMd = !initialPages.empty();
+    for (auto& pObj : initialPages) {
+        std::string pageMd = (pObj.contains("markdown") && pObj["markdown"].is_string())
+                                 ? pObj["markdown"].get<std::string>()
+                                 : std::string();
+        if (pageMd.empty()) {
+            allHaveMd = false;
+        } else if (allHaveMd) {
             if (!cleanMd.empty()) {
                 cleanMd += "\n\n---\n\n";
             }
-            cleanMd += pObj["markdown"].get<std::string>();
+            cleanMd += pageMd;
         }
+        session.pageFragments.push_back(SerializePageFragment(pObj));
     }
+
     if (allHaveMd && !cleanMd.empty()) {
         session.fullMarkdown = cleanMd;
     } else {
@@ -1917,7 +1952,7 @@ DocumentPipeline::OcrDispatchResult DocumentPipeline::DispatchParallelOcrWorkers
                                 int64_t elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastProgressTime).count();
                                 bool isLastElement = (doneCount == static_cast<int>(ocrIndices.size()));
 
-                                if (isLastElement || elapsedMs >= 150) {
+                                if (isLastElement || elapsedMs >= kProgressThrottleMs) {
                                     lastProgressTime = now;
                                     std::string currentTempPageMd;
                                     for (size_t idx = 0; idx < curPageData->elements.size(); ++idx) {
@@ -1994,11 +2029,95 @@ DocumentPipeline::OcrDispatchResult DocumentPipeline::DispatchParallelOcrWorkers
     return res;
 }
 
+// 并行预翻译：将单页内所有需要翻译的文本元素一次性并发提交给翻译服务，
+// 结果按元素索引回填，避免串行逐元素翻译造成的长尾等待。
+std::vector<std::string> DocumentPipeline::TranslatePageElements(
+    const std::shared_ptr<PreprocessedPage>& curPageData,
+    const OcrDispatchResult& ocrRes
+) {
+    std::vector<std::string> translations(curPageData->elements.size());
+    if (!m_modelManager) {
+        return translations;
+    }
+
+    // 收集需要翻译的元素：跳过图像、表格、公式，以及空文本/无需翻译的文本
+    std::vector<size_t> transIndices;
+    transIndices.reserve(curPageData->elements.size());
+    for (size_t elIdx = 0; elIdx < curPageData->elements.size(); ++elIdx) {
+        const auto& elem = curPageData->elements[elIdx];
+        if (elem.isImage) continue;
+        if (elem.elem.type == LayoutElementType::Table || elem.elem.type == LayoutElementType::Formula) continue;
+        if (ocrRes.pageInterrupted && !ocrRes.elementSuccess[elIdx] && ocrRes.recognizedResults[elIdx].empty()) continue;
+        if (!NeedsTranslation(ocrRes.recognizedResults[elIdx])) continue;
+        transIndices.push_back(elIdx);
+    }
+    if (transIndices.empty()) {
+        return translations;
+    }
+
+    // 并发度与翻译服务槽位数保持一致：默认 1 保持串行（最大化单槽上下文），配置 >1 时启用并行
+    int maxParallel = 1;
+    if (m_modelManager->GetConfigManager()) {
+        auto appCfg = m_modelManager->GetConfigManager()->GetConfig();
+        maxParallel = (std::clamp)(appCfg.transParallel, 1, 4);
+    }
+    int numWorkers = (std::min)(static_cast<int>(transIndices.size()), maxParallel);
+    if (numWorkers <= 1) {
+        for (size_t elIdx : transIndices) {
+            translations[elIdx] = TranslateEnglishIfNeeded(ocrRes.recognizedResults[elIdx], true);
+        }
+        return translations;
+    }
+
+    auto pageCancelToken = std::make_shared<std::atomic<bool>>(false);
+    std::atomic<size_t> nextTaskIdx{0};
+
+    std::vector<std::thread> workers;
+    workers.reserve(numWorkers);
+
+    struct WorkersJoinGuard {
+        std::vector<std::thread>& w;
+        ~WorkersJoinGuard() {
+            for (auto& t : w) {
+                if (t.joinable()) {
+                    try { t.join(); } catch (...) {}
+                }
+            }
+        }
+    } workersGuard{workers};
+
+    for (int w = 0; w < numWorkers; ++w) {
+        workers.emplace_back([&]() {
+            try {
+                while (true) {
+                    if (m_shouldStop.load() || !m_aliveToken->load() || pageCancelToken->load()) {
+                        break;
+                    }
+                    size_t taskIdx = nextTaskIdx.fetch_add(1);
+                    if (taskIdx >= transIndices.size()) {
+                        break;
+                    }
+                    size_t elIdx = transIndices[taskIdx];
+                    translations[elIdx] = TranslateEnglishIfNeeded(ocrRes.recognizedResults[elIdx], true, pageCancelToken);
+                }
+            } catch (const std::exception& e) {
+                LOG_ERROR("DocumentPipeline", std::string("翻译工作线程异常: ") + e.what());
+            } catch (...) {
+                LOG_ERROR("DocumentPipeline", "翻译工作线程未知异常");
+            }
+        });
+    }
+
+    return translations;
+}
+
 DocumentPipeline::AssembledPage DocumentPipeline::AssemblePageContent(
     const std::shared_ptr<PreprocessedPage>& curPageData,
     const OcrDispatchResult& ocrRes,
-    bool translateEnglishToChinese
+    const std::vector<std::string>& elementTranslations
 ) {
+    // 传入非空译文数组即表示本次启用了文档翻译（数组大小与元素数一致，未翻译处为空串）
+    const bool translateEnabled = !elementTranslations.empty();
     AssembledPage assembled;
     assembled.pageJson["page_index"] = curPageData->pageIndex + 1;
     assembled.pageJson["elements"] = json::array();
@@ -2059,7 +2178,7 @@ DocumentPipeline::AssembledPage DocumentPipeline::AssemblePageContent(
         }
 
         std::string elementMarkdown;
-        std::string pureTranslated;
+        std::string pureTranslated = translateEnabled ? elementTranslations[elIdx] : std::string();
 
         if (elem.elem.type == LayoutElementType::Formula) {
             std::string formattedContent = CleanAndFormatFormula(recognizedText);
@@ -2076,8 +2195,7 @@ DocumentPipeline::AssembledPage DocumentPipeline::AssemblePageContent(
             recognizedText = SanitizeInlineLatex(recognizedText);
             std::string prefix = (elem.elem.labelName == "doc_title" ? "# " : "## ");
             std::string titleSource = prefix + recognizedText;
-            if (translateEnglishToChinese) {
-                pureTranslated = TranslateEnglishIfNeeded(recognizedText, true);
+            if (translateEnabled) {
                 std::string transTitle = prefix + pureTranslated;
                 if (!pureTranslated.empty() && pureTranslated != recognizedText) {
                     elementMarkdown = titleSource + "\n\n" + transTitle;
@@ -2091,8 +2209,7 @@ DocumentPipeline::AssembledPage DocumentPipeline::AssemblePageContent(
             elementMarkdown = ConvertOtslToHtml(recognizedText);
         } else {
             recognizedText = SanitizeInlineLatex(recognizedText);
-            if (translateEnglishToChinese) {
-                pureTranslated = TranslateEnglishIfNeeded(recognizedText, true);
+            if (translateEnabled) {
                 std::string alignedTrans = AlignMarkdownFormat(recognizedText, pureTranslated);
                 if (!pureTranslated.empty() && pureTranslated != recognizedText) {
                     static const std::regex listRegex(R"((\n|^)\s*(\d+[\.\)]|[\-\*\+\•])\s+)");
@@ -2119,7 +2236,7 @@ DocumentPipeline::AssembledPage DocumentPipeline::AssemblePageContent(
             {"box", {elem.x1, elem.y1, elem.x2, elem.y2}},
             {"content", recognizedText}
         };
-        if (translateEnglishToChinese && !pureTranslated.empty() && pureTranslated != recognizedText) {
+        if (translateEnabled && !pureTranslated.empty() && pureTranslated != recognizedText) {
             elJson["translated_content"] = pureTranslated;
         }
         assembled.pageJson["elements"].push_back(elJson);
@@ -2141,15 +2258,16 @@ void DocumentPipeline::HandlePipelineInterruption(
 
     if (!assembled.pageMarkdown.empty()) {
         AppendToMarkdown(session.fullMarkdown, assembled.pageMarkdown);
-        session.fullDocJson["pages"].push_back(pageJsonCopy);
+        session.pageFragments.push_back(SerializePageFragment(pageJsonCopy));
     }
 
-    session.fullDocJson["completed_pages"] = p;
-    session.fullDocJson["last_interrupted_page"] = p + 1;
-    session.fullDocJson["is_completed"] = false;
-    session.fullDocJson["translate_enabled"] = session.translateEnglish;
+    session.docMeta["completed_pages"] = p;
+    session.docMeta["last_interrupted_page"] = p + 1;
+    session.docMeta["is_completed"] = false;
+    session.docMeta["translate_enabled"] = session.translateEnglish;
 
-    std::string interruptedJsonStr = SafeDumpJson(session.fullDocJson);
+    std::string interruptedJsonStr = AssembleSessionJson(session.docMeta, session.pageFragments);
+    CloseMarkdownStream(session);
     SaveToMarkdown(session.actualOutputDir, session.baseDocName, session.fullMarkdown);
     SaveToJson(session.actualOutputDir, session.baseDocName, interruptedJsonStr);
 
@@ -2165,17 +2283,60 @@ void DocumentPipeline::PersistPageSnapshot(
     json pageJsonCopy = assembled.pageJson;
     pageJsonCopy["markdown"] = assembled.pageMarkdown;
     pageJsonCopy["is_page_completed"] = true;
-    session.fullDocJson["pages"].push_back(pageJsonCopy);
+    session.pageFragments.push_back(SerializePageFragment(pageJsonCopy));
 
     AppendToMarkdown(session.fullMarkdown, assembled.pageMarkdown);
 
-    session.fullDocJson["completed_pages"] = p + 1;
-    session.fullDocJson["is_completed"] = isCompleted;
-    session.fullDocJson["translate_enabled"] = session.translateEnglish;
+    session.docMeta["completed_pages"] = p + 1;
+    session.docMeta["is_completed"] = isCompleted;
+    session.docMeta["translate_enabled"] = session.translateEnglish;
 
-    std::string currentJsonDump = SafeDumpJson(session.fullDocJson, -1);
-    SaveToMarkdown(session.actualOutputDir, session.baseDocName, session.fullMarkdown);
+    // 增量追加新增 Markdown 净字节，避免每页整份重写（O(N^2) 磁盘开销）
+    FlushMarkdownIncremental(session);
+
+    std::string currentJsonDump = AssembleSessionJson(session.docMeta, session.pageFragments);
     SaveToJson(session.actualOutputDir, session.baseDocName, currentJsonDump);
+}
+
+bool DocumentPipeline::FlushMarkdownIncremental(ParseSession& session) {
+    try {
+        wxString dir = wxString::FromUTF8(session.actualOutputDir);
+        if (!wxDirExists(dir)) {
+            wxFileName::Mkdir(dir, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
+        }
+        if (!session.mdStream.is_open()) {
+            wxString filePath = dir + "/" + wxString::FromUTF8(session.baseDocName) + ".md";
+            session.mdStream.open(ToFsPath(filePath), std::ios::binary | std::ios::trunc);
+            if (!session.mdStream) {
+                return false;
+            }
+            session.mdWrittenLen = 0;
+        }
+
+        // 仅写入尚未落盘的净字节：AppendToMarkdown 只会剥离尾部 \n/\r，
+        // 因此之前的写入前缀永不回退，mdWrittenLen 可安全作为追加起点。
+        size_t end = session.fullMarkdown.size();
+        while (end > session.mdWrittenLen &&
+               (session.fullMarkdown[end - 1] == '\n' || session.fullMarkdown[end - 1] == '\r')) {
+            --end;
+        }
+        if (end > session.mdWrittenLen) {
+            session.mdStream.write(session.fullMarkdown.data() + session.mdWrittenLen,
+                                   static_cast<std::streamsize>(end - session.mdWrittenLen));
+            session.mdWrittenLen = end;
+        }
+        session.mdStream.flush();
+        return session.mdStream.good();
+    } catch (...) {
+        return false;
+    }
+}
+
+void DocumentPipeline::CloseMarkdownStream(ParseSession& session) {
+    if (session.mdStream.is_open()) {
+        session.mdStream.flush();
+        session.mdStream.close();
+    }
 }
 
 // ============================================================================
@@ -2196,10 +2357,11 @@ void DocumentPipeline::StartParseAsync(
     m_shouldStop.store(false);
     m_isRunning.store(true);
 
-    auto aliveToken = m_aliveToken;
+    // 持有 shared_ptr 自身，确保后台工作线程存活期间本对象绝不被提前析构（消除悬空 this 风险）
+    auto self = shared_from_this();
 
-    std::thread([this, aliveToken, inputFilePath, outputDir, translateEnglishToChinese, onProgress, onComplete, startFromPage, initialMarkdown, initialJson]() {
-        ExecutePipeline(inputFilePath, outputDir, translateEnglishToChinese, onProgress, onComplete, startFromPage, initialMarkdown, initialJson);
+    std::thread([self, inputFilePath, outputDir, translateEnglishToChinese, onProgress, onComplete, startFromPage, initialMarkdown, initialJson]() {
+        self->ExecutePipeline(inputFilePath, outputDir, translateEnglishToChinese, onProgress, onComplete, startFromPage, initialMarkdown, initialJson);
     }).detach();
 }
 
@@ -2216,6 +2378,17 @@ void DocumentPipeline::ExecutePipeline(
     auto aliveToken = m_aliveToken;
     if (!aliveToken || !aliveToken->load())
         return;
+
+    // 统一串行化进度回调：阶段1(异步线程) / 主流水线线程 / OCR worker 线程都可能触发，
+    // 通过共享互斥量保证任意调用方传入的普通回调也不会被并发重入（规避数据竞争）。
+    auto progressMutex = std::make_shared<std::mutex>();
+    DocProgressCallback progressCb;
+    if (onProgress) {
+        progressCb = [onProgress, progressMutex](int curPage, int totalPages, const std::string& stage, const std::string& md) {
+            std::lock_guard<std::mutex> lk(*progressMutex);
+            onProgress(curPage, totalPages, stage, md);
+        };
+    }
 
     ParseSession session;
     std::string initError;
@@ -2235,7 +2408,7 @@ void DocumentPipeline::ExecutePipeline(
     nextPageFuture = LaunchPreprocessStageOneAsync(
         session.actualStartPage, session.totalPages,
         session.inputFilePath, session.tempCacheDir, session.figuresDir,
-        m_layoutEngine, aliveToken, m_shouldStop, onProgress, session.fullMarkdown
+        m_layoutEngine, aliveToken, m_shouldStop, progressCb, session.fullMarkdown
     );
 
     for (int p = session.actualStartPage; p < session.totalPages; ++p) {
@@ -2245,7 +2418,7 @@ void DocumentPipeline::ExecutePipeline(
             break;
         }
 
-        auto curPageData = FetchOrWaitStageOne(p, session.totalPages, nextPageFuture, onProgress, session.fullMarkdown);
+        auto curPageData = FetchOrWaitStageOne(p, session.totalPages, nextPageFuture, progressCb, session.fullMarkdown);
         if (!curPageData || !curPageData->success) {
             if (m_shouldStop.load() || !aliveToken->load()) {
                 hasError = true;
@@ -2254,21 +2427,27 @@ void DocumentPipeline::ExecutePipeline(
             }
             LOG_ERROR("DocumentPipeline", "Failed to preprocess stage 1 for page: " + std::to_string(p + 1));
             if (p + 1 < session.totalPages && !m_shouldStop.load() && aliveToken->load()) {
-                nextPageFuture = LaunchPreprocessStageOneAsync(p + 1, session.totalPages, session.inputFilePath, session.tempCacheDir, session.figuresDir, m_layoutEngine, aliveToken, m_shouldStop, onProgress, session.fullMarkdown);
+                nextPageFuture = LaunchPreprocessStageOneAsync(p + 1, session.totalPages, session.inputFilePath, session.tempCacheDir, session.figuresDir, m_layoutEngine, aliveToken, m_shouldStop, progressCb, session.fullMarkdown);
             }
             continue;
         }
 
         // 核心提速重叠：在当前页进入耗时的阶段 2 OCR 之前，立刻在后台启动下一页阶段 1 预处理
         if (p + 1 < session.totalPages && !m_shouldStop.load() && aliveToken->load()) {
-            nextPageFuture = LaunchPreprocessStageOneAsync(p + 1, session.totalPages, session.inputFilePath, session.tempCacheDir, session.figuresDir, m_layoutEngine, aliveToken, m_shouldStop, onProgress, session.fullMarkdown);
+            nextPageFuture = LaunchPreprocessStageOneAsync(p + 1, session.totalPages, session.inputFilePath, session.tempCacheDir, session.figuresDir, m_layoutEngine, aliveToken, m_shouldStop, progressCb, session.fullMarkdown);
         }
 
         // 阶段 2：多 Worker 并发切片推理
-        auto ocrRes = DispatchParallelOcrWorkers(p, session.totalPages, curPageData, onProgress, session.fullMarkdown);
+        auto ocrRes = DispatchParallelOcrWorkers(p, session.totalPages, curPageData, progressCb, session.fullMarkdown);
 
-        // 阶段 3：按拓扑阅读顺序组装 Markdown 与 JSON
-        auto assembled = AssemblePageContent(curPageData, ocrRes, session.translateEnglish);
+        // 阶段 3：并行预翻译需要双语对照的文本元素（启用文档翻译时）
+        std::vector<std::string> elementTranslations;
+        if (session.translateEnglish && !m_shouldStop.load() && aliveToken->load()) {
+            elementTranslations = TranslatePageElements(curPageData, ocrRes);
+        }
+
+        // 阶段 4：按拓扑阅读顺序组装 Markdown 与 JSON
+        auto assembled = AssemblePageContent(curPageData, ocrRes, elementTranslations);
 
         curPageData->CleanRemainingTempFiles(session.inputFilePath, session.tempCacheDir, false);
 
@@ -2281,14 +2460,16 @@ void DocumentPipeline::ExecutePipeline(
 
         PersistPageSnapshot(session, p, assembled, p + 1 == session.totalPages);
 
-        if (aliveToken->load() && onProgress) {
-            onProgress(p + 1, session.totalPages, "第 " + std::to_string(p + 1) + " 页解析完成", session.fullMarkdown);
+        if (aliveToken->load() && progressCb) {
+            progressCb(p + 1, session.totalPages, "第 " + std::to_string(p + 1) + " 页解析完成", session.fullMarkdown);
         }
     }
 
     DrainFutureAndClean(nextPageFuture, session.inputFilePath, session.tempCacheDir);
 
-    std::string jsonDumpStr = SafeDumpJson(session.fullDocJson);
+    CloseMarkdownStream(session);
+
+    std::string jsonDumpStr = AssembleSessionJson(session.docMeta, session.pageFragments);
     SaveToMarkdown(session.actualOutputDir, session.baseDocName, session.fullMarkdown);
     SaveToJson(session.actualOutputDir, session.baseDocName, jsonDumpStr);
 

@@ -131,21 +131,30 @@ std::string LlamaClient::FormatHyMt2UserContent(const std::string& srcText, Lang
     return "将以下" + srcLangName + "文本翻译为" + targetLangName + "，注意只需要输出翻译后的结果，不要额外解释：\n\n" + srcText;
 }
 
-void LlamaClient::TranslateStreamAsync(const TranslationTask& task, StreamTokenCallback onToken, StreamCompleteCallback onComplete) {
+void LlamaClient::TranslateStreamAsync(const TranslationTask& task, StreamTokenCallback onToken, StreamCompleteCallback onComplete,
+                                       std::shared_ptr<std::atomic<bool>> taskCancelToken) {
 
-    CancelCurrentTask();
-    m_shouldStop.store(false);
+    // 关键：当传入独立的 taskCancelToken 时，仅受该批次任务自身令牌控制，
+    // 避免并行翻译时相互调用 CancelCurrentTask() 而取消对方的全局 m_shouldStop 标志。
+    if (!taskCancelToken) {
+        CancelCurrentTask();
+        m_shouldStop.store(false);
+    }
+    m_activeRequests.fetch_add(1);
     m_isRunning.store(true);
     auto aliveToken = m_aliveToken;
 
-    std::thread([this, aliveToken, task, onToken, onComplete]() {
+    std::thread([this, aliveToken, taskCancelToken, task, onToken, onComplete]() {
         if (!aliveToken->load()) {
+            m_activeRequests.fetch_sub(1);
+            if (m_activeRequests.load() <= 0) m_isRunning.store(false);
             return;
         }
 
         std::string currentBaseUrl = GetBaseUrl();
         if (currentBaseUrl.empty()) {
-            m_isRunning.store(false);
+            m_activeRequests.fetch_sub(1);
+            if (m_activeRequests.load() <= 0) m_isRunning.store(false);
             if (aliveToken->load() && onComplete)
                 onComplete(false, "", "服务地址为空或未启动");
             return;
@@ -176,7 +185,9 @@ void LlamaClient::TranslateStreamAsync(const TranslationTask& task, StreamTokenC
             std::string buffer;
             httplib::Headers headers;
             auto res = cli.Post(path, headers, reqBody, "application/json", [&](const char* data, size_t len) {
-                if (!aliveToken->load() || m_shouldStop.load()) {
+                // 关键修复：传入独立 taskCancelToken 时仅受该任务自身令牌控制，隔离全局历史 m_shouldStop 标志
+                bool isCancelled = taskCancelToken ? taskCancelToken->load() : m_shouldStop.load();
+                if (!aliveToken->load() || isCancelled) {
                     return false;
                 }
 
@@ -239,13 +250,17 @@ void LlamaClient::TranslateStreamAsync(const TranslationTask& task, StreamTokenC
             errorMsg = "未知推理异常";
         }
 
-        m_isRunning.store(false);
+        m_activeRequests.fetch_sub(1);
+        if (m_activeRequests.load() <= 0) {
+            m_isRunning.store(false);
+        }
 
         if (!aliveToken->load()) {
             return;
         }
 
-        if (m_shouldStop.load()) {
+        bool isCancelled = taskCancelToken ? taskCancelToken->load() : m_shouldStop.load();
+        if (isCancelled) {
             if (onComplete)
                 onComplete(false, accumulatedText, "已手动取消");
         } else if (hasError) {

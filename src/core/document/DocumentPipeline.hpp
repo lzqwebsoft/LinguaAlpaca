@@ -152,8 +152,6 @@ private:
     std::atomic<bool> m_shouldStop{false};
     std::atomic<bool> m_isRunning{false};
 
-    mutable std::mutex m_mutex;
-
     bool InitParseSession(
         const std::string& inputFilePath,
         const std::string& outputDir,
@@ -184,7 +182,13 @@ private:
     AssembledPage AssemblePageContent(
         const std::shared_ptr<PreprocessedPage>& curPageData,
         const OcrDispatchResult& ocrRes,
-        bool translateEnglishToChinese
+        const std::vector<std::string>& elementTranslations
+    );
+
+    // 并行预翻译单页内所有需要翻译的文本元素，返回按元素索引的纯译文数组（无需翻译处为空串）
+    std::vector<std::string> TranslatePageElements(
+        const std::shared_ptr<PreprocessedPage>& curPageData,
+        const OcrDispatchResult& ocrRes
     );
 
     void HandlePipelineInterruption(
@@ -202,6 +206,12 @@ private:
         bool isCompleted
     );
 
+    // 增量将新产生的 Markdown 净字节追加落盘（避免每页整份重写造成的 O(N^2) 磁盘开销）
+    bool FlushMarkdownIncremental(ParseSession& session);
+
+    // 关闭增量 Markdown 输出流，确保后续整份规范化重写不与其争用文件句柄
+    void CloseMarkdownStream(ParseSession& session);
+
     void ExecutePipeline(
         const std::string& inputFilePath,
         const std::string& outputDir,
@@ -213,7 +223,7 @@ private:
         const std::string& initialJson
     );
 
-    std::string TranslateEnglishIfNeeded(const std::string& text, bool enableTranslation);
+    std::string TranslateEnglishIfNeeded(const std::string& text, bool enableTranslation, std::shared_ptr<std::atomic<bool>> cancelToken = nullptr);
     static bool NeedsTranslation(const std::string& text);
 };
 

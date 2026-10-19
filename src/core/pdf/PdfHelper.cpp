@@ -2,11 +2,22 @@
 #include "PdfHelper.hpp"
 #include "core/Logger.hpp"
 
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
+
 #include <fpdfview.h>
 #include <fpdf_doc.h>
 
 #include <wx/filename.h>
 #include <wx/filefn.h>
+
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -25,9 +36,7 @@ struct PdfiumScope {
         FPDF_InitLibraryWithConfig(&config);
         LOG_INFO("PdfHelper", "Initialized Google PDFium engine");
     }
-    ~PdfiumScope() {
-        FPDF_DestroyLibrary();
-    }
+    ~PdfiumScope() { FPDF_DestroyLibrary(); }
 };
 
 void EnsurePdfiumInitialized() {
@@ -73,7 +82,8 @@ void PdfHelper::ClearCache() {
 }
 
 bool PdfHelper::IsPdfFile(const std::string& filePath) {
-    if (filePath.empty()) return false;
+    if (filePath.empty())
+        return false;
     wxFileName fn(wxString::FromUTF8(filePath));
     wxString ext = fn.GetExt().Lower();
     return ext == "pdf";
@@ -91,7 +101,8 @@ int PdfHelper::GetPageCount(const std::string& filePath) {
         EnsurePdfiumInitialized();
         std::lock_guard<std::mutex> lock(s_pdfDocMutex);
         FPDF_DOCUMENT doc = GetOrLoadPdfDocLocked(filePath);
-        if (!doc) return 0;
+        if (!doc)
+            return 0;
         return FPDF_GetPageCount(doc);
     } catch (const std::exception& ex) {
         LOG_WARN("PdfHelper", "Failed to query PDF page count: " + std::string(ex.what()));
@@ -119,7 +130,8 @@ bool PdfHelper::RenderPage(const std::string& filePath, int pageIndex, wxImage& 
         {
             std::lock_guard<std::mutex> lock(s_pdfDocMutex);
             FPDF_DOCUMENT doc = GetOrLoadPdfDocLocked(filePath);
-            if (!doc) return false;
+            if (!doc)
+                return false;
 
             int totalPages = FPDF_GetPageCount(doc);
             if (pageIndex < 0 || pageIndex >= totalPages) {
@@ -184,7 +196,7 @@ bool PdfHelper::RenderPage(const std::string& filePath, int pageIndex, wxImage& 
             const uint8_t* srcRow = buffer + y * stride;
             unsigned char* dstRow = rgbData + static_cast<size_t>(y) * outW * 3;
             for (int x = 0; x < outW; ++x) {
-                dstRow[x * 3]     = srcRow[x * 4];
+                dstRow[x * 3] = srcRow[x * 4];
                 dstRow[x * 3 + 1] = srcRow[x * 4 + 1];
                 dstRow[x * 3 + 2] = srcRow[x * 4 + 2];
             }

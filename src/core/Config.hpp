@@ -32,6 +32,7 @@ struct AppConfig {
     int translationThreads{0}; // 翻译计算线程数 (0 为默认)
     int ocrThreads{0}; // OCR 计算线程数 (0 为默认)
     int ocrParallel{2}; // 默认 OCR 并发槽位数 (1~4，支持多切片并发识别)
+    int transParallel{1}; // 翻译并发槽位数 (1~4；>1 时文档翻译逐元素并行，同时提升翻译服务槽位数；默认 1 保持串行以最大化单槽上下文)
     int layoutThreads{0}; // 版面分析计算线程数 (0 为默认)
 
     // 划词翻译相关配置
@@ -72,7 +73,7 @@ public:
     void UpdateConfig(const AppConfig& newConfig);
 
     void SaveModelPath(const std::string& path);
-    void SaveModelConfig(const std::string& path, int gpuLayers, int port = 0, int ctxSize = 2048, int threads = 0);
+    void SaveModelConfig(const std::string& path, int gpuLayers, int port = 0, int ctxSize = 2048, int threads = 0, int parallel = 1);
     void SaveOcrConfig(const std::string& ocrModelPath, const std::string& ocrMmprojPath, int ocrGpuLayers = 0, int port = 0, int ctxSize = 4096, int threads = 0, bool ocrMmprojOffload = false, int parallel = 2);
     void SaveLayoutConfig(const std::string& layoutModelPath, int executionProvider = 0, int threads = 0);
     void SaveThemeMode(const std::string& themeMode);

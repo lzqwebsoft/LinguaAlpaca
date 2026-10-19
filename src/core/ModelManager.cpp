@@ -146,6 +146,7 @@ namespace LinguaAlpaca {
 			serverConfig.port = appConfig.translationPort;
 			serverConfig.ctxSize = appConfig.translationCtxSize;
 			serverConfig.threads = appConfig.translationThreads;
+			serverConfig.parallel = (std::clamp)(appConfig.transParallel, 1, 4);
 
 			// 若已在运行且配置一致且健康，直接返回
 			if (m_transServer->IsAlive() && !m_isTransSwitching.load()) {
@@ -156,7 +157,8 @@ namespace LinguaAlpaca {
 						curCfg.ngl == serverConfig.ngl &&
 						curCfg.port == serverConfig.port &&
 						curCfg.ctxSize == serverConfig.ctxSize &&
-						curCfg.threads == serverConfig.threads) {
+						curCfg.threads == serverConfig.threads &&
+						curCfg.parallel == serverConfig.parallel) {
 						probeInfo.activeType = type;
 						probeInfo.currentModel = targetModelPath;
 						probeInfo.port = m_transServer->GetPort();
@@ -462,7 +464,8 @@ namespace LinguaAlpaca {
 	void ModelManager::ExecuteTranslationStream(
 		const TranslationTask& task,
 		StreamTokenCallback onToken,
-		StreamCompleteCallback onComplete) {
+		StreamCompleteCallback onComplete,
+		std::shared_ptr<std::atomic<bool>> taskCancelToken) {
 
 		if (!m_transClient) {
 			if (onComplete) onComplete(false, "", "翻译客户端未就绪");
@@ -488,7 +491,7 @@ namespace LinguaAlpaca {
 			if (onComplete) {
 				onComplete(success, fullText, error);
 			}
-		});
+		}, taskCancelToken);
 	}
 
 	void ModelManager::ExecuteOcrStream(

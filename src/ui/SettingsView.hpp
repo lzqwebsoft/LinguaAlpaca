@@ -153,6 +153,9 @@ private:
     CustomInputBox* m_modelPortCtrl{nullptr};
     wxStaticText* m_modelCtxLabel{nullptr};
     CustomInputBox* m_modelCtxCtrl{nullptr};
+    wxStaticText* m_modelParallelLabel{nullptr};
+    CustomChoice* m_modelParallelChoice{nullptr};
+    wxStaticText* m_modelParallelHint{nullptr};
 
     // 本地 API 访问端点展示面板
     wxPanel* m_modelApiPanel{nullptr};

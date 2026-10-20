@@ -2,6 +2,7 @@
 #include "../theme/IconManager.hpp"
 #include <wx/graphics.h>
 #include <wx/dcbuffer.h>
+#include <cmath>
 
 namespace LinguaAlpaca::UI {
 
@@ -26,7 +27,63 @@ SidebarNav::SidebarNav(wxWindow* parent, wxWindowID id)
         event.Skip();
     });
     Bind(wxEVT_LEFT_DOWN, &SidebarNav::OnLeftDown, this);
+    Bind(wxEVT_LEFT_UP, &SidebarNav::OnLeftUp, this);
     Bind(wxEVT_MOTION, &SidebarNav::OnMouseMove, this);
+    Bind(wxEVT_LEFT_DCLICK, &SidebarNav::OnLeftDClick, this);
+    Bind(wxEVT_LEAVE_WINDOW, [this](wxMouseEvent& event) {
+        if (!m_isDraggingWindow && m_hoverIndex != -1) {
+            m_hoverIndex = -1;
+            SetCursor(wxCursor(wxCURSOR_DEFAULT));
+            Refresh();
+        }
+        event.Skip();
+    });
+    Bind(wxEVT_MOUSE_CAPTURE_LOST, [this](wxMouseCaptureLostEvent&) {
+        m_isDraggingWindow = false;
+        m_itemPressed = false;
+        if (m_onDragEnd) {
+            m_onDragEnd();
+        }
+    });
+}
+
+void SidebarNav::SetDragCallbacks(
+    std::function<void(wxWindow*)> onStartDrag,
+    std::function<void(wxMouseEvent&)> onDragging,
+    std::function<void()> onEndDrag,
+    std::function<void()> onDoubleClick) {
+    m_onDragStart = std::move(onStartDrag);
+    m_onDragging = std::move(onDragging);
+    m_onDragEnd = std::move(onEndDrag);
+    m_onDoubleClick = std::move(onDoubleClick);
+}
+
+int SidebarNav::HitTest(const wxPoint& pt) const {
+    wxSize size = GetClientSize();
+    if (size.x <= 0 || size.y <= 0) return -1;
+
+    int itemMarginX = 12_dip;
+    if (pt.x < itemMarginX || pt.x > size.x - itemMarginX) {
+        return -1;
+    }
+
+    int itemHeight = 66_dip;
+    int topOffset = 16_dip;
+    int itemBoxHeight = 58_dip;
+
+    for (size_t i = 0; i < m_items.size(); ++i) {
+        int itemY = (i <= 2) ? (topOffset + (int)i * itemHeight) : (topOffset + (int)i * itemHeight + 16_dip);
+        if (pt.y >= itemY && pt.y <= itemY + itemBoxHeight) {
+            return (int)i;
+        }
+    }
+
+    int bottomY = size.y - 74_dip;
+    if (pt.y >= bottomY && pt.y <= bottomY + itemBoxHeight) {
+        return 4;
+    }
+
+    return -1;
 }
 
 void SidebarNav::SetActiveItem(int index) {
@@ -107,58 +164,101 @@ void SidebarNav::OnPaint(wxPaintEvent& WXUNUSED(event)) {
 }
 
 void SidebarNav::OnLeftDown(wxMouseEvent& event) {
-    int y = event.GetY();
-    int sizeY = GetClientSize().y;
-    int topOffset = 16_dip;
-    int itemHeight = 66_dip;
+    wxPoint pos = event.GetPosition();
+    int hitIndex = HitTest(pos);
 
-    int newIndex = -1;
-    for (size_t i = 0; i < m_items.size(); ++i) {
-        int itemY = (i <= 2) ? (topOffset + (int)i * itemHeight) : (topOffset + (int)i * itemHeight + 16_dip);
-        if (y >= itemY && y <= itemY + 58_dip) {
-            newIndex = (int)i;
-            break;
+    if (hitIndex != -1) {
+        if (m_selectedIndex != hitIndex) {
+            SetActiveItem(hitIndex);
+            wxCommandEvent evt(EVT_SIDEBAR_NAV_CHANGED, GetId());
+            evt.SetInt(hitIndex);
+            evt.SetEventObject(this);
+            ProcessWindowEvent(evt);
+        }
+        m_mouseDownPos = pos;
+        m_itemPressed = true;
+        m_isDraggingWindow = false;
+    } else {
+        m_itemPressed = false;
+        m_isDraggingWindow = true;
+        if (m_hoverIndex != -1) {
+            m_hoverIndex = -1;
+            SetCursor(wxCursor(wxCURSOR_DEFAULT));
+            Refresh();
+        }
+        if (m_onDragStart) {
+            m_onDragStart(this);
+        }
+    }
+    event.Skip();
+}
+
+void SidebarNav::OnLeftUp(wxMouseEvent& event) {
+    m_itemPressed = false;
+    if (m_isDraggingWindow) {
+        m_isDraggingWindow = false;
+        if (m_onDragEnd) {
+            m_onDragEnd();
         }
     }
 
-    if (y >= sizeY - 74_dip && y <= sizeY - 16_dip) {
-        newIndex = 4;
+    int oldHover = m_hoverIndex;
+    m_hoverIndex = HitTest(event.GetPosition());
+    if (oldHover != m_hoverIndex) {
+        SetCursor(m_hoverIndex != -1 ? wxCursor(wxCURSOR_HAND) : wxCursor(wxCURSOR_DEFAULT));
+        Refresh();
     }
-
-    if (newIndex != -1) {
-        SetActiveItem(newIndex);
-        wxCommandEvent evt(EVT_SIDEBAR_NAV_CHANGED, GetId());
-        evt.SetInt(newIndex);
-        evt.SetEventObject(this);
-        ProcessWindowEvent(evt);
-    }
+    event.Skip();
 }
 
 void SidebarNav::OnMouseMove(wxMouseEvent& event) {
-    int y = event.GetY();
-    int sizeY = GetClientSize().y;
-    int topOffset = 16_dip;
-    int itemHeight = 66_dip;
+    wxPoint pos = event.GetPosition();
 
-    int oldHover = m_hoverIndex;
-    m_hoverIndex = -1;
+    if (m_isDraggingWindow) {
+        if (m_onDragging) {
+            m_onDragging(event);
+        }
+        return;
+    }
 
-    for (size_t i = 0; i < m_items.size(); ++i) {
-        int itemY = (i <= 2) ? (topOffset + (int)i * itemHeight) : (topOffset + (int)i * itemHeight + 16_dip);
-        if (y >= itemY && y <= itemY + 58_dip) {
-            m_hoverIndex = (int)i;
-            break;
+    if (m_itemPressed && event.Dragging() && event.LeftIsDown()) {
+        int dx = std::abs(pos.x - m_mouseDownPos.x);
+        int dy = std::abs(pos.y - m_mouseDownPos.y);
+        if (dx >= 4_dip || dy >= 4_dip) {
+            m_itemPressed = false;
+            m_isDraggingWindow = true;
+            if (m_hoverIndex != -1) {
+                m_hoverIndex = -1;
+                SetCursor(wxCursor(wxCURSOR_DEFAULT));
+                Refresh();
+            }
+            if (m_onDragStart) {
+                m_onDragStart(this);
+            }
+            if (m_onDragging) {
+                m_onDragging(event);
+            }
+            return;
         }
     }
 
-    if (y >= sizeY - 74_dip && y <= sizeY - 16_dip) {
-        m_hoverIndex = 4;
-    }
+    int oldHover = m_hoverIndex;
+    m_hoverIndex = HitTest(pos);
 
     if (oldHover != m_hoverIndex) {
         SetCursor(m_hoverIndex != -1 ? wxCursor(wxCURSOR_HAND) : wxCursor(wxCURSOR_DEFAULT));
         Refresh();
     }
+}
+
+void SidebarNav::OnLeftDClick(wxMouseEvent& event) {
+    int hitIndex = HitTest(event.GetPosition());
+    if (hitIndex == -1) {
+        if (m_onDoubleClick) {
+            m_onDoubleClick();
+        }
+    }
+    event.Skip();
 }
 
 } // namespace LinguaAlpaca::UI

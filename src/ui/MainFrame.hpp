@@ -37,6 +37,9 @@ private:
     void OnClose(wxCloseEvent& event);
 
     // 拖动与窗口控制
+    void StartWindowDrag(wxWindow* sourceWin = nullptr);
+    void ProcessWindowDrag(wxMouseEvent& event);
+    void EndWindowDrag();
     void OnHeaderLeftDown(wxMouseEvent& event);
     void OnHeaderLeftUp(wxMouseEvent& event);
     void OnHeaderMouseMove(wxMouseEvent& event);
@@ -82,6 +85,7 @@ private:
 
     bool m_isDragging{false};
     wxPoint m_dragStartPos;
+    wxWeakRef<wxWindow> m_dragSourceWin;
     bool m_isMaximizedMac{false};
     wxRect m_savedRestoreRect;
 };

@@ -216,6 +216,12 @@ namespace LinguaAlpaca::UI {
         // 绑定主题与侧边栏事件
         m_themeBtn->Bind(wxEVT_BUTTON, &MainFrame::OnThemeToggle, this);
         m_sidebar->Bind(EVT_SIDEBAR_NAV_CHANGED, &MainFrame::OnNavChanged, this);
+        m_sidebar->SetDragCallbacks(
+            [this](wxWindow* win) { StartWindowDrag(win); },
+            [this](wxMouseEvent& evt) { ProcessWindowDrag(evt); },
+            [this]() { EndWindowDrag(); },
+            [this]() { ToggleMaximize(); }
+        );
 
         // 绑定窗口控制按钮事件
         m_minBtn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { Hide(); });
@@ -247,6 +253,9 @@ namespace LinguaAlpaca::UI {
         m_appNameText->Bind(wxEVT_LEFT_DCLICK, &MainFrame::OnHeaderDoubleClick, this);
 
         Bind(wxEVT_CLOSE_WINDOW, &MainFrame::OnClose, this);
+        Bind(wxEVT_MOUSE_CAPTURE_LOST, [this](wxMouseCaptureLostEvent&) {
+            EndWindowDrag();
+        });
         Bind(wxEVT_ICONIZE, [this](wxIconizeEvent& event) {
             if (event.IsIconized()) {
                 Hide();
@@ -411,41 +420,54 @@ namespace LinguaAlpaca::UI {
         }
     }
 
-    void MainFrame::OnHeaderLeftDown(wxMouseEvent& event) {
+    void MainFrame::StartWindowDrag(wxWindow* sourceWin) {
 #ifdef __WXMSW__
         ReleaseCapture();
         ::SendMessage((HWND)GetHWND(), WM_NCLBUTTONDOWN, HTCAPTION, 0);
 #else
         m_isDragging = true;
         m_dragStartPos = wxGetMousePosition() - GetPosition();
-        if (!m_topHeaderPanel->HasCapture()) {
-            m_topHeaderPanel->CaptureMouse();
+        m_dragSourceWin = sourceWin ? sourceWin : m_topHeaderPanel;
+        if (m_dragSourceWin && !m_dragSourceWin->HasCapture()) {
+            m_dragSourceWin->CaptureMouse();
         }
 #endif
-        event.Skip();
     }
 
-    void MainFrame::OnHeaderLeftUp(wxMouseEvent& event) {
+    void MainFrame::EndWindowDrag() {
         if (m_isDragging) {
             m_isDragging = false;
-            if (m_topHeaderPanel->HasCapture()) {
-                m_topHeaderPanel->ReleaseMouse();
+            if (m_dragSourceWin && m_dragSourceWin->HasCapture()) {
+                m_dragSourceWin->ReleaseMouse();
             }
+            m_dragSourceWin = nullptr;
         }
-        event.Skip();
     }
 
-    void MainFrame::OnHeaderMouseMove(wxMouseEvent& event) {
+    void MainFrame::ProcessWindowDrag(wxMouseEvent& event) {
         if (m_isDragging && event.Dragging() && event.LeftIsDown()) {
 #ifndef __WXMSW__
             if (m_isMaximizedMac) {
-                // 最大化状态下拖拽标题栏：平滑恢复窗口大小并跟随鼠标
+                // 最大化状态下拖拽：平滑恢复窗口大小并跟随鼠标相对位置
                 wxPoint mouseScreen = wxGetMousePosition();
                 m_isMaximizedMac = false;
                 int restoreW = (m_savedRestoreRect.width > 0) ? m_savedRestoreRect.width : dip(1080, 780).x;
                 int restoreH = (m_savedRestoreRect.height > 0) ? m_savedRestoreRect.height : dip(1080, 780).y;
-                int newX = mouseScreen.x - restoreW / 2;
-                int newY = mouseScreen.y - 20;
+
+                int currentW = GetSize().x;
+                int mouseOffsetInWinX = mouseScreen.x - GetPosition().x;
+                int newX;
+                if (mouseOffsetInWinX <= 80_dip) {
+                    // 位于侧边栏区域：窗口左侧紧随鼠标相对位置
+                    newX = mouseScreen.x - mouseOffsetInWinX;
+                } else if (currentW > 0) {
+                    newX = mouseScreen.x - (int)((double)mouseOffsetInWinX / currentW * restoreW);
+                } else {
+                    newX = mouseScreen.x - restoreW / 2;
+                }
+                int newY = mouseScreen.y - 20_dip;
+                if (newY < 0) newY = 0;
+
                 m_savedRestoreRect = wxRect(newX, newY, restoreW, restoreH);
                 SetSize(m_savedRestoreRect);
                 m_dragStartPos = mouseScreen - GetPosition();
@@ -457,6 +479,21 @@ namespace LinguaAlpaca::UI {
             wxPoint currentMouseScreen = wxGetMousePosition();
             SetPosition(currentMouseScreen - m_dragStartPos);
         }
+    }
+
+    void MainFrame::OnHeaderLeftDown(wxMouseEvent& event) {
+        wxWindow* win = wxDynamicCast(event.GetEventObject(), wxWindow);
+        StartWindowDrag(win ? win : m_topHeaderPanel);
+        event.Skip();
+    }
+
+    void MainFrame::OnHeaderLeftUp(wxMouseEvent& event) {
+        EndWindowDrag();
+        event.Skip();
+    }
+
+    void MainFrame::OnHeaderMouseMove(wxMouseEvent& event) {
+        ProcessWindowDrag(event);
         event.Skip();
     }
 

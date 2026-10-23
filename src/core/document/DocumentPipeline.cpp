@@ -142,32 +142,111 @@ std::string StripMarkdownFences(const std::string& text) {
     return std::string(sv.substr(first, last - first + 1));
 }
 
-// 自动检测并截断模型自回归输出的失控重复循环与幻觉噪音 (如 }\mathrm{C}^{\star}\mathrm{D}\mathrm{A}\mathrm{B 重复数百次)
-std::string TruncateRunawayRepetitions(std::string_view s) {
-    if (s.size() < 40) return std::string(s);
+// 判定文本内容是否纯由分隔符符号构成 (如 ·, •, ., -, _, *, ~, 空白等)
+bool LocalIsPureSeparatorContent(std::string_view text) {
+    if (text.empty()) return true;
+
+    size_t i = 0;
+    while (i < text.size()) {
+        unsigned char c = static_cast<unsigned char>(text[i]);
+        if (c == ' ' || c == '\t' || c == '\r' || c == '\n') {
+            i++;
+            continue;
+        }
+        if (c == '.' || c == '-' || c == '_' || c == '*' || c == '~' || c == '=' || c == '#') {
+            i++;
+            continue;
+        }
+        // UTF-8 multi-byte characters
+        if (c == 0xC2 && i + 1 < text.size()) {
+            unsigned char c2 = static_cast<unsigned char>(text[i + 1]);
+            if (c2 == 0xB7) { // · (middle dot U+00B7)
+                i += 2;
+                continue;
+            }
+        }
+        if (c == 0xE2 && i + 2 < text.size()) {
+            unsigned char c2 = static_cast<unsigned char>(text[i + 1]);
+            unsigned char c3 = static_cast<unsigned char>(text[i + 2]);
+            if (c2 == 0x80) {
+                if (c3 == 0xA2 || // • (bullet U+2022)
+                    c3 == 0xA6 || // … (ellipsis U+2026)
+                    c3 == 0x93 || // – (en dash U+2013)
+                    c3 == 0x94) { // — (em dash U+2014)
+                    i += 3;
+                    continue;
+                }
+            }
+            if (c2 == 0x94) {
+                if (c3 >= 0x80 && c3 <= 0x8F) { // Box drawing horizontal rules
+                    i += 3;
+                    continue;
+                }
+            }
+        }
+        if (c == 0xE3 && i + 2 < text.size()) {
+            unsigned char c2 = static_cast<unsigned char>(text[i + 1]);
+            unsigned char c3 = static_cast<unsigned char>(text[i + 2]);
+            if (c2 == 0x83 && c3 == 0xBB) { // ・ (katakana middle dot U+30FB)
+                i += 3;
+                continue;
+            }
+        }
+        return false;
+    }
+    return true;
+}
+
+// 自动检测并截断模型自回归输出的失控重复循环与幻觉噪音 (如 }\mathrm{C}^{\star}\mathrm{D}\mathrm{A}\mathrm{B 重复数百次，或 · · · · 连续失控)
+std::string LocalTruncateRunawayRepetitions(std::string_view s) {
+    if (s.size() < 16) return std::string(s);
 
     size_t cutPos = std::string::npos;
     const size_t len = s.size();
+    size_t matchedPatLen = 0;
+    size_t matchedCount = 0;
+    bool isSeparatorPat = false;
 
-    for (size_t patLen = 4; patLen <= 120; ++patLen) {
+    for (size_t patLen = 1; patLen <= 120; ++patLen) {
         if (patLen * 3 > len) break;
         bool found = false;
         for (size_t i = 0; i + patLen * 3 <= len; ++i) {
             std::string_view pat = s.substr(i, patLen);
-            // 避免全部字符相同的伪循环 (如 ----- 或 .....)
-            if (pat.find_first_not_of(pat[0]) == std::string_view::npos) {
-                continue;
-            }
             size_t count = 1;
             size_t pos = i + patLen;
             while (pos + patLen <= len && s.substr(pos, patLen) == pat) {
                 count++;
                 pos += patLen;
             }
-            if ((count >= 3 && patLen * count >= 30) || count >= 5) {
-                cutPos = i;
-                found = true;
-                break;
+
+            if (LocalIsPureSeparatorContent(pat)) {
+                if (patLen <= 4 && count >= 6 && patLen * count >= 12) {
+                    cutPos = i;
+                    matchedPatLen = patLen;
+                    matchedCount = count;
+                    isSeparatorPat = true;
+                    found = true;
+                    break;
+                }
+                if (patLen > 4 && count >= 3 && patLen * count >= 20) {
+                    cutPos = i;
+                    matchedPatLen = patLen;
+                    matchedCount = count;
+                    isSeparatorPat = true;
+                    found = true;
+                    break;
+                }
+            } else {
+                if (patLen <= 3 && count >= 8 && patLen * count >= 16) {
+                    cutPos = i;
+                    found = true;
+                    break;
+                }
+                if (patLen >= 4 && ((count >= 3 && patLen * count >= 24) || count >= 5)) {
+                    cutPos = i;
+                    found = true;
+                    break;
+                }
             }
         }
         if (found) break;
@@ -175,6 +254,23 @@ std::string TruncateRunawayRepetitions(std::string_view s) {
 
     if (cutPos == std::string::npos) {
         return std::string(s);
+    }
+
+    // 若从首字符起（或前导空白后）即为纯分隔符死循环 (例如自回归失控连续输出数百个 · · · 或 .....)
+    // 根据需求不彻底丢弃，而是保留精简适量的原版分隔符号 (保留至多 5 次模式重复，如 · · · · · 或 .....)
+    bool isLeadingWhitespace = (s.substr(0, cutPos).find_first_not_of(" \t\r\n") == std::string_view::npos);
+    if (isLeadingWhitespace && isSeparatorPat && matchedPatLen > 0) {
+        size_t keepCount = (std::min)(matchedCount, size_t(5));
+        std::string kept;
+        std::string_view pat = s.substr(cutPos, matchedPatLen);
+        for (size_t k = 0; k < keepCount; ++k) {
+            kept.append(pat);
+        }
+        size_t last = kept.find_last_not_of(" \t\r\n");
+        if (last != std::string::npos) {
+            kept.erase(last + 1);
+        }
+        return kept;
     }
 
     std::string result(s.substr(0, cutPos));
@@ -321,7 +417,7 @@ std::string CleanAndFormatFormula(const std::string& rawFormula) {
     }
 
     // 检测自回归循环截断
-    std::string formulaStr = TruncateRunawayRepetitions(sv);
+    std::string formulaStr = LocalTruncateRunawayRepetitions(sv);
 
     // 平衡花括号与定界符
     formulaStr = BalanceFormulaBracesAndDelimiters(std::move(formulaStr));
@@ -1263,6 +1359,10 @@ bool DocumentPipeline::IsFootnoteOrAnnotation(
     int pageH,
     bool bodyHasMarkers
 ) {
+    if (IsPureSeparatorContent(text)) {
+        return false;
+    }
+
     if (labelName == "footnote" || labelName == "vision_footnote") {
         return true;
     }
@@ -1314,6 +1414,50 @@ bool DocumentPipeline::IsFootnoteOrAnnotation(
     } catch (...) {}
 
     return false;
+}
+
+bool DocumentPipeline::IsFootnoteOrDecorativeSeparator(
+    const std::string& text,
+    const std::string& labelName,
+    int x1, int y1, int x2, int y2,
+    int pageW, int pageH
+) {
+    if (!IsPureSeparatorContent(text)) {
+        return false;
+    }
+
+    std::string trimmed = TrimString(text);
+    if (trimmed.empty()) {
+        return true;
+    }
+
+    if (pageH <= 0) {
+        return true;
+    }
+
+    const float topRatio = static_cast<float>(y1) / static_cast<float>(pageH);
+    const float bottomRatio = static_cast<float>(y2) / static_cast<float>(pageH);
+    const float heightRatio = static_cast<float>(y2 - y1) / static_cast<float>(pageH);
+
+    // 1. 底部区域分隔线：位于页面下半部分 (y1 >= 60% 或 y2 >= 65%)，且高度较小 (<= 6% 页面高度)，属于典型书籍印刷中的脚注隔离分割线
+    if ((topRatio >= 0.60f || bottomRatio >= 0.65f) && heightRatio <= 0.06f) {
+        return true;
+    }
+
+    // 2. 属于 footnote 标签但内容纯为分割符者，无条件判定为脚注分割线
+    if (labelName == "footnote" || labelName == "vision_footnote") {
+        return true;
+    }
+
+    return false;
+}
+
+bool DocumentPipeline::IsPureSeparatorContent(std::string_view text) {
+    return LocalIsPureSeparatorContent(text);
+}
+
+std::string DocumentPipeline::TruncateRunawayRepetitions(std::string_view s) {
+    return LocalTruncateRunawayRepetitions(s);
 }
 
 DocumentPipeline::DocumentPipeline(std::shared_ptr<ModelManager> modelManager, std::shared_ptr<DocLayoutEngine> layoutEngine)
@@ -1938,6 +2082,7 @@ DocumentPipeline::OcrDispatchResult DocumentPipeline::DispatchParallelOcrWorkers
                         }
 
                         recognizedText = StripMarkdownFences(recognizedText);
+                        recognizedText = TruncateRunawayRepetitions(recognizedText);
                         res.recognizedResults[elIdx] = recognizedText;
                         res.elementSuccess[elIdx] = ocrSuccess;
 
@@ -2157,6 +2302,12 @@ DocumentPipeline::AssembledPage DocumentPipeline::AssemblePageContent(
 
         std::string recognizedText = ocrRes.recognizedResults[elIdx];
 
+        // 0. 过滤纯空白无文本内容元素 (非图片且非表格)
+        std::string trimmedText = TrimString(recognizedText);
+        if (trimmedText.empty() && !elem.isImage && elem.elem.type != LayoutElementType::Table) {
+            continue;
+        }
+
         bool isFootnote = IsFootnoteOrAnnotation(
             recognizedText, elem.elem.labelName,
             elem.y1, elem.y2, curPageData->pageHeight,
@@ -2188,6 +2339,10 @@ DocumentPipeline::AssembledPage DocumentPipeline::AssemblePageContent(
                 recognizedText = formattedContent.substr(startPos + 1, endPos - startPos - 1);
             }
             elementMarkdown = formattedContent;
+        } else if (IsPureSeparatorContent(recognizedText)) {
+            // 分隔线/点号装饰线 (如 · · · · · 或 ..... 或 ---)：保留精简适量的分隔符内容，去除 ## 标题等误识别前缀
+            recognizedText = TruncateRunawayRepetitions(recognizedText);
+            elementMarkdown = recognizedText;
         } else if (elem.elem.type == LayoutElementType::Title ||
                    (elem.elem.type == LayoutElementType::Text && (recognizedText == "目录 Contents" ||
                                                                   recognizedText == "目录" ||
@@ -2228,7 +2383,7 @@ DocumentPipeline::AssembledPage DocumentPipeline::AssemblePageContent(
 
         AppendToMarkdown(assembled.pageMarkdown, elementMarkdown);
 
-        std::string finalType = isFootnote ? "footnote" : elem.elem.labelName;
+        std::string finalType = isFootnote ? "footnote" : (IsPureSeparatorContent(recognizedText) ? "separator" : elem.elem.labelName);
         json elJson = {
             {"id", elem.elem.id},
             {"type", finalType},

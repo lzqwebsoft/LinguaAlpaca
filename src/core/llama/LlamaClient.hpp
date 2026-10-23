@@ -35,6 +35,8 @@ public:
     bool IsRunning() const;
 
     static std::string SanitizeOcrToken(const std::string& token);
+    static bool DetectRunawayRepetition(std::string_view text);
+    static std::string TruncateRunawayRepetitions(std::string_view s);
 
 private:
     std::string FormatHyMt2UserContent(const std::string& srcText, LanguageCode srcLang, LanguageCode tgtLang);

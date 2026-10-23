@@ -137,6 +137,20 @@ public:
         bool bodyHasMarkers = false
     );
 
+    // 自动检测并截断模型自回归输出的失控重复循环与幻觉噪音 (如 }\mathrm{C}^{\star}\mathrm{D}\mathrm{A}\mathrm{B 重复数百次，或 · · · · 连续失控)
+    static std::string TruncateRunawayRepetitions(std::string_view s);
+
+    // 判定文本内容是否纯由分隔符符号构成 (如 ·, •, ., -, _, *, ~, 空白等)
+    static bool IsPureSeparatorContent(std::string_view text);
+
+    // 判定候选元素是否为底部脚注分隔线或页面无内容装饰性分隔符
+    static bool IsFootnoteOrDecorativeSeparator(
+        const std::string& text,
+        const std::string& labelName,
+        int x1, int y1, int x2, int y2,
+        int pageW, int pageH
+    );
+
     // 阶段 1 预处理内部数据结构前向声明
     struct PreprocessedPage;
 

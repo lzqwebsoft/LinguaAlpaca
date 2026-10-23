@@ -6,6 +6,7 @@
 #include "core/pdf/PdfHelper.hpp"
 #include "engine/DocLayoutEngine.hpp"
 #include "core/document/DocumentPipeline.hpp"
+#include "core/llama/LlamaClient.hpp"
 #include "core/Config.hpp"
 #include <fstream>
 #include <regex>
@@ -1019,6 +1020,85 @@ TEST_CASE("SanitizeInlineLatex: Repair unclosed braces and LaTeX decoration comm
     // 4. 验证行内普通公式与多层嵌套正常保留
     std::string formulaInline = "公式为 $x + y = z$ 以及 $f(x) = \\sqrt{x^2 + 1}$ 无需额外修改";
     CHECK(DocumentPipeline::SanitizeInlineLatex(formulaInline) == formulaInline);
+}
+
+TEST_CASE("TruncateRunawayRepetitions and Separator Filter: Prevent OCR runaway loops on dots/dividers", "[runaway][separator][pipeline]") {
+    // 1. 验证微虫世界第 12 页（PDF第14页）自回归点号死循环截断：保留适量精简点号，不彻底丢弃
+    std::string runawayDots;
+    for (int i = 0; i < 200; ++i) {
+        runawayDots += "· ";
+    }
+    std::string truncatedDots = DocumentPipeline::TruncateRunawayRepetitions(runawayDots);
+    CHECK(truncatedDots == "· · · · ·");
+    CHECK(LlamaClient::TruncateRunawayRepetitions(runawayDots) == "· · · · ·");
+
+    // 2. 验证有效文本后残留的自回归死循环点号截断：保留正文，完全剔除尾部噪声
+    std::string validTextWithRunaway = "This is a legitimate paragraph heading.\n\n";
+    for (int i = 0; i < 100; ++i) {
+        validTextWithRunaway += "· ";
+    }
+    std::string truncatedValid = DocumentPipeline::TruncateRunawayRepetitions(validTextWithRunaway);
+    CHECK(truncatedValid == "This is a legitimate paragraph heading.");
+
+    // 3. 验证短横线/下划线死循环截断：保留适量 5 个字符
+    std::string runawayDashes(100, '-');
+    CHECK(DocumentPipeline::TruncateRunawayRepetitions(runawayDashes) == "-----");
+    std::string runawayPeriod(100, '.');
+    CHECK(DocumentPipeline::TruncateRunawayRepetitions(runawayPeriod) == ".....");
+
+    // 4. 验证合法英文省略号与 Markdown 水平分割线不被误杀
+    std::string normalEllipsis = "The story continues... but wait, there is more.";
+    CHECK(DocumentPipeline::TruncateRunawayRepetitions(normalEllipsis) == normalEllipsis);
+    std::string markdownHr = "---";
+    CHECK(DocumentPipeline::TruncateRunawayRepetitions(markdownHr) == markdownHr);
+
+    // 5. 验证纯分隔符内容判定 (IsPureSeparatorContent)
+    CHECK(DocumentPipeline::IsPureSeparatorContent("· · · · · · · · · ·") == true);
+    CHECK(DocumentPipeline::IsPureSeparatorContent(".....") == true);
+    CHECK(DocumentPipeline::IsPureSeparatorContent("-----------------") == true);
+    CHECK(DocumentPipeline::IsPureSeparatorContent("• • • •") == true);
+    CHECK(DocumentPipeline::IsPureSeparatorContent("— — — —") == true);
+    CHECK(DocumentPipeline::IsPureSeparatorContent("") == true);
+    CHECK(DocumentPipeline::IsPureSeparatorContent("   \n\t  ") == true);
+    CHECK(DocumentPipeline::IsPureSeparatorContent("1. Introduction") == false);
+    CHECK(DocumentPipeline::IsPureSeparatorContent("TRANSLATOR'S INTRODUCTION") == false);
+    CHECK(DocumentPipeline::IsPureSeparatorContent("注1：这是正常注释") == false);
+
+    // 6. 验证底部脚注分隔线判定 (IsFootnoteOrDecorativeSeparator)
+    // 场景 A: 微虫世界第 14 页真实候选框 [258, 1975, 543, 2004] (W=1600, H=2352)，位于底部 84% 处，高度仅 29 像素
+    CHECK(DocumentPipeline::IsFootnoteOrDecorativeSeparator(
+        "· · · · · · · · · ·", "paragraph_title",
+        258, 1975, 543, 2004, 1600, 2352
+    ) == true);
+
+    // 场景 B: 底部原版 ..... 分隔符
+    CHECK(DocumentPipeline::IsFootnoteOrDecorativeSeparator(
+        ".....", "paragraph_title",
+        258, 1975, 543, 2004, 1600, 2352
+    ) == true);
+
+    // 场景 C: 底部被版面识别模型标为 footnote 的纯点号/横线分隔符
+    CHECK(DocumentPipeline::IsFootnoteOrDecorativeSeparator(
+        "· · · · · ·", "footnote",
+        173, 1956, 454, 1980, 1600, 2352
+    ) == true);
+
+    // 场景 D: 正常的真实底部脚注，必须保留！
+    CHECK(DocumentPipeline::IsFootnoteOrDecorativeSeparator(
+        "2 Zhang Daye, Weichong shijie [The world of a tiny insect], in Qingdai gaoben baizhong huikan...",
+        "footnote",
+        259, 2029, 1423, 2160, 1600, 2352
+    ) == false);
+
+    // 场景 E: 正文区域（上半部分）的分割线
+    CHECK(DocumentPipeline::IsFootnoteOrDecorativeSeparator(
+        "---", "paragraph_title",
+        200, 500, 1400, 520, 1600, 2352
+    ) == false);
+
+    // 7. 验证 LlamaClient 实时流式自回归死循环检测 (DetectRunawayRepetition)
+    CHECK(LlamaClient::DetectRunawayRepetition("· · · · · · · · · ·") == true);
+    CHECK(LlamaClient::DetectRunawayRepetition("Normal streaming text without repetitive loops.") == false);
 }
 
 TEST_CASE("DocLayoutEngine - Duplicate Header/Footer Suppression Protection", "[layout][filter]") {

@@ -1554,6 +1554,9 @@ hr {
             if (!contentEl || !contentEl.innerHTML.trim()) {
                 if (typeof renderMarkdown === 'function' && typeof rawMarkdown === 'string' && rawMarkdown) {
                     renderMarkdown(rawMarkdown, "", false);
+                    if (typeof flushPendingRender === 'function') {
+                        flushPendingRender();
+                    }
                 }
             }
             initTableOfContents();

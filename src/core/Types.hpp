@@ -263,6 +263,7 @@ struct LayoutElement {
     int x2{0};
     int y2{0};
     int readingOrder{0};
+    bool hasNestedFormula{false}; // 是否在版面合并时吸收了行内/嵌套公式子框
 };
 
 struct DocumentLayoutResult {

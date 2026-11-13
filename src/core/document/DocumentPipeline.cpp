@@ -297,7 +297,39 @@ std::string LocalTruncateRunawayRepetitions(std::string_view s) {
     return result;
 }
 
-// 自动补齐闭合未闭合的花括号 {} 与 \left ... \right.，规范化单引号实体，防止 KaTeX 语法崩溃
+// 单趟栈式花括号平衡：自动剔除 depth == 0 处的游离右花括号 '}'，并在末尾补齐缺失的 '}'
+std::string BalanceBracesSinglePass(std::string_view input) {
+    if (input.empty()) return "";
+    std::string balanced;
+    balanced.reserve(input.size() + 8);
+    int depth = 0;
+    for (size_t i = 0; i < input.size(); ++i) {
+        if (input[i] == '\\' && i + 1 < input.size()) {
+            balanced.push_back(input[i]);
+            balanced.push_back(input[i + 1]);
+            ++i;
+            continue;
+        }
+        if (input[i] == '{') {
+            ++depth;
+            balanced.push_back('{');
+        } else if (input[i] == '}') {
+            if (depth > 0) {
+                --depth;
+                balanced.push_back('}');
+            }
+            // depth == 0 处的游离 '}' 直接丢弃，防止 KaTeX 报 Expected 'EOF', got '}'
+        } else {
+            balanced.push_back(input[i]);
+        }
+    }
+    if (depth > 0) {
+        balanced.append(static_cast<size_t>(depth), '}');
+    }
+    return balanced;
+}
+
+// 自动补齐闭合未闭合的花括号 {} 与 \left ... \right.，剔除游离 '}'，规范化单引号实体，防止 KaTeX 语法崩溃
 std::string BalanceFormulaBracesAndDelimiters(std::string s) {
     if (s.empty()) return s;
 
@@ -325,26 +357,11 @@ std::string BalanceFormulaBracesAndDelimiters(std::string s) {
         insertPos = match.position();
     }
 
-    // 3. 统计未转义的花括号
-    int openBraces = 0;
-    int closeBraces = 0;
-    for (size_t i = 0; i < s.size(); ++i) {
-        if (s[i] == '{' && (i == 0 || s[i - 1] != '\\')) {
-            openBraces++;
-        } else if (s[i] == '}' && (i == 0 || s[i - 1] != '\\')) {
-            closeBraces++;
-        }
-    }
-
-    if (openBraces > closeBraces) {
-        std::string missing(openBraces - closeBraces, '}');
-        s.insert(insertPos, missing);
-        if (std::regex_search(s, match, s_endEnvRegex)) {
-            insertPos = match.position();
-        } else {
-            insertPos = s.size();
-        }
-    }
+    // 3. 对主体内容执行单趟花括号平衡（同时消除中途游离 '}' 与补全尾部缺失 '}'）
+    std::string body = BalanceBracesSinglePass(std::string_view(s.data(), insertPos));
+    std::string suffix = (insertPos < s.size()) ? s.substr(insertPos) : "";
+    s = body + suffix;
+    insertPos = body.size();
 
     // 4. 统计 \left 与 \right
     static const std::regex s_leftRegex(R"(\\left\b)");
@@ -430,11 +447,116 @@ std::string CleanAndFormatFormula(const std::string& rawFormula) {
     return "$$\n" + formulaStr.substr(first, last - first + 1) + "\n$$";
 }
 
-// 规范化与修复行内 LaTeX 数学与排版标记（如 \(\underline{\text{URL}\) 自动补齐闭合花括号）
+// 判断文本中是否包含裸露但未包裹定界符的 LaTeX 数学宏
+bool ContainsNakedMathMacro(std::string_view sv) {
+    static const char* const kMathMacros[] = {
+        "\\mathrm", "\\mathit", "\\mathbf", "\\mathcal", "\\mathbb", "\\frac", "\\sqrt"
+    };
+    for (const char* m : kMathMacros) {
+        if (sv.find(m) != std::string_view::npos) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// 为裸露包含 \mathrm{...} 等数学宏但缺少 \(...\) 定界符的行或段落自动平衡花括号并包裹定界符
+std::string WrapNakedMathExpressions(const std::string& input) {
+    if (input.empty() || !ContainsNakedMathMacro(input)) {
+        return input;
+    }
+
+    static const std::regex s_nakedMathMacroRegex(
+        R"(\\(?:mathrm|mathit|mathbf|mathcal|mathbb|frac|sqrt)\s*\{)"
+    );
+    static const std::regex s_proseDecorRegex(
+        R"(\\(?:underline|uline|uwave|uuline|dashuline|dotuline|sout|xout|textbf|textit|textrm|text)\s*\{)"
+    );
+    static const std::regex s_nakedAsciiSegmentRegex(
+        R"(([A-Za-z0-9_\\\{\}\(\)\[\].,;:\+\-\*\/=\s]*\\(?:mathrm|mathit|mathbf|mathcal|mathbb|frac|sqrt)\s*\{[A-Za-z0-9_\\\{\}\(\)\[\].,;:\+\-\*\/=\s]*))"
+    );
+
+    std::string out;
+    out.reserve(input.size() + 32);
+
+    size_t pos = 0;
+    while (pos <= input.size()) {
+        size_t nlPos = input.find('\n', pos);
+        bool hasNl = (nlPos != std::string::npos);
+        std::string line = hasNl ? input.substr(pos, nlPos - pos) : input.substr(pos);
+
+        bool alreadyWrapped = (line.find("\\(") != std::string::npos ||
+                               line.find("\\)") != std::string::npos ||
+                               line.find("\\[") != std::string::npos ||
+                               line.find("\\]") != std::string::npos ||
+                               line.find('$') != std::string::npos);
+
+        if (!alreadyWrapped &&
+            std::regex_search(line, s_nakedMathMacroRegex) &&
+            !std::regex_search(line, s_proseDecorRegex)) {
+            // 检查该行是否包含非 ASCII（如中文说明文字）
+            bool hasNonAscii = false;
+            for (unsigned char c : line) {
+                if (c >= 0x80) {
+                    hasNonAscii = true;
+                    break;
+                }
+            }
+
+            if (!hasNonAscii) {
+                std::string balanced = BalanceBracesSinglePass(TrimString(line));
+                if (!balanced.empty()) {
+                    line = "\\(" + balanced + "\\)";
+                }
+            } else {
+                // 中英混排段落：仅对连续的 ASCII 数学表达式片段包裹 \(...\)
+                std::string replaced;
+                replaced.reserve(line.size() + 16);
+                size_t lPos = 0;
+                std::smatch sm;
+                std::string::const_iterator searchIt = line.cbegin();
+                while (std::regex_search(searchIt, line.cend(), sm, s_nakedAsciiSegmentRegex)) {
+                    size_t matchStart = lPos + static_cast<size_t>(sm.position());
+                    size_t matchEnd = matchStart + static_cast<size_t>(sm.length());
+                    replaced.append(line, lPos, matchStart - lPos);
+
+                    std::string seg = TrimString(sm.str(1));
+                    size_t leadSpaces = sm.str(1).find_first_not_of(" \t");
+                    size_t trailSpaces = sm.str(1).find_last_not_of(" \t");
+                    if (leadSpaces != std::string::npos && leadSpaces > 0) {
+                        replaced.append(sm.str(1), 0, leadSpaces);
+                    }
+                    replaced += "\\(" + BalanceBracesSinglePass(seg) + "\\)";
+                    if (trailSpaces != std::string::npos && trailSpaces + 1 < sm.str(1).size()) {
+                        replaced.append(sm.str(1), trailSpaces + 1, sm.str(1).size() - (trailSpaces + 1));
+                    }
+
+                    lPos = matchEnd;
+                    searchIt = line.cbegin() + static_cast<ptrdiff_t>(lPos);
+                }
+                if (lPos < line.size()) {
+                    replaced.append(line, lPos, line.size() - lPos);
+                }
+                if (!replaced.empty()) {
+                    line = std::move(replaced);
+                }
+            }
+        }
+
+        out += line;
+        if (!hasNl) break;
+        out.push_back('\n');
+        pos = nlPos + 1;
+    }
+
+    return out;
+}
+
+// 规范化与修复行内 LaTeX 数学与排版标记（如 \(\underline{\text{URL}\) 自动补齐闭合花括号、剔除游离 '}'、包裹裸数学表达式）
 std::string SanitizeInlineLatex(const std::string& text) {
     if (text.empty()) return "";
 
-    // 1. 修复 \( ... \) 与 $ ... $ 行内公式块中未闭合的花括号
+    // 1. 修复 \( ... \) 行内公式块中的花括号不平衡问题（包括缺失 '}' 与中途游离 '}'）
     std::string intermediate;
     intermediate.reserve(text.size() + 16);
 
@@ -447,25 +569,7 @@ std::string SanitizeInlineLatex(const std::string& text) {
                 std::string mathContent = text.substr(i + 2, endDelim - (i + 2));
                 // 防止跨越段落空行
                 if (mathContent.find("\n\n") == std::string::npos) {
-                    int depth = 0;
-                    size_t j = 0;
-                    while (j < mathContent.size()) {
-                        if (mathContent[j] == '\\') {
-                            j += 2;
-                            continue;
-                        }
-                        if (mathContent[j] == '{') {
-                            depth++;
-                        } else if (mathContent[j] == '}') {
-                            if (depth > 0) depth--;
-                        }
-                        j++;
-                    }
-                    intermediate += "\\(" + mathContent;
-                    if (depth > 0) {
-                        intermediate.append(depth, '}');
-                    }
-                    intermediate += "\\)";
+                    intermediate += "\\(" + BalanceBracesSinglePass(mathContent) + "\\)";
                     i = endDelim + 2;
                     continue;
                 }
@@ -548,7 +652,9 @@ std::string SanitizeInlineLatex(const std::string& text) {
     if (pos < intermediate.size()) {
         result.append(intermediate, pos, intermediate.size() - pos);
     }
-    return result;
+
+    // 3. 自动为裸露的 LaTeX 数学表达式补全定界符并平衡花括号
+    return WrapNakedMathExpressions(result);
 }
 
 // 单例共享的页码正则表达式
@@ -570,6 +676,8 @@ struct PreprocessedElement {
     int cropW{0};
     int cropH{0};
     bool isImage{false};
+    bool hasNativeText{false};  // 若为 true，表示已通过 PDFium 直接提取内嵌文本，跳过 Stage 2 视觉 OCR
+    std::string nativeText;     // PDFium 直接提取并完成折行合并的段落文本
     std::string ocrInputSource; // 若为非 Image 则为内存 base64 URI (data:image/jpeg;base64,...)
     std::string figRelPath;     // 若为 Image 则为 imgs/img_p1_box_...jpg
     std::string imgTag;         // 若为 Image 则为标准居中 HTML 标签
@@ -624,6 +732,7 @@ struct DocumentPipeline::ParseSession {
     size_t mdWrittenLen{0};                    // 已落盘的 Markdown 净字节数（剥离尾部换行后）
     std::string fullMarkdown;
     bool translateEnglish{false};
+    bool fastTextMode{false};
 };
 
 struct DocumentPipeline::OcrDispatchResult {
@@ -832,7 +941,8 @@ std::shared_ptr<DocumentPipeline::PreprocessedPage> PreprocessStageOne(
     const std::shared_ptr<std::atomic<bool>>& aliveToken,
     const std::atomic<bool>& shouldStop,
     DocProgressCallback onProgress = nullptr,
-    const std::string& currentMarkdown = ""
+    const std::string& currentMarkdown = "",
+    bool fastTextMode = false
 ) {
     if (shouldStop.load() || !aliveToken->load()) {
         return nullptr;
@@ -889,6 +999,20 @@ std::shared_ptr<DocumentPipeline::PreprocessedPage> PreprocessStageOne(
         return nullptr;
     }
 
+    struct ClampedCandidate {
+        size_t elIdx{0};
+        int x1{0};
+        int y1{0};
+        int x2{0};
+        int y2{0};
+        int cropW{0};
+        int cropH{0};
+        bool eligibleForFastText{false};
+    };
+
+    std::vector<ClampedCandidate> validCandidates;
+    validCandidates.reserve(pageData->layoutResult.elements.size());
+
     for (size_t elIdx = 0; elIdx < pageData->layoutResult.elements.size(); ++elIdx) {
         if (shouldStop.load() || !aliveToken->load()) {
             break;
@@ -924,7 +1048,78 @@ std::shared_ptr<DocumentPipeline::PreprocessedPage> PreprocessStageOne(
             }
         }
 
-        CropAndSaveElement(pageImg, elem, elIdx, p, x1, y1, x2, y2, cropW, cropH, pImgW, figuresDir, tempCacheDir, *pageData);
+        ClampedCandidate cand;
+        cand.elIdx = elIdx;
+        cand.x1 = x1;
+        cand.y1 = y1;
+        cand.x2 = x1 + cropW;
+        cand.y2 = y1 + cropH;
+        cand.cropW = cropW;
+        cand.cropH = cropH;
+        cand.eligibleForFastText = fastTextMode && DocumentPipeline::IsElementEligibleForFastText(elem);
+        validCandidates.push_back(cand);
+    }
+
+    // 若启用了纯文本极速模式且当前输入为 PDF，单次批量提取所有符合条件的纯文本元素
+    std::vector<PdfBoxTextResult> fastTextResults(validCandidates.size());
+    if (fastTextMode && PdfHelper::IsPdfFile(inputFilePath) && !validCandidates.empty()) {
+        std::vector<PdfBoxRegion> queryBoxes;
+        std::vector<size_t> queryToCandIdx;
+        queryBoxes.reserve(validCandidates.size());
+        queryToCandIdx.reserve(validCandidates.size());
+
+        for (size_t i = 0; i < validCandidates.size(); ++i) {
+            if (validCandidates[i].eligibleForFastText) {
+                queryBoxes.push_back(PdfBoxRegion{
+                    validCandidates[i].x1,
+                    validCandidates[i].y1,
+                    validCandidates[i].x2,
+                    validCandidates[i].y2
+                });
+                queryToCandIdx.push_back(i);
+            }
+        }
+
+        if (!queryBoxes.empty()) {
+            std::vector<PdfBoxTextResult> extracted;
+            if (PdfHelper::ExtractPageBoxesText(inputFilePath, p, pImgW, pImgH, queryBoxes, extracted) &&
+                extracted.size() == queryToCandIdx.size()) {
+                for (size_t q = 0; q < queryToCandIdx.size(); ++q) {
+                    fastTextResults[queryToCandIdx[q]] = std::move(extracted[q]);
+                }
+            }
+        }
+    }
+
+    for (size_t i = 0; i < validCandidates.size(); ++i) {
+        if (shouldStop.load() || !aliveToken->load()) {
+            break;
+        }
+        const auto& cand = validCandidates[i];
+        const auto& elem = pageData->layoutResult.elements[cand.elIdx];
+
+        if (cand.eligibleForFastText && fastTextResults[i].success && !fastTextResults[i].text.empty()) {
+            PreprocessedElement pElem;
+            pElem.elem = elem;
+            pElem.x1 = cand.x1;
+            pElem.y1 = cand.y1;
+            pElem.x2 = cand.x2;
+            pElem.y2 = cand.y2;
+            pElem.cropW = cand.cropW;
+            pElem.cropH = cand.cropH;
+            pElem.isImage = false;
+            pElem.hasNativeText = true;
+            pElem.nativeText = std::move(fastTextResults[i].text);
+            pageData->elements.push_back(std::move(pElem));
+            continue;
+        }
+
+        CropAndSaveElement(
+            pageImg, elem, cand.elIdx, p,
+            cand.x1, cand.y1, cand.x2, cand.y2,
+            cand.cropW, cand.cropH, pImgW,
+            figuresDir, tempCacheDir, *pageData
+        );
     }
 
     pageImg.Destroy();
@@ -947,11 +1142,12 @@ std::future<std::shared_ptr<DocumentPipeline::PreprocessedPage>> LaunchPreproces
     const std::shared_ptr<std::atomic<bool>>& aliveToken,
     const std::atomic<bool>& shouldStop,
     DocProgressCallback onProgress = nullptr,
-    const std::string& currentMarkdown = ""
+    const std::string& currentMarkdown = "",
+    bool fastTextMode = false
 ) {
     return std::async(std::launch::async, [=, &shouldStop]() {
         try {
-            return PreprocessStageOne(p, totalPages, inputFilePath, tempCacheDir, figuresDir, layoutEngine, aliveToken, shouldStop, onProgress, currentMarkdown);
+            return PreprocessStageOne(p, totalPages, inputFilePath, tempCacheDir, figuresDir, layoutEngine, aliveToken, shouldStop, onProgress, currentMarkdown, fastTextMode);
         } catch (const std::exception& e) {
             LOG_ERROR("DocumentPipeline", std::string("PreprocessStageOne exception: ") + e.what());
             return std::shared_ptr<DocumentPipeline::PreprocessedPage>(nullptr);
@@ -1676,6 +1872,7 @@ DocumentPipeline::ResumeInfo DocumentPipeline::CheckResumeInfo(const std::string
 
         info.isCompleted = j.value("is_completed", false);
         info.translateEnabled = j.value("translate_enabled", false);
+        info.fastTextMode = j.value("fast_text_mode", false);
         if (!info.isCompleted && info.totalPages > 0 && completedInJson >= info.totalPages && lastPageCompleted) {
             info.isCompleted = true;
         }
@@ -1733,6 +1930,27 @@ std::string DocumentPipeline::ExtractMarkdownUpToPage(const std::string& fullMd,
         pos = nextPos + sep.length();
     }
     return fullMd;
+}
+
+bool DocumentPipeline::IsElementEligibleForFastText(const LayoutElement& elem) {
+    // 1. 图像/印章直接裁剪保存为图片，不提取文本
+    if (elem.type == LayoutElementType::Image || elem.labelName == "image" || elem.labelName == "seal") {
+        return false;
+    }
+    // 2. 独立数学公式块与包含嵌套行内公式的段落一律交由视觉 OCR 转换为标准 LaTeX
+    if (elem.type == LayoutElementType::Formula ||
+        elem.labelName == "display_formula" ||
+        elem.labelName == "inline_formula" ||
+        elem.labelName == "formula" ||
+        elem.hasNestedFormula) {
+        return false;
+    }
+    // 3. 表格与图表交由视觉 OCR 进行 OTSL/图表结构化推理
+    if (elem.type == LayoutElementType::Table || elem.labelName == "table" ||
+        elem.type == LayoutElementType::Chart || elem.labelName == "chart") {
+        return false;
+    }
+    return true;
 }
 
 bool DocumentPipeline::NeedsTranslation(const std::string& text) {
@@ -1806,6 +2024,7 @@ bool DocumentPipeline::InitParseSession(
     const std::string& inputFilePath,
     const std::string& outputDir,
     bool translateEnglishToChinese,
+    bool fastTextMode,
     int startFromPage,
     const std::string& initialMarkdown,
     const std::string& initialJson,
@@ -1837,7 +2056,8 @@ bool DocumentPipeline::InitParseSession(
     }
 
     LOG_INFO("DocumentPipeline", "Start parsing document: " + inputFilePath + " (Total pages: " +
-             std::to_string(session.totalPages) + ", Start from page: " + std::to_string(startFromPage) + ")");
+             std::to_string(session.totalPages) + ", Start from page: " + std::to_string(startFromPage) +
+             ", FastTextMode: " + std::string(fastTextMode ? "true" : "false") + ")");
 
     if (m_modelManager) {
         m_modelManager->ResetCancelState(TargetModelType::Ocr);
@@ -1879,6 +2099,7 @@ bool DocumentPipeline::InitParseSession(
     session.docMeta["file_name"] = session.baseDocName;
     session.docMeta["total_pages"] = session.totalPages;
     session.docMeta["translate_enabled"] = translateEnglishToChinese;
+    session.docMeta["fast_text_mode"] = fastTextMode;
 
     session.actualStartPage = (std::clamp)(startFromPage, 0, session.totalPages);
     if (session.actualStartPage >= session.totalPages) {
@@ -1921,6 +2142,61 @@ bool DocumentPipeline::InitParseSession(
     }
 
     session.translateEnglish = translateEnglishToChinese;
+    session.fastTextMode = fastTextMode;
+    return true;
+}
+
+bool DocumentPipeline::EnsureOcrModelReadyForPage(
+    int p,
+    int totalPages,
+    DocProgressCallback onProgress,
+    const std::string& currentMarkdown,
+    std::string& outError
+) {
+    if (!m_modelManager) {
+        outError = "模型管理服务未初始化";
+        return false;
+    }
+
+    auto health = m_modelManager->GetHealthStatus(TargetModelType::Ocr);
+    if (health.state == ServerHealthState::Ready) {
+        return true;
+    }
+
+    auto readyPromise = std::make_shared<std::promise<std::pair<bool, ServerStatusInfo>>>();
+    auto promiseSet = std::make_shared<std::atomic<bool>>(false);
+    auto readyFuture = readyPromise->get_future();
+
+    m_modelManager->EnsureModelAsync(
+        TargetModelType::Ocr,
+        [this, p, totalPages, onProgress, &currentMarkdown](const std::string& statusMsg) {
+            if (m_aliveToken && m_aliveToken->load() && !m_shouldStop.load() && onProgress) {
+                std::string msg = "第 " + std::to_string(p + 1) + " / " + std::to_string(totalPages) +
+                                  " 页: 检测到公式/图表，正在按需启动视觉 OCR (" + statusMsg + ")...";
+                onProgress(p, totalPages, msg, currentMarkdown);
+            }
+        },
+        [readyPromise, promiseSet](bool ok, const ServerStatusInfo& info) {
+            if (!promiseSet->exchange(true)) {
+                try {
+                    readyPromise->set_value({ok, info});
+                } catch (...) {}
+            }
+        }
+    );
+
+    while (readyFuture.wait_for(std::chrono::milliseconds(100)) != std::future_status::ready) {
+        if (m_shouldStop.load() || !m_aliveToken || !m_aliveToken->load()) {
+            outError = "用户已取消解析";
+            return false;
+        }
+    }
+
+    auto [ok, info] = readyFuture.get();
+    if (!ok) {
+        outError = info.message.empty() ? "OCR 视觉模型未就绪" : info.message;
+        return false;
+    }
     return true;
 }
 
@@ -1965,9 +2241,37 @@ DocumentPipeline::OcrDispatchResult DocumentPipeline::DispatchParallelOcrWorkers
     res.elementSuccess.resize(curPageData->elements.size(), false);
 
     std::vector<size_t> ocrIndices;
+    int nativeExtractedCount = 0;
     for (size_t elIdx = 0; elIdx < curPageData->elements.size(); ++elIdx) {
-        if (!curPageData->elements[elIdx].isImage) {
-            ocrIndices.push_back(elIdx);
+        const auto& elem = curPageData->elements[elIdx];
+        if (elem.isImage) {
+            continue;
+        }
+        if (elem.hasNativeText) {
+            res.recognizedResults[elIdx] = elem.nativeText;
+            res.elementSuccess[elIdx] = true;
+            nativeExtractedCount++;
+            continue;
+        }
+        ocrIndices.push_back(elIdx);
+    }
+
+    // 若存在需要视觉 OCR 的元素（如独立公式、含行内公式段落、表格或扫描框），按需确保 OCR 服务已就绪
+    if (!ocrIndices.empty() && m_modelManager) {
+        std::string ocrInitErr;
+        if (!EnsureOcrModelReadyForPage(p, totalPages, onProgress, currentMarkdown, ocrInitErr)) {
+            res.pageInterrupted = true;
+            res.isServerDown = true;
+            res.failureReason = (ocrInitErr == "用户已取消解析")
+                                    ? ocrInitErr
+                                    : ("第 " + std::to_string(p + 1) + " 页按需启动 OCR 视觉服务失败 (" + ocrInitErr + ")");
+            return res;
+        }
+    } else if (ocrIndices.empty() && nativeExtractedCount > 0) {
+        if (m_aliveToken->load() && onProgress) {
+            std::string stageMsg = "第 " + std::to_string(p + 1) + " / " + std::to_string(totalPages) +
+                                   " 页: 极速文本提取完成 (" + std::to_string(nativeExtractedCount) + " 段)...";
+            onProgress(p, totalPages, stageMsg, currentMarkdown);
         }
     }
 
@@ -2420,6 +2724,7 @@ void DocumentPipeline::HandlePipelineInterruption(
     session.docMeta["last_interrupted_page"] = p + 1;
     session.docMeta["is_completed"] = false;
     session.docMeta["translate_enabled"] = session.translateEnglish;
+    session.docMeta["fast_text_mode"] = session.fastTextMode;
 
     std::string interruptedJsonStr = AssembleSessionJson(session.docMeta, session.pageFragments);
     CloseMarkdownStream(session);
@@ -2445,6 +2750,7 @@ void DocumentPipeline::PersistPageSnapshot(
     session.docMeta["completed_pages"] = p + 1;
     session.docMeta["is_completed"] = isCompleted;
     session.docMeta["translate_enabled"] = session.translateEnglish;
+    session.docMeta["fast_text_mode"] = session.fastTextMode;
 
     // 增量追加新增 Markdown 净字节，避免每页整份重写（O(N^2) 磁盘开销）
     FlushMarkdownIncremental(session);
@@ -2506,7 +2812,8 @@ void DocumentPipeline::StartParseAsync(
     DocCompleteCallback onComplete,
     int startFromPage,
     const std::string& initialMarkdown,
-    const std::string& initialJson
+    const std::string& initialJson,
+    bool fastTextMode
 ) {
     Cancel();
     m_shouldStop.store(false);
@@ -2515,8 +2822,8 @@ void DocumentPipeline::StartParseAsync(
     // 持有 shared_ptr 自身，确保后台工作线程存活期间本对象绝不被提前析构（消除悬空 this 风险）
     auto self = shared_from_this();
 
-    std::thread([self, inputFilePath, outputDir, translateEnglishToChinese, onProgress, onComplete, startFromPage, initialMarkdown, initialJson]() {
-        self->ExecutePipeline(inputFilePath, outputDir, translateEnglishToChinese, onProgress, onComplete, startFromPage, initialMarkdown, initialJson);
+    std::thread([self, inputFilePath, outputDir, translateEnglishToChinese, fastTextMode, onProgress, onComplete, startFromPage, initialMarkdown, initialJson]() {
+        self->ExecutePipeline(inputFilePath, outputDir, translateEnglishToChinese, fastTextMode, onProgress, onComplete, startFromPage, initialMarkdown, initialJson);
     }).detach();
 }
 
@@ -2524,6 +2831,7 @@ void DocumentPipeline::ExecutePipeline(
     const std::string& inputFilePath,
     const std::string& outputDir,
     bool translateEnglishToChinese,
+    bool fastTextMode,
     DocProgressCallback onProgress,
     DocCompleteCallback onComplete,
     int startFromPage,
@@ -2547,7 +2855,7 @@ void DocumentPipeline::ExecutePipeline(
 
     ParseSession session;
     std::string initError;
-    if (!InitParseSession(inputFilePath, outputDir, translateEnglishToChinese, startFromPage, initialMarkdown, initialJson, session, initError)) {
+    if (!InitParseSession(inputFilePath, outputDir, translateEnglishToChinese, fastTextMode, startFromPage, initialMarkdown, initialJson, session, initError)) {
         m_isRunning.store(false);
         if (aliveToken->load() && onComplete) {
             onComplete(false, "", "", initError);
@@ -2563,7 +2871,7 @@ void DocumentPipeline::ExecutePipeline(
     nextPageFuture = LaunchPreprocessStageOneAsync(
         session.actualStartPage, session.totalPages,
         session.inputFilePath, session.tempCacheDir, session.figuresDir,
-        m_layoutEngine, aliveToken, m_shouldStop, progressCb, session.fullMarkdown
+        m_layoutEngine, aliveToken, m_shouldStop, progressCb, session.fullMarkdown, session.fastTextMode
     );
 
     for (int p = session.actualStartPage; p < session.totalPages; ++p) {
@@ -2582,14 +2890,14 @@ void DocumentPipeline::ExecutePipeline(
             }
             LOG_ERROR("DocumentPipeline", "Failed to preprocess stage 1 for page: " + std::to_string(p + 1));
             if (p + 1 < session.totalPages && !m_shouldStop.load() && aliveToken->load()) {
-                nextPageFuture = LaunchPreprocessStageOneAsync(p + 1, session.totalPages, session.inputFilePath, session.tempCacheDir, session.figuresDir, m_layoutEngine, aliveToken, m_shouldStop, progressCb, session.fullMarkdown);
+                nextPageFuture = LaunchPreprocessStageOneAsync(p + 1, session.totalPages, session.inputFilePath, session.tempCacheDir, session.figuresDir, m_layoutEngine, aliveToken, m_shouldStop, progressCb, session.fullMarkdown, session.fastTextMode);
             }
             continue;
         }
 
         // 核心提速重叠：在当前页进入耗时的阶段 2 OCR 之前，立刻在后台启动下一页阶段 1 预处理
         if (p + 1 < session.totalPages && !m_shouldStop.load() && aliveToken->load()) {
-            nextPageFuture = LaunchPreprocessStageOneAsync(p + 1, session.totalPages, session.inputFilePath, session.tempCacheDir, session.figuresDir, m_layoutEngine, aliveToken, m_shouldStop, progressCb, session.fullMarkdown);
+            nextPageFuture = LaunchPreprocessStageOneAsync(p + 1, session.totalPages, session.inputFilePath, session.tempCacheDir, session.figuresDir, m_layoutEngine, aliveToken, m_shouldStop, progressCb, session.fullMarkdown, session.fastTextMode);
         }
 
         // 阶段 2：多 Worker 并发切片推理

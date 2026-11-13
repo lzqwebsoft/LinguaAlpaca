@@ -370,7 +370,38 @@
         return sanitized;
     }
 
-    // 8. 清理和规范化 LaTeX 数学公式中的多余/嵌套定界符与单引号实体
+    // 8. 清理和规范化 LaTeX 数学公式中的多余/嵌套定界符、单引号实体与不平衡花括号
+    function balanceBracesSinglePass(s) {
+        if (!s) return "";
+        var out = "";
+        var depth = 0;
+        for (var i = 0; i < s.length; i++) {
+            var ch = s[i];
+            if (ch === '\\' && i + 1 < s.length) {
+                out += ch + s[i + 1];
+                i++;
+                continue;
+            }
+            if (ch === '{') {
+                depth++;
+                out += '{';
+            } else if (ch === '}') {
+                if (depth > 0) {
+                    depth--;
+                    out += '}';
+                }
+                // depth === 0 处的游离 '}' 直接丢弃，防止 KaTeX 报 Expected 'EOF', got '}'
+            } else {
+                out += ch;
+            }
+        }
+        while (depth > 0) {
+            out += '}';
+            depth--;
+        }
+        return out;
+    }
+
     function cleanMathFormula(f) {
         if (!f) return "";
         var s = f.trim();
@@ -417,7 +448,15 @@
                 changed = true;
             }
         }
-        return s;
+
+        // 保留末尾 \end{...} 环境结尾，对公式主体执行单趟花括号平衡
+        var endEnvMatch = s.match(/\\end\{[a-zA-Z]+\*?\}\s*$/);
+        if (endEnvMatch) {
+            var body = s.substring(0, endEnvMatch.index);
+            var suffix = s.substring(endEnvMatch.index);
+            return balanceBracesSinglePass(body) + suffix;
+        }
+        return balanceBracesSinglePass(s);
     }
 
     // 9. 隔离由于空行未断开而导致 marked.js 自动将数字累加合并的相邻有序列表
@@ -496,58 +535,58 @@
         return result.join('\n');
     }
 
-    // 10. 核心 Markdown、OTSL 表格与数学公式渲染接口
-    function renderMarkdown(rawMarkdown, baseHref, preserveScroll) {
-        var getScrollY = function() {
-            if (typeof window.scrollY !== 'undefined' && window.scrollY > 0) return window.scrollY;
-            if (typeof window.pageYOffset !== 'undefined' && window.pageYOffset > 0) return window.pageYOffset;
-            if (document.documentElement && document.documentElement.scrollTop > 0) return document.documentElement.scrollTop;
-            if (document.body && document.body.scrollTop > 0) return document.body.scrollTop;
-            return 0;
-        };
+    // 轻量级 FNV-1a 64位风格双 32 位哈希指纹，避免在 JS 堆中长期滞留数 MB 原始 Markdown 副本
+    function computeFastFingerprint(str) {
+        if (!str) return "0:0:0";
+        var h1 = 0x811c9dc5;
+        var h2 = 0x9e3779b9;
+        for (var i = 0; i < str.length; i++) {
+            var c = str.charCodeAt(i);
+            h1 ^= c;
+            h1 = Math.imul(h1, 0x01000193);
+            h2 ^= (c + i);
+            h2 = Math.imul(h2, 0x85ebca6b);
+        }
+        return str.length + ":" + (h1 >>> 0).toString(36) + ":" + (h2 >>> 0).toString(36);
+    }
 
-        var restoreScroll = function(y) {
-            if (y <= 0) return;
-            window.scrollTo(0, y);
-            if (document.documentElement) document.documentElement.scrollTop = y;
-            if (document.body) document.body.scrollTop = y;
-        };
-
-        var savedScrollY = preserveScroll ? getScrollY() : 0;
-
-        if (baseHref) {
-            var baseTag = document.getElementById('baseTag');
-            if (baseTag) {
-                var normalizedBase = baseHref.replace(/\\/g, '/');
-                if (!normalizedBase.endsWith('/')) {
-                    normalizedBase += '/';
-                }
-                if (!normalizedBase.startsWith('file:///') && !normalizedBase.startsWith('http')) {
-                    normalizedBase = 'file:///' + normalizedBase;
-                }
-                baseTag.href = normalizedBase;
+    // 提取并渲染未包裹定界符但含 \mathrm{...} / \frac{...} 等数学宏的裸表达式
+    function extractNakedMathExpressions(text, mathBlocks) {
+        if (!text || !/\\(?:mathrm|mathit|mathbf|mathcal|mathbb|frac|sqrt)\s*\{/.test(text)) {
+            return text;
+        }
+        var nakedExprRegex = /[A-Za-z0-9_\\\{\}\(\)\[\].,;:\+\-\*\/=\s]*\\(?:mathrm|mathit|mathbf|mathcal|mathbb|frac|sqrt)\s*\{[^\n<>]*?(?=\s*$|\s*[，。；！？]|<\/|<br\b)/g;
+        var lines = text.split('\n');
+        for (var i = 0; i < lines.length; i++) {
+            var line = lines[i];
+            if (!line || line.indexOf('%%CODE') !== -1 || line.indexOf('\\') === -1) {
+                continue;
+            }
+            if (/\\(?:mathrm|mathit|mathbf|mathcal|mathbb|frac|sqrt)\s*\{/.test(line)) {
+                lines[i] = line.replace(nakedExprRegex, function(m) {
+                    if (m.indexOf('%%') !== -1) return m;
+                    var trimmed = m.trim();
+                    if (!trimmed) return m;
+                    var leadLen = m.length - m.trimStart().length;
+                    var trailLen = m.length - m.trimEnd().length;
+                    var lead = leadLen > 0 ? m.substring(0, leadLen) : "";
+                    var trail = trailLen > 0 ? m.substring(m.length - trailLen) : "";
+                    var key = "%%MATHINLINE_" + mathBlocks.length + "%%";
+                    mathBlocks.push({ isBlock: false, formula: trimmed });
+                    return lead + key + trail;
+                });
             }
         }
+        return lines.join('\n');
+    }
 
-        var container = document.getElementById('content');
-        if (!container) return;
-
-        // 内容完全一致时短路退出，杜绝无意义的 DOM 重建与重绘
-        if (container._lastRawMarkdown === rawMarkdown && container._lastBaseDir === baseHref) {
-            if (preserveScroll && savedScrollY > 0) {
-                restoreScroll(savedScrollY);
-            }
-            return;
+    // 渲染单个 Markdown 分块为完整 HTML 字符串（含 OTSL 表格、KaTeX 公式、图片懒加载属性注入）
+    function renderChunkHtml(chunkMarkdown) {
+        if (!chunkMarkdown || chunkMarkdown.trim() === '') {
+            return '';
         }
 
-        if (!rawMarkdown || rawMarkdown.trim() === '') {
-            container._lastRawMarkdown = rawMarkdown;
-            container._lastBaseDir = baseHref;
-            container.innerHTML = '';
-            return;
-        }
-
-        var processedMarkdown = preprocessOtslTables(rawMarkdown);
+        var processedMarkdown = preprocessOtslTables(chunkMarkdown);
         processedMarkdown = preprocessLatexDecorations(processedMarkdown);
 
         // 处理已转为 HTML 的表格单元格：统一规范化单引号与公式外换行
@@ -604,6 +643,9 @@
             return key;
         });
 
+        // 兜底提取裸露但含 \mathrm{...} 等数学宏的表达式
+        text = extractNakedMathExpressions(text, mathBlocks);
+
         // 实体转义未知伪标签与 NLP 特殊标记
         text = sanitizeNlpTokensAndPseudoTags(text);
 
@@ -630,9 +672,13 @@
             html = '<pre>' + escapeHtmlText(text) + '</pre>';
         }
 
-        // 还原数学公式并调用 KaTeX 矢量渲染 (并注入 ulem 宏增强与全局渲染缓存)
+        // 还原数学公式并调用 KaTeX 矢量渲染 (仅输出 html 以减半 DOM 节点并控制缓存上限)
         if (!global.__katexCache) {
             global.__katexCache = {};
+            global.__katexCacheCount = 0;
+        } else if (global.__katexCacheCount > 2500) {
+            global.__katexCache = {};
+            global.__katexCacheCount = 0;
         }
 
         for (var i = 0; i < mathBlocks.length; i++) {
@@ -651,7 +697,7 @@
                             displayMode: item.isBlock,
                             throwOnError: false,
                             trust: true,
-                            output: "htmlAndMathml",
+                            output: "html",
                             macros: {
                                 "\\underline": "\\htmlClass{single-underline}{#1}",
                                 "\\uwave": "\\htmlClass{wavy-underline}{#1}",
@@ -664,6 +710,7 @@
                             }
                         });
                         global.__katexCache[cacheKey] = renderedMath;
+                        global.__katexCacheCount++;
                     } else {
                         renderedMath = item.isBlock ? "$$" + formulaStr + "$$" : "$" + formulaStr + "$";
                     }
@@ -685,25 +732,259 @@
             return "<div class='table-wrapper'>" + tableHtml + "</div>";
         });
 
-        container.innerHTML = html;
-        container._lastRawMarkdown = rawMarkdown;
-        container._lastBaseDir = baseHref;
+        // 为图片注入原生懒加载与异步解码属性，避免超长文档在打开时将视口外所有图片解码进内存
+        html = html.replace(/<img\b([^>]*)>/gi, function(match, attrs) {
+            if (/loading\s*=/i.test(attrs)) {
+                return match;
+            }
+            var trimmedAttrs = attrs.replace(/\/\s*$/, '');
+            var selfClosing = /\/\s*$/.test(attrs) ? ' /' : '';
+            return '<img loading="lazy" decoding="async"' + trimmedAttrs + selfClosing + '>';
+        });
 
-        // 绑定图片点击事件 (支持桌面端协议与浏览器全屏预览)
-        var imgs = container.querySelectorAll('img');
-        for (var j = 0; j < imgs.length; j++) {
-            (function(img) {
-                img.addEventListener('click', function(e) {
-                    e.stopPropagation();
-                    var originalSrc = img.getAttribute('data-original-src');
-                    var targetSrc = originalSrc || img.src;
-                    if (typeof notifyImageClick === 'function') {
-                        notifyImageClick(targetSrc);
-                    } else if (targetSrc && !targetSrc.startsWith('data:')) {
-                        window.open(targetSrc, '_blank');
+        return html;
+    }
+
+    // 将长文档安全拆分为多个可独立虚拟化与增量更新的分块（尊重代码块与数学公式边界）
+    function splitMarkdownIntoChunks(rawMarkdown) {
+        if (!rawMarkdown) return [];
+
+        // 按页面分割线 "---" 进行分块（保留后续块的 "---" 以便 <hr> 渲染一致）
+        var chunks = [];
+        var lines = rawMarkdown.split(/\r?\n/);
+        var currentLines = [];
+        var inCodeFence = false;
+        var inMathBlock = false;
+        var currentLen = 0;
+
+        for (var i = 0; i < lines.length; i++) {
+            var line = lines[i];
+            var trimmed = line.trim();
+
+            if (trimmed.startsWith('```') || trimmed.startsWith('~~~')) {
+                inCodeFence = !inCodeFence;
+            } else if (!inCodeFence && trimmed === '$$') {
+                inMathBlock = !inMathBlock;
+            }
+
+            var isPageDivider = (!inCodeFence && !inMathBlock &&
+                                 trimmed === '---' &&
+                                 i > 0 && lines[i - 1].trim() === '' &&
+                                 i + 1 < lines.length && lines[i + 1].trim() === '');
+
+            // 若文档没有显式分页符但单块长度超过 12000 字符，在空行处自动切分块
+            var isSizeSplit = (!inCodeFence && !inMathBlock &&
+                               trimmed === '' && currentLen >= 12000 &&
+                               i + 1 < lines.length && lines[i + 1].trim() !== '---');
+
+            if (isPageDivider && currentLines.length > 0) {
+                chunks.push(currentLines.join('\n'));
+                currentLines = [line];
+                currentLen = line.length;
+                continue;
+            }
+
+            if (isSizeSplit) {
+                chunks.push(currentLines.join('\n'));
+                currentLines = [];
+                currentLen = 0;
+                continue;
+            }
+
+            currentLines.push(line);
+            currentLen += line.length + 1;
+        }
+
+        if (currentLines.length > 0) {
+            chunks.push(currentLines.join('\n'));
+        }
+
+        return chunks;
+    }
+
+    // 确保容器绑定唯一图片点击事件委托（避免超长文档绑定数千个闭包监听）
+    function ensureContainerImgDelegation(container) {
+        if (!container || container._hasImgClickListener) return;
+        container._hasImgClickListener = true;
+        container.addEventListener('click', function(e) {
+            var img = e.target && e.target.closest ? e.target.closest('img') : null;
+            if (!img) return;
+            e.stopPropagation();
+            var originalSrc = img.getAttribute('data-original-src');
+            var targetSrc = originalSrc || img.getAttribute('src') || img.src;
+            if (typeof notifyImageClick === 'function') {
+                notifyImageClick(targetSrc);
+            } else if (targetSrc && !targetSrc.startsWith('data:')) {
+                window.open(targetSrc, '_blank');
+            }
+        });
+    }
+
+    // 同步冲刷后台分片队列，确保 GetRenderedHtml() / TOC 等需要完整 DOM 时无遗漏
+    function flushPendingRender() {
+        if (global.__renderChunkTimer) {
+            clearTimeout(global.__renderChunkTimer);
+            global.__renderChunkTimer = null;
+        }
+        if (typeof global.__flushRemainingChunks === 'function') {
+            var fn = global.__flushRemainingChunks;
+            global.__flushRemainingChunks = null;
+            fn();
+        }
+    }
+
+    // 10. 核心 Markdown、OTSL 表格与数学公式渲染接口（支持按页增量复用、时间切片防卡顿、CSS 视口虚拟化）
+    function renderMarkdown(rawMarkdown, baseHref, preserveScroll) {
+        var getScrollY = function() {
+            if (typeof window.scrollY !== 'undefined' && window.scrollY > 0) return window.scrollY;
+            if (typeof window.pageYOffset !== 'undefined' && window.pageYOffset > 0) return window.pageYOffset;
+            if (document.documentElement && document.documentElement.scrollTop > 0) return document.documentElement.scrollTop;
+            if (document.body && document.body.scrollTop > 0) return document.body.scrollTop;
+            return 0;
+        };
+
+        var restoreScroll = function(y) {
+            if (y <= 0) return;
+            window.scrollTo(0, y);
+            if (document.documentElement) document.documentElement.scrollTop = y;
+            if (document.body) document.body.scrollTop = y;
+        };
+
+        var savedScrollY = preserveScroll ? getScrollY() : 0;
+
+        if (baseHref) {
+            var baseTag = document.getElementById('baseTag');
+            if (baseTag) {
+                var normalizedBase = baseHref.replace(/\\/g, '/');
+                if (!normalizedBase.endsWith('/')) {
+                    normalizedBase += '/';
+                }
+                if (!normalizedBase.startsWith('file:///') && !normalizedBase.startsWith('http')) {
+                    normalizedBase = 'file:///' + normalizedBase;
+                }
+                baseTag.href = normalizedBase;
+            }
+        }
+
+        var container = document.getElementById('content');
+        if (!container) return;
+
+        ensureContainerImgDelegation(container);
+
+        // 指纹比对：内容与路径完全一致时短路退出，杜绝无意义的 DOM 重建与大字符串内存滞留
+        var rawFingerprint = computeFastFingerprint(rawMarkdown || '');
+        if (container._lastRawFingerprint === rawFingerprint && container._lastBaseDir === baseHref) {
+            if (preserveScroll && savedScrollY > 0) {
+                restoreScroll(savedScrollY);
+            }
+            return;
+        }
+
+        // 中止上一次未完成的后台切片任务
+        if (global.__renderChunkTimer) {
+            clearTimeout(global.__renderChunkTimer);
+            global.__renderChunkTimer = null;
+        }
+        global.__flushRemainingChunks = null;
+
+        if (!rawMarkdown || rawMarkdown.trim() === '') {
+            container._lastRawFingerprint = rawFingerprint;
+            container._lastBaseDir = baseHref;
+            container._isChunked = false;
+            container._renderedChunkHashes = [];
+            container.innerHTML = '';
+            return;
+        }
+
+        var chunks = splitMarkdownIntoChunks(rawMarkdown);
+        container._lastRawFingerprint = rawFingerprint;
+
+        // 1. 短文档 / 单块快速路径：直接渲染进 #content，保持零包裹嵌套
+        if (chunks.length <= 1) {
+            container._isChunked = false;
+            container._renderedChunkHashes = [];
+            container._lastBaseDir = baseHref;
+            container.innerHTML = renderChunkHtml(chunks[0] || rawMarkdown);
+        } else {
+            // 2. 长文档 / 多页文档路径：按页分块 + 增量前缀复用 + 时间切片分批挂载
+            var chunkHashes = new Array(chunks.length);
+            for (var c = 0; c < chunks.length; c++) {
+                chunkHashes[c] = computeFastFingerprint(chunks[c]);
+            }
+
+            var oldHashes = (container._isChunked && container._lastBaseDir === baseHref && Array.isArray(container._renderedChunkHashes))
+                ? container._renderedChunkHashes
+                : [];
+
+            // 计算前后相同的前缀页数量（末尾最后一页保留重渲染，防止在同页末尾追加内容被跳过）
+            var commonPrefix = 0;
+            if (oldHashes.length > 0 && container.children.length >= oldHashes.length) {
+                var maxCheck = Math.min(oldHashes.length, chunkHashes.length - 1);
+                while (commonPrefix < maxCheck && oldHashes[commonPrefix] === chunkHashes[commonPrefix]) {
+                    commonPrefix++;
+                }
+            }
+
+            if (commonPrefix === 0) {
+                container.innerHTML = '';
+            } else {
+                while (container.children.length > commonPrefix) {
+                    container.removeChild(container.lastChild);
+                }
+            }
+
+            container._isChunked = true;
+            container._lastBaseDir = baseHref;
+            container._renderedChunkHashes = chunkHashes;
+
+            var createChunkNode = function(mdText) {
+                var section = document.createElement('section');
+                section.className = 'doc-page-chunk';
+                section.innerHTML = renderChunkHtml(mdText);
+                return section;
+            };
+
+            // 首屏或增量批次立即同步渲染（每次最多 3 页，确保主线程阻塞 < 20ms）
+            var syncEnd = Math.min(chunks.length, commonPrefix + 3);
+            var syncFrag = document.createDocumentFragment();
+            for (var s = commonPrefix; s < syncEnd; s++) {
+                syncFrag.appendChild(createChunkNode(chunks[s]));
+            }
+            container.appendChild(syncFrag);
+
+            // 若仍有剩余页，通过时间切片在后台增量挂载，彻底避免 UI 卡死
+            if (syncEnd < chunks.length) {
+                var nextIdx = syncEnd;
+                var renderBatch = function(batchLimit) {
+                    var frag = document.createDocumentFragment();
+                    var count = 0;
+                    while (nextIdx < chunks.length && count < batchLimit) {
+                        frag.appendChild(createChunkNode(chunks[nextIdx]));
+                        nextIdx++;
+                        count++;
                     }
-                });
-            })(imgs[j]);
+                    container.appendChild(frag);
+                };
+
+                global.__flushRemainingChunks = function() {
+                    if (nextIdx < chunks.length) {
+                        renderBatch(chunks.length - nextIdx);
+                    }
+                };
+
+                var scheduleNextSlice = function() {
+                    if (nextIdx >= chunks.length) {
+                        global.__renderChunkTimer = null;
+                        global.__flushRemainingChunks = null;
+                        return;
+                    }
+                    global.__renderChunkTimer = setTimeout(function() {
+                        renderBatch(4);
+                        scheduleNextSlice();
+                    }, 8);
+                };
+                scheduleNextSlice();
+            }
         }
 
         // 恢复视口滚动高度，杜绝跳动
@@ -737,6 +1018,7 @@
     global.preprocessOtslTables = preprocessOtslTables;
     global.sanitizeNlpTokensAndPseudoTags = sanitizeNlpTokensAndPseudoTags;
     global.cleanMathFormula = cleanMathFormula;
+    global.flushPendingRender = flushPendingRender;
     global.renderMarkdown = renderMarkdown;
     global.renderDocument = renderMarkdown;
 

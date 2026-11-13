@@ -9,7 +9,8 @@ enum class ButtonStyle {
     Secondary,
     Green,
     Danger,
-    Close
+    Close,
+    CheckBox
 };
 
 class CustomButton : public wxControl {
@@ -23,6 +24,16 @@ public:
     void SetButtonStyle(ButtonStyle style) { m_buttonStyle = style; Refresh(); }
     void SetIcon(const char* svgContent, const wxSize& iconSize = wxSize(16, 16), const wxColour& tintColor = wxNullColour);
     void SetIconBundle(const wxBitmapBundle& bundle) { m_iconBundle = bundle; Refresh(); }
+
+    // CheckBox 模式接口 (ButtonStyle::CheckBox)
+    bool GetValue() const { return m_isChecked; }
+    void SetValue(bool checked) {
+        if (m_isChecked != checked) {
+            m_isChecked = checked;
+            Refresh();
+        }
+    }
+    bool IsChecked() const { return m_isChecked; }
 
 protected:
     wxSize DoGetBestSize() const override;
@@ -43,6 +54,7 @@ private:
     wxBitmapBundle m_iconBundle;
     bool m_isHovered{false};
     bool m_isPressed{false};
+    bool m_isChecked{false};
 };
 
 } // namespace LinguaAlpaca::UI

@@ -659,6 +659,7 @@ void DocLayoutEngine::SuppressContainedOrDuplicateBoxes(std::vector<LayoutElemen
             // B. 包含性抑制 (IoS >= cfg.containmentIosThreshold)
             // 支持同类合并、文本类元素包含合并、段落文本包含行内/块级公式、以及表格包含内部公式/文本/数字子块的抑制
             if (ios >= cfg.containmentIosThreshold && (sameLabel || bothTextLike || textContainsFormula || tableContainsSubBox)) {
+                const bool involvesFormula = (isFormulaA || isFormulaB || boxA.hasNestedFormula || boxB.hasNestedFormula);
                 // 如果两框面积高度接近 (IoU >= 0.70)，按结构特异性或置信度择优
                 if (iou >= 0.70f) {
                     if (isTableA && !isTableB) {
@@ -667,8 +668,14 @@ void DocLayoutEngine::SuppressContainedOrDuplicateBoxes(std::vector<LayoutElemen
                         suppressed[i] = true;
                         break;
                     } else if (boxA.score >= boxB.score) {
+                        if (involvesFormula && (boxA.type == LayoutElementType::Text || boxA.type == LayoutElementType::Title)) {
+                            boxA.hasNestedFormula = true;
+                        }
                         suppressed[j] = true;
                     } else {
+                        if (involvesFormula && (boxB.type == LayoutElementType::Text || boxB.type == LayoutElementType::Title)) {
+                            boxB.hasNestedFormula = true;
+                        }
                         suppressed[i] = true;
                         break;
                     }
@@ -688,6 +695,9 @@ void DocLayoutEngine::SuppressContainedOrDuplicateBoxes(std::vector<LayoutElemen
                 largeBox.score = (std::max)(largeBox.score, smallBox.score);
                 if (largeBox.readingOrder < 0 && smallBox.readingOrder >= 0) {
                     largeBox.readingOrder = smallBox.readingOrder;
+                }
+                if (involvesFormula && (largeBox.type == LayoutElementType::Text || largeBox.type == LayoutElementType::Title)) {
+                    largeBox.hasNestedFormula = true;
                 }
 
                 LOG_DEBUG("DocLayoutEngine", 

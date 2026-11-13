@@ -499,31 +499,22 @@ void OcrView::InitUI() {
     m_stopBtn->SetIcon(SVG::STOP, dip(16, 16), *wxWHITE);
     m_stopBtn->Hide();
 
-    m_enableTranslateCheck = new wxCheckBox(this, wxID_ANY, L"双语对照翻译 (Hy-MT2)");
+    m_enableTranslateCheck = new CustomButton(this, wxID_ANY, L"双语对照翻译 (Hy-MT2)", ButtonStyle::CheckBox);
     m_enableTranslateCheck->SetValue(false);
     m_enableTranslateCheck->SetFont(ThemeFont::GetFont(FontRole::Control));
     m_enableTranslateCheck->SetForegroundColour(palette.textPrimary);
     m_enableTranslateCheck->SetToolTip(L"启用后自动调用大模型翻译段落，并在原文下方保持一致的 Markdown 排版呈现译文");
     m_enableTranslateCheck->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent& ev) {
-        if (!m_loadedImagePath.IsEmpty()) {
-            wxFileName docFn(m_loadedImagePath);
-            std::string baseDocName = docFn.GetName().ToUTF8().data();
-            wxString outDir = docFn.GetPath() + "/" + wxString::FromUTF8(baseDocName);
-            wxString jsonPath = outDir + "/" + wxString::FromUTF8(baseDocName) + ".json";
-            if (wxFileExists(jsonPath)) {
-                try {
-                    std::ifstream f(std::string(jsonPath.ToUTF8().data()), std::ios::binary);
-                    if (f) {
-                        nlohmann::json j;
-                        f >> j;
-                        f.close();
-                        j["translate_enabled"] = ev.IsChecked();
-                        std::ofstream out(std::string(jsonPath.ToUTF8().data()), std::ios::binary);
-                        out << j.dump(2);
-                    }
-                } catch (...) {}
-            }
-        }
+        PersistDocumentConfigOption("translate_enabled", ev.IsChecked());
+    });
+
+    m_fastTextModeCheck = new CustomButton(this, wxID_ANY, L"纯文本极速模式", ButtonStyle::CheckBox);
+    m_fastTextModeCheck->SetValue(false);
+    m_fastTextModeCheck->SetFont(ThemeFont::GetFont(FontRole::Control));
+    m_fastTextModeCheck->SetForegroundColour(palette.textPrimary);
+    m_fastTextModeCheck->SetToolTip(L"启用后对文字版 PDF 的正文与标题直接提取内嵌文本（跳过耗时视觉 OCR）；公式、表格及扫描页面仍自动使用 OCR 识别");
+    m_fastTextModeCheck->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent& ev) {
+        PersistDocumentConfigOption("fast_text_mode", ev.IsChecked());
     });
 
     m_openFolderBtn = new CustomButton(this, wxID_ANY, L"打开结果目录", ButtonStyle::Secondary, wxDefaultPosition, dip(155, 42));
@@ -533,6 +524,7 @@ void OcrView::InitUI() {
     bottomSizer->Add(m_recognizeBtn, 0);
     bottomSizer->Add(m_stopBtn, 0);
     bottomSizer->Add(m_enableTranslateCheck, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 16_dip);
+    bottomSizer->Add(m_fastTextModeCheck, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 16_dip);
     bottomSizer->AddStretchSpacer(1);
     bottomSizer->Add(m_openFolderBtn, 0, wxALIGN_CENTER_VERTICAL);
 
@@ -653,8 +645,12 @@ void OcrView::UpdateTheme() {
         m_recognizeBtn->Refresh();
     if (m_stopBtn)
         m_stopBtn->Refresh();
-    if (m_enableTranslateCheck)
+    if (m_enableTranslateCheck) {
         m_enableTranslateCheck->Refresh();
+    }
+    if (m_fastTextModeCheck) {
+        m_fastTextModeCheck->Refresh();
+    }
 
     if (m_dropzonePanel) {
         m_dropzonePanel->SetBackgroundColour(palette.cardBg);
@@ -895,6 +891,9 @@ void OcrView::LoadImageFile(const wxString& filePath) {
     m_pdfScrollY = 0;
 
     if (m_isPdfDoc) {
+        if (m_fastTextModeCheck) {
+            m_fastTextModeCheck->Enable();
+        }
         m_pdfTotalPages = PdfHelper::GetPageCount(filePath.ToUTF8().data());
         m_pdfCurrentPage = 0;
         if (PdfHelper::RenderPage(filePath.ToUTF8().data(), 0, m_loadedImage, 1000)) {
@@ -915,6 +914,10 @@ void OcrView::LoadImageFile(const wxString& filePath) {
             m_progressPanel->SetIdle(wxString::Format(L"PDF 文档已就绪 (共 %d 页)，支持垂直滑动条或滚轮滑动翻页", m_pdfTotalPages));
         }
     } else {
+        if (m_fastTextModeCheck) {
+            m_fastTextModeCheck->SetValue(false);
+            m_fastTextModeCheck->Disable();
+        }
         m_pdfTotalPages = 1;
         m_pdfCurrentPage = 0;
         m_loadedImage.LoadFile(filePath);
@@ -933,6 +936,30 @@ void OcrView::LoadImageFile(const wxString& filePath) {
 
     // 检查并弹框提示是否恢复之前的历史进度
     CheckAndPromptResume(filePath);
+}
+
+void OcrView::PersistDocumentConfigOption(const char* key, bool value) {
+    if (m_loadedImagePath.IsEmpty() || !key)
+        return;
+
+    wxFileName docFn(m_loadedImagePath);
+    std::string baseDocName = docFn.GetName().ToUTF8().data();
+    wxString outDir = docFn.GetPath() + "/" + wxString::FromUTF8(baseDocName);
+    wxString jsonPath = outDir + "/" + wxString::FromUTF8(baseDocName) + ".json";
+    if (!wxFileExists(jsonPath))
+        return;
+
+    try {
+        std::ifstream f(std::string(jsonPath.ToUTF8().data()), std::ios::binary);
+        if (f) {
+            nlohmann::json j;
+            f >> j;
+            f.close();
+            j[key] = value;
+            std::ofstream out(std::string(jsonPath.ToUTF8().data()), std::ios::binary);
+            out << j.dump(2);
+        }
+    } catch (...) {}
 }
 
 bool OcrView::CheckAndPromptResume(const wxString& filePath) {
@@ -956,6 +983,9 @@ bool OcrView::CheckAndPromptResume(const wxString& filePath) {
 
     if (m_enableTranslateCheck) {
         m_enableTranslateCheck->SetValue(resumeInfo.translateEnabled);
+    }
+    if (m_fastTextModeCheck && m_isPdfDoc) {
+        m_fastTextModeCheck->SetValue(resumeInfo.fastTextMode);
     }
 
     int total = resumeInfo.totalPages > 0 ? resumeInfo.totalPages : (m_pdfTotalPages > 0 ? m_pdfTotalPages : 1);
@@ -1388,6 +1418,10 @@ bool OcrView::PasteImageFromClipboard() {
         m_isPdfDoc = false;
         m_pdfTotalPages = 1;
         m_pdfCurrentPage = 0;
+        if (m_fastTextModeCheck) {
+            m_fastTextModeCheck->SetValue(false);
+            m_fastTextModeCheck->Disable();
+        }
 
         if (!filePath.IsEmpty()) {
             wxFileName docFn(filePath);
@@ -1513,11 +1547,17 @@ void OcrView::SetState(OcrTaskState state) {
         if (m_enableTranslateCheck) {
             m_enableTranslateCheck->Disable();
         }
+        if (m_fastTextModeCheck) {
+            m_fastTextModeCheck->Disable();
+        }
     } else {
         m_recognizeBtn->Show();
         m_stopBtn->Hide();
         if (m_enableTranslateCheck) {
             m_enableTranslateCheck->Enable();
+        }
+        if (m_fastTextModeCheck) {
+            m_fastTextModeCheck->Enable(!m_loadedImage.IsOk() || m_isPdfDoc);
         }
     }
     if (m_dropzonePanel) {
@@ -1594,12 +1634,17 @@ void OcrView::DoExecuteDocumentPipeline(const std::string& docPath) {
     }
 
     bool enableTranslate = m_enableTranslateCheck ? m_enableTranslateCheck->GetValue() : false;
+    bool fastTextMode = (m_isPdfDoc && m_fastTextModeCheck) ? m_fastTextModeCheck->GetValue() : false;
 
     if (m_progressPanel) {
         if (m_resumeFromPage > 0) {
             m_progressPanel->SetStarting(wxString::Format(
                 enableTranslate ? L"正在准备断点续传，将从第 %d 页接续解析与双语对照翻译..." : L"正在准备断点续传，将从第 %d 页接续解析...",
                 m_resumeFromPage + 1));
+        } else if (fastTextMode) {
+            m_progressPanel->SetStarting(
+                enableTranslate ? L"正在启动 版面分析 - PDF极速文本提取(公式自动OCR) - 双语对照翻译 流水线..."
+                                : L"正在启动 版面分析 - PDF极速文本提取(公式自动OCR) 文档解析流水线...");
         } else {
             m_progressPanel->SetStarting(
                 enableTranslate ? L"正在启动 版面分析 - 视觉OCR - 双语对照翻译 端到端文档解析流水线..." : L"正在启动 版面分析 - 视觉OCR 文档解析流水线...");
@@ -1611,7 +1656,7 @@ void OcrView::DoExecuteDocumentPipeline(const std::string& docPath) {
     int totalPages = m_pdfTotalPages > 0 ? m_pdfTotalPages : 1;
 
     // Helper: 真正启动 Pipeline 执行
-    auto launchPipeline = [this, docPath, enableTranslate, totalPages]() {
+    auto launchPipeline = [this, docPath, enableTranslate, fastTextMode, totalPages]() {
         wxFileName fn(wxString::FromUTF8(docPath));
         std::string outDir = std::string(fn.GetPath().ToUTF8().data()) + "/" + std::string(fn.GetName().ToUTF8().data());
         m_lastOutputDir = wxString::FromUTF8(outDir);
@@ -1634,6 +1679,8 @@ void OcrView::DoExecuteDocumentPipeline(const std::string& docPath) {
                     percent = 15;
                 else if (stageDesc.find("版面分析") != std::string::npos)
                     percent = 35;
+                else if (stageDesc.find("极速文本提取") != std::string::npos)
+                    percent = 80;
                 else if (stageDesc.find("识别") != std::string::npos) {
                     int elIdx = 0, elTotal = 0;
                     const char* s = strchr(stageDesc.c_str(), '(');
@@ -1652,6 +1699,8 @@ void OcrView::DoExecuteDocumentPipeline(const std::string& docPath) {
                     pageFraction = 0.1;
                 else if (stageDesc.find("版面分析") != std::string::npos)
                     pageFraction = 0.35;
+                else if (stageDesc.find("极速文本提取") != std::string::npos)
+                    pageFraction = 0.85;
                 else if (stageDesc.find("识别") != std::string::npos) {
                     int elIdx = 0, elTotal = 0;
                     const char* s = strchr(stageDesc.c_str(), '(');
@@ -1813,8 +1862,28 @@ void OcrView::DoExecuteDocumentPipeline(const std::string& docPath) {
             onComplete,
             m_resumeFromPage,
             m_resumeInitialMarkdown,
-            m_resumeInitialJson
+            m_resumeInitialJson,
+            fastTextMode
         );
+    };
+
+    // Helper: 按需准备翻译模型并启动流水线
+    auto ensureTranslationAndLaunch = [this, totalPages, enableTranslate, launchPipeline]() {
+        if (enableTranslate) {
+            m_modelManager->EnsureModelAsync(
+                TargetModelType::Translation,
+                BindUi([this, totalPages](const std::string& statusMsg) {
+                    if (m_progressPanel) {
+                        m_progressPanel->SetProgress(0, totalPages, 12, L"正在准备翻译大模型 (llama.cpp): " + wxString::FromUTF8(statusMsg));
+                    }
+                }),
+                BindUi([this, launchPipeline](bool transOk, const ServerStatusInfo& transInfo) {
+                    launchPipeline();
+                })
+            );
+        } else {
+            launchPipeline();
+        }
     };
 
     // 1. 先确保版面分析模型装载就绪 (若未配置则优雅降级为单阶段全页识别)
@@ -1825,8 +1894,15 @@ void OcrView::DoExecuteDocumentPipeline(const std::string& docPath) {
                 m_progressPanel->SetProgress(0, totalPages, 3, L"正在准备版面分析引擎: " + wxString::FromUTF8(statusMsg));
             }
         }),
-        BindUi([this, docPath, totalPages, enableTranslate, launchPipeline](bool layoutOk, const ServerStatusInfo& layoutInfo) {
-            // 2. 继续确保 OCR 视觉模型服务就绪 (PaddleOCR-VL via llama.cpp)
+        BindUi([this, totalPages, fastTextMode, ensureTranslationAndLaunch](bool layoutOk, const ServerStatusInfo& layoutInfo) {
+            // 若开启了 PDF 纯文本极速模式，无需在启动前强制等待装载庞大的 OCR 视觉模型；
+            // 流水线在遇到公式/表格或扫描页时会自动按需唤醒 OCR 服务
+            if (fastTextMode) {
+                ensureTranslationAndLaunch();
+                return;
+            }
+
+            // 2. 标准模式：继续确保 OCR 视觉模型服务就绪 (PaddleOCR-VL via llama.cpp)
             m_modelManager->EnsureModelAsync(
                 TargetModelType::Ocr,
                 BindUi([this, layoutOk, totalPages](const std::string& statusMsg) {
@@ -1836,7 +1912,7 @@ void OcrView::DoExecuteDocumentPipeline(const std::string& docPath) {
                     }
                     UpdateStatusBadge();
                 }),
-                BindUi([this, docPath, totalPages, enableTranslate, launchPipeline](bool ocrOk, const ServerStatusInfo& ocrInfo) {
+                BindUi([this, ensureTranslationAndLaunch](bool ocrOk, const ServerStatusInfo& ocrInfo) {
                     if (!ocrOk) {
                         SetState(OcrTaskState::Idle);
                         if (m_progressPanel) {
@@ -1845,24 +1921,7 @@ void OcrView::DoExecuteDocumentPipeline(const std::string& docPath) {
                         UpdateStatusBadge();
                         return;
                     }
-
-                    if (enableTranslate) {
-                        // 3. 若启用了双语对照翻译，确保 翻译大模型服务就绪 (Hy-MT2 via llama.cpp)
-                        m_modelManager->EnsureModelAsync(
-                            TargetModelType::Translation,
-                            BindUi([this, totalPages](const std::string& statusMsg) {
-                                if (m_progressPanel) {
-                                    m_progressPanel->SetProgress(0, totalPages, 12, L"视觉识别服务已就绪，正在准备翻译大模型 (llama.cpp): " + wxString::FromUTF8(statusMsg));
-                                }
-                            }),
-                            BindUi([this, launchPipeline](bool transOk, const ServerStatusInfo& transInfo) {
-                                launchPipeline();
-                            })
-                        );
-                    } else {
-                        // 未开启翻译，直接执行 OCR 结构化流水线
-                        launchPipeline();
-                    }
+                    ensureTranslationAndLaunch();
                 })
             );
         })

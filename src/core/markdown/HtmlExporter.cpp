@@ -97,7 +97,7 @@ struct CachedImageDataUrl {
 
 static std::mutex s_imageDataUrlMutex;
 static std::unordered_map<std::string, CachedImageDataUrl> s_imageDataUrlCache;
-constexpr size_t MAX_IMAGE_DATA_URL_CACHE_SIZE = 2000;
+constexpr size_t MAX_IMAGE_DATA_URL_CACHE_SIZE = 64;
 
 std::string ReadTextFile(const wxString& filePath) {
     if (!wxFileExists(filePath)) return "";
@@ -401,9 +401,10 @@ std::string HtmlExporter::GenerateStandaloneHtml(
 ) {
     bool hasPreRenderedDom = !preRenderedHtml.empty();
 
-    // 1. 若宿主未提供 preRenderedHtml，才需要处理 Markdown 并转为客户端渲染 JSON；
-    //    若已提供 preRenderedHtml，则去除冗余 Markdown 原文（避免文档和 Base64 图片在 HTML 和 JS 里重复存储两份），
-    //    从而显著缩减导出的 HTML 单文件体积并加快移动端加载速度。
+    // 1. 仅在导出独立单文件 HTML 时按需内嵌 Base64 图片：
+    //    - 若宿主提供了 preRenderedHtml（来自桌面端零 Base64 预览 DOM），则对其内的相对路径 <img> 按需注入 Base64；
+    //    - 若未提供 preRenderedHtml，则对原始 Markdown 注入 Base64 后交由客户端脚本渲染。
+    std::string processedPreRenderedHtml = hasPreRenderedDom ? EmbedLocalImagesAsBase64(preRenderedHtml, baseDir) : "";
     std::string jsonMd;
     if (!hasPreRenderedDom) {
         std::string processedMd = EmbedLocalImagesAsBase64(markdown, baseDir);
@@ -411,6 +412,12 @@ std::string HtmlExporter::GenerateStandaloneHtml(
         ReplaceAll(jsonMd, "</", "<\\/");
     } else {
         jsonMd = "null";
+    }
+
+    // 导出后立即释放静态 Base64 缓存，防止大图库常驻内存
+    {
+        std::lock_guard<std::mutex> lock(s_imageDataUrlMutex);
+        s_imageDataUrlCache.clear();
     }
 
     // 2. 读取本地静态模板 export.html 与离线脚本/样式
@@ -457,7 +464,7 @@ std::string HtmlExporter::GenerateStandaloneHtml(
         ReplaceAll(html, "{{MARKED_JS}}", hasPreRenderedDom ? "" : s_cachedAssets.markedJs);
         ReplaceAll(html, "{{KATEX_JS}}", hasPreRenderedDom ? "" : s_cachedAssets.katexJs);
         ReplaceAll(html, "{{RENDER_JS}}", hasPreRenderedDom ? "" : s_cachedAssets.renderJs);
-        ReplaceAll(html, "{{RENDERED_CONTENT}}", preRenderedHtml);
+        ReplaceAll(html, "{{RENDERED_CONTENT}}", processedPreRenderedHtml);
         ReplaceAll(html, "{{RAW_MARKDOWN_JSON}}", jsonMd);
 
         return html;
@@ -484,7 +491,7 @@ std::string HtmlExporter::GenerateStandaloneHtml(
         "        <h1 style='color:#3a2a1a;font-size:26px;'>" + safeTitle + "</h1>\n"
         "        <div style='color:#6b6355;font-size:13px;'>LinguaAlpaca 文档解析结果</div>\n"
         "    </header>\n"
-        "    <main class='content-panel'><div id='content'>" + preRenderedHtml + "</div></main>\n"
+        "    <main class='content-panel'><div id='content'>" + processedPreRenderedHtml + "</div></main>\n"
         "    <script>\n"
         "        var rawMarkdownData = " + jsonMd + ";\n"
         "        function renderMarkdown(md) {\n"

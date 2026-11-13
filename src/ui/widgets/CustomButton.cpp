@@ -19,6 +19,9 @@ CustomButton::CustomButton(wxWindow *parent, wxWindowID id,
     SetMinSize(size);
     SetMaxSize(size);
     SetSize(size);
+  } else if (m_buttonStyle == ButtonStyle::CheckBox) {
+    SetFont(ThemeFont::GetFont(FontRole::Control));
+    SetInitialSize(DoGetBestSize());
   }
 
   Bind(wxEVT_PAINT, &CustomButton::OnPaint, this);
@@ -69,6 +72,14 @@ wxSize CustomButton::DoGetBestSize() const {
   if (m_explicitSize.x > 0 && m_explicitSize.y > 0) {
     return m_explicitSize;
   }
+  if (m_buttonStyle == ButtonStyle::CheckBox) {
+    wxClientDC dc(const_cast<CustomButton *>(this));
+    wxFont font = GetFont().IsOk() ? GetFont() : ThemeFont::GetFont(FontRole::Control);
+    dc.SetFont(font);
+    wxSize extent = m_label.IsEmpty() ? wxSize(0, dc.GetCharHeight()) : dc.GetTextExtent(m_label);
+    int gap = m_label.IsEmpty() ? 0 : 8_dip;
+    return wxSize(2_dip + 18_dip + gap + extent.x + 4_dip, (std::max)(extent.y + 8_dip, 28_dip));
+  }
   if (m_label.IsEmpty()) {
     int s = 28_dip;
     return wxSize(s, s);
@@ -94,6 +105,57 @@ void CustomButton::OnPaint(wxPaintEvent &WXUNUSED(event)) {
   std::unique_ptr<wxGraphicsContext> gc(wxGraphicsContext::Create(dc));
   if (!gc)
     return;
+
+  if (m_buttonStyle == ButtonStyle::CheckBox) {
+    bool enabled = IsEnabled();
+    bool isDark = (ThemeManager::GetInstance().GetCurrentTheme() == ThemeMode::Dark);
+    double boxSize = static_cast<double>(18_dip);
+    double boxX = static_cast<double>(2_dip);
+    double boxY = (size.y - boxSize) / 2.0;
+    double checkRadius = 5.0_dip;
+
+    if (m_isChecked) {
+      wxColour fillColour = enabled
+          ? (m_isHovered ? palette.accentHover : palette.accentPrimary)
+          : palette.cardBorder;
+      gc->SetBrush(gc->CreateBrush(wxBrush(fillColour)));
+      gc->SetPen(*wxTRANSPARENT_PEN);
+      gc->DrawRoundedRectangle(boxX, boxY, boxSize, boxSize, checkRadius);
+
+      wxColour checkColour = enabled ? *wxWHITE : palette.textSecondary;
+      gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(checkColour).Width(2.0_dip).Cap(wxCAP_ROUND).Join(wxJOIN_ROUND)));
+      wxGraphicsPath path = gc->CreatePath();
+      path.MoveToPoint(boxX + 4.5_dip, boxY + 9.2_dip);
+      path.AddLineToPoint(boxX + 7.8_dip, boxY + 12.5_dip);
+      path.AddLineToPoint(boxX + 13.5_dip, boxY + 5.8_dip);
+      gc->StrokePath(path);
+    } else {
+      wxColour fillColour = GetParent() ? GetParent()->GetBackgroundColour() : palette.windowBg;
+      if (enabled) {
+        fillColour = m_isHovered
+            ? (isDark ? wxColour(255, 255, 255, 20) : wxColour(0, 0, 0, 10))
+            : palette.cardBg;
+      }
+      wxColour boxBorder = enabled
+          ? (m_isHovered ? palette.accentPrimary : palette.cardBorderActive)
+          : palette.cardBorder;
+      gc->SetBrush(gc->CreateBrush(wxBrush(fillColour)));
+      gc->SetPen(gc->CreatePen(wxPen(boxBorder, enabled ? 1.5_dip : 1.0_dip)));
+      gc->DrawRoundedRectangle(boxX, boxY, boxSize, boxSize, checkRadius);
+    }
+
+    if (!m_label.IsEmpty()) {
+      wxFont font = GetFont().IsOk() ? GetFont() : ThemeFont::GetFont(FontRole::Control);
+      wxColour labelColour = !enabled
+          ? palette.textSecondary
+          : (m_isHovered ? palette.accentPrimary : palette.textPrimary);
+      gc->SetFont(font, labelColour);
+      double textW = 0.0, textH = 0.0;
+      gc->GetTextExtent(m_label, &textW, &textH);
+      gc->DrawText(m_label, boxX + boxSize + static_cast<double>(8_dip), (size.y - textH) / 2.0);
+    }
+    return;
+  }
 
   wxColour bgColour;
   wxColour textColour;
@@ -252,6 +314,19 @@ void CustomButton::OnLeftUp(wxMouseEvent &event) {
   }
   if (m_isPressed) {
     m_isPressed = false;
+    if (m_buttonStyle == ButtonStyle::CheckBox) {
+      if (GetClientRect().Contains(event.GetPosition())) {
+        m_isChecked = !m_isChecked;
+        Refresh();
+        wxCommandEvent evt(wxEVT_CHECKBOX, GetId());
+        evt.SetEventObject(this);
+        evt.SetInt(m_isChecked ? 1 : 0);
+        ProcessWindowEvent(evt);
+      } else {
+        Refresh();
+      }
+      return;
+    }
     Refresh();
 
     // 触发按钮事件

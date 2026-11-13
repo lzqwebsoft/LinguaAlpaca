@@ -332,9 +332,9 @@ void MarkdownView::DoRenderMarkdown(bool preserveScroll) {
         return;
 
     try {
-        std::string processedMd = HtmlExporter::EmbedLocalImagesAsBase64(m_rawMarkdown, m_baseDir);
-
-        std::string jsonMd = nlohmann::json(processedMd).dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
+        // 桌面端预览基于 file:/// + <base id="baseTag"> 直接从本地磁盘懒加载 imgs/ 图片，
+        // 彻底避免在此处将所有本地图片编码为巨型 Base64 字符串导致 IPC 与 V8 内存暴涨
+        std::string jsonMd = nlohmann::json(m_rawMarkdown).dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
         std::string jsonBase = nlohmann::json(m_baseDir).dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
 
         wxString jsCall = "renderMarkdown(" + wxString::FromUTF8(jsonMd) + ", "
@@ -414,7 +414,10 @@ wxString MarkdownView::GetRenderedHtml() const {
         return wxEmptyString;
     }
     wxString html;
-    if (m_webView->RunScript("document.getElementById('content') ? document.getElementById('content').innerHTML : '';", &html)) {
+    if (m_webView->RunScript(
+            "(function(){ if (typeof flushPendingRender === 'function') flushPendingRender(); "
+            "var el = document.getElementById('content'); return el ? el.innerHTML : ''; })();",
+            &html)) {
         return html;
     }
     return wxEmptyString;

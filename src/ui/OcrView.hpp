@@ -80,6 +80,7 @@ private:
     void SetState(OcrTaskState state);
     void LoadImageFile(const wxString& filePath);
     bool CheckAndPromptResume(const wxString& filePath);
+    void PersistDocumentConfigOption(const char* key, bool value);
     bool PasteImageFromClipboard();
     void ShowDropzoneContextMenu(const wxPoint& pos);
     void UpdateDropzoneUI();
@@ -177,7 +178,8 @@ private:
     // Bottom Action Bar Controls
     CustomButton* m_recognizeBtn{nullptr};
     CustomButton* m_stopBtn{nullptr};
-    wxCheckBox* m_enableTranslateCheck{nullptr};
+    CustomButton* m_enableTranslateCheck{nullptr};
+    CustomButton* m_fastTextModeCheck{nullptr};
     CustomButton* m_openFolderBtn{nullptr};
 
     std::function<void(const wxString&)> m_onTranslateCallback;

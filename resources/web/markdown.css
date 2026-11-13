@@ -56,6 +56,12 @@ html, body {
     max-width: 100%;
 }
 
+/* 长文档分页区块视口虚拟化：屏幕外页面自动跳过布局与光栅化，大幅降低内存占用 */
+.doc-page-chunk {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 520px;
+}
+
 /* 标题样式 */
 h1, h2, h3, h4, h5, h6 {
     color: var(--text-primary);

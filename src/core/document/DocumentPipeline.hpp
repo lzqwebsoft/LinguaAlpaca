@@ -70,6 +70,7 @@ public:
         int completedPages{0};       // 已经完全确认完成的页数 (lastProcessedPage - 1)
         bool isCompleted{false};
         bool translateEnabled{false}; // 文档专属翻译配置 (从历史解析 JSON 中恢复)
+        bool fastTextMode{false};     // 文档专属纯文本极速提取配置 (从历史解析 JSON 中恢复)
         std::string markdown;       // 完整 Markdown 结果 (未翻译为原文，双语翻译为对照文本)
         std::string jsonStructured;
     };
@@ -80,6 +81,9 @@ public:
     // 提取指定页数前（包含第 pageCount 页）的 Markdown 内容
     static std::string ExtractMarkdownUpToPage(const std::string& fullMd, int pageCount);
 
+    // 判定版面元素在“纯文本极速模式”下是否允许直接提取 PDF 原生文本（独立公式、含行内公式段落、表格、图表、插图返回 false）
+    static bool IsElementEligibleForFastText(const LayoutElement& elem);
+
     // 启动或断点恢复解析任务
     void StartParseAsync(
         const std::string& inputFilePath,
@@ -89,7 +93,8 @@ public:
         DocCompleteCallback onComplete,
         int startFromPage = 0,
         const std::string& initialMarkdown = "",
-        const std::string& initialJson = ""
+        const std::string& initialJson = "",
+        bool fastTextMode = false
     );
 
     void Cancel();
@@ -170,11 +175,20 @@ private:
         const std::string& inputFilePath,
         const std::string& outputDir,
         bool translateEnglishToChinese,
+        bool fastTextMode,
         int startFromPage,
         const std::string& initialMarkdown,
         const std::string& initialJson,
         ParseSession& session,
         std::string& errorMsg
+    );
+
+    bool EnsureOcrModelReadyForPage(
+        int p,
+        int totalPages,
+        DocProgressCallback onProgress,
+        const std::string& currentMarkdown,
+        std::string& outError
     );
 
     std::shared_ptr<PreprocessedPage> FetchOrWaitStageOne(
@@ -230,6 +244,7 @@ private:
         const std::string& inputFilePath,
         const std::string& outputDir,
         bool translateEnglishToChinese,
+        bool fastTextMode,
         DocProgressCallback onProgress,
         DocCompleteCallback onComplete,
         int startFromPage,

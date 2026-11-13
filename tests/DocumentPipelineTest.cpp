@@ -17,11 +17,14 @@ using namespace LinguaAlpaca;
 namespace {
 
 std::string FindTestAsset(const std::string& relativePath) {
-    if (wxFileExists(wxString::FromUTF8(relativePath))) return relativePath;
+    if (wxFileExists(wxString::FromUTF8(relativePath)))
+        return relativePath;
     std::string cand1 = "../" + relativePath;
-    if (wxFileExists(wxString::FromUTF8(cand1))) return cand1;
+    if (wxFileExists(wxString::FromUTF8(cand1)))
+        return cand1;
     std::string cand2 = "../../" + relativePath;
-    if (wxFileExists(wxString::FromUTF8(cand2))) return cand2;
+    if (wxFileExists(wxString::FromUTF8(cand2)))
+        return cand2;
     return relativePath;
 }
 
@@ -30,10 +33,12 @@ std::string ResolveTestLayoutModelPath() {
     try {
         ConfigManager cfgMgr;
         modelPath = cfgMgr.GetConfig().layoutModelPath;
-    } catch (...) {}
+    } catch (...) {
+    }
 
     std::string resolvedPath = DocLayoutEngine::ResolveLayoutModelPath(modelPath);
-    if (!resolvedPath.empty()) return resolvedPath;
+    if (!resolvedPath.empty())
+        return resolvedPath;
 
     wxString userDir = wxStandardPaths::Get().GetUserConfigDir() + wxFileName::GetPathSeparator() + "LinguaAlpaca";
     wxString iniPath = userDir + wxFileName::GetPathSeparator() + "config.ini";
@@ -41,29 +46,30 @@ std::string ResolveTestLayoutModelPath() {
         wxFileConfig fileConfig("LinguaAlpaca", "", iniPath);
         std::string pathInFile = fileConfig.Read("/LayoutModel/Path", "").ToUTF8().data();
         resolvedPath = DocLayoutEngine::ResolveLayoutModelPath(pathInFile);
-        if (!resolvedPath.empty()) return resolvedPath;
+        if (!resolvedPath.empty())
+            return resolvedPath;
     }
 
     wxString envPath;
     if (wxGetEnv("LINGUA_LAYOUT_MODEL_PATH", &envPath) && !envPath.IsEmpty()) {
         resolvedPath = DocLayoutEngine::ResolveLayoutModelPath(envPath.ToUTF8().data());
-        if (!resolvedPath.empty()) return resolvedPath;
+        if (!resolvedPath.empty())
+            return resolvedPath;
     }
 
-    const std::vector<std::string> defaultCandidates = {
-        "models/PP-DocLayoutV3.onnx",
-        "../models/PP-DocLayoutV3.onnx",
-        "../../models/PP-DocLayoutV3.onnx",
-        "models/PP-DocLayoutV3_onnx/inference.onnx",
-        "../models/PP-DocLayoutV3_onnx/inference.onnx",
-        "../../models/PP-DocLayoutV3_onnx/inference.onnx",
-        "models/PP-DocLayoutV2.onnx",
-        "../models/PP-DocLayoutV2.onnx",
-        "../../models/PP-DocLayoutV2.onnx"
-    };
+    const std::vector<std::string> defaultCandidates = {"models/PP-DocLayoutV3.onnx",
+                                                        "../models/PP-DocLayoutV3.onnx",
+                                                        "../../models/PP-DocLayoutV3.onnx",
+                                                        "models/PP-DocLayoutV3_onnx/inference.onnx",
+                                                        "../models/PP-DocLayoutV3_onnx/inference.onnx",
+                                                        "../../models/PP-DocLayoutV3_onnx/inference.onnx",
+                                                        "models/PP-DocLayoutV2.onnx",
+                                                        "../models/PP-DocLayoutV2.onnx",
+                                                        "../../models/PP-DocLayoutV2.onnx"};
     for (const auto& cand : defaultCandidates) {
         std::string res = DocLayoutEngine::ResolveLayoutModelPath(cand);
-        if (!res.empty()) return res;
+        if (!res.empty())
+            return res;
     }
     return "";
 }
@@ -163,16 +169,18 @@ TEST_CASE("DocLayoutEngine - Test with User Newspaper Image", "[layout]") {
         REQUIRE(result.elements.size() >= 1);
         std::cout << "\n>>> Detected " << result.elements.size() << " layout elements in test_newspaper.jpg:\n";
         for (const auto& elem : result.elements) {
-            std::cout << "  [" << elem.readingOrder << "] " << elem.labelName 
-                 << " (score=" << elem.score << ") bbox=[" 
-                 << elem.x1 << ", " << elem.y1 << ", " << elem.x2 << ", " << elem.y2 << "]\n";
+            std::cout << "  [" << elem.readingOrder << "] " << elem.labelName << " (score=" << elem.score << ") bbox=[" << elem.x1 << ", " << elem.y1 << ", " << elem.x2 << ", " << elem.y2 << "]\n";
         }
 
         // 验证数学之美第 18 页页眉 "II || 数学之美" 必须被正确识别过滤，不得误入正文
         // 图片固定存放在 tests/ 目录中，脱离对外部 PDF 路径的依赖
         std::string sxzm18Path = "tests/test_sxzm_page18.png";
-        if (!wxFileExists(sxzm18Path)) { sxzm18Path = "../tests/test_sxzm_page18.png"; }
-        if (!wxFileExists(sxzm18Path)) { sxzm18Path = "../../tests/test_sxzm_page18.png"; }
+        if (!wxFileExists(sxzm18Path)) {
+            sxzm18Path = "../tests/test_sxzm_page18.png";
+        }
+        if (!wxFileExists(sxzm18Path)) {
+            sxzm18Path = "../../tests/test_sxzm_page18.png";
+        }
 
         REQUIRE(wxFileExists(sxzm18Path));
         {
@@ -183,9 +191,8 @@ TEST_CASE("DocLayoutEngine - Test with User Newspaper Image", "[layout]") {
             std::cout << "\n--- 数学之美 Page 18 (W=" << resSxzm.imageWidth << ", H=" << resSxzm.imageHeight << ") detected " << resSxzm.elements.size() << " elements:\n";
             bool foundLeakedHeader = false;
             for (const auto& elem : resSxzm.elements) {
-                std::cout << "  [" << elem.readingOrder << "] " << elem.labelName 
-                     << " (score=" << elem.score << ") bbox=[" 
-                     << elem.x1 << ", " << elem.y1 << ", " << elem.x2 << ", " << elem.y2 << "]\n";
+                std::cout << "  [" << elem.readingOrder << "] " << elem.labelName << " (score=" << elem.score << ") bbox=[" << elem.x1 << ", " << elem.y1 << ", " << elem.x2 << ", " << elem.y2
+                          << "]\n";
                 // 页眉位于顶部 y <= 150 (真实页眉 bbox ~ [300, 79, 497, 121])
                 if (elem.y2 <= 150) {
                     foundLeakedHeader = true;
@@ -196,8 +203,12 @@ TEST_CASE("DocLayoutEngine - Test with User Newspaper Image", "[layout]") {
 
         // 验证数学之美第 56 页行内公式 (10^-20, 10^-70 等) 落在段落内部时必须被抑制，不得重复生成独立公式块
         std::string sxzm56Path = "tests/test_sxzm_page56.png";
-        if (!wxFileExists(sxzm56Path)) { sxzm56Path = "../tests/test_sxzm_page56.png"; }
-        if (!wxFileExists(sxzm56Path)) { sxzm56Path = "../../tests/test_sxzm_page56.png"; }
+        if (!wxFileExists(sxzm56Path)) {
+            sxzm56Path = "../tests/test_sxzm_page56.png";
+        }
+        if (!wxFileExists(sxzm56Path)) {
+            sxzm56Path = "../../tests/test_sxzm_page56.png";
+        }
 
         REQUIRE(wxFileExists(sxzm56Path));
         {
@@ -207,9 +218,8 @@ TEST_CASE("DocLayoutEngine - Test with User Newspaper Image", "[layout]") {
             std::cout << "\n--- 数学之美 Page 56 (W=" << res56.imageWidth << ", H=" << res56.imageHeight << ") detected " << res56.elements.size() << " elements:\n";
             bool foundDuplicateInlineFormula = false;
             for (const auto& elem : res56.elements) {
-                std::cout << "  [" << elem.readingOrder << "] " << elem.labelName 
-                     << " (score=" << elem.score << ") bbox=[" 
-                     << elem.x1 << ", " << elem.y1 << ", " << elem.x2 << ", " << elem.y2 << "]\n";
+                std::cout << "  [" << elem.readingOrder << "] " << elem.labelName << " (score=" << elem.score << ") bbox=[" << elem.x1 << ", " << elem.y1 << ", " << elem.x2 << ", " << elem.y2
+                          << "]\n";
                 // 落在段落 [325, 1345, 1444, 1645] 内部的 10^-20 与 10^-70 行内公式必须被抑制
                 if (elem.labelName == "inline_formula" && elem.y1 >= 1345 && elem.y2 <= 1645) {
                     foundDuplicateInlineFormula = true;
@@ -224,8 +234,12 @@ TEST_CASE("DocLayoutEngine - Test with User Newspaper Image", "[layout]") {
 
         // 验证数学之美第 236 页表格内部的公式 (k=1, k=2, k=5, k=6, k=7 等) 落在表格内部时必须被抑制，不得重复生成独立公式块
         std::string sxzm236Path = "tests/test_sxzm_page236.png";
-        if (!wxFileExists(sxzm236Path)) { sxzm236Path = "../tests/test_sxzm_page236.png"; }
-        if (!wxFileExists(sxzm236Path)) { sxzm236Path = "../../tests/test_sxzm_page236.png"; }
+        if (!wxFileExists(sxzm236Path)) {
+            sxzm236Path = "../tests/test_sxzm_page236.png";
+        }
+        if (!wxFileExists(sxzm236Path)) {
+            sxzm236Path = "../../tests/test_sxzm_page236.png";
+        }
 
         REQUIRE(wxFileExists(sxzm236Path));
         {
@@ -235,9 +249,8 @@ TEST_CASE("DocLayoutEngine - Test with User Newspaper Image", "[layout]") {
             std::cout << "\n--- 数学之美 Page 236 (W=" << res236.imageWidth << ", H=" << res236.imageHeight << ") detected " << res236.elements.size() << " elements:\n";
             bool foundDuplicateFormulaInTable = false;
             for (const auto& elem : res236.elements) {
-                std::cout << "  [" << elem.readingOrder << "] " << elem.labelName 
-                     << " (score=" << elem.score << ") bbox=[" 
-                     << elem.x1 << ", " << elem.y1 << ", " << elem.x2 << ", " << elem.y2 << "]\n";
+                std::cout << "  [" << elem.readingOrder << "] " << elem.labelName << " (score=" << elem.score << ") bbox=[" << elem.x1 << ", " << elem.y1 << ", " << elem.x2 << ", " << elem.y2
+                          << "]\n";
                 // 检查是否有落在表格内部的公式块 (y >= 1600)
                 if ((elem.type == LayoutElementType::Formula || elem.labelName == "inline_formula" || elem.labelName == "display_formula") && elem.y1 >= 1600) {
                     foundDuplicateFormulaInTable = true;
@@ -250,10 +263,18 @@ TEST_CASE("DocLayoutEngine - Test with User Newspaper Image", "[layout]") {
         // 图片固定存放在 tests/ 目录中，脱离对外部网络共享 PDF 路径的依赖
         std::string page5Path = "tests/test_book_page5.png";
         std::string page8Path = "tests/test_book_page8.png";
-        if (!wxFileExists(page5Path)) { page5Path = "../tests/test_book_page5.png"; }
-        if (!wxFileExists(page5Path)) { page5Path = "../../tests/test_book_page5.png"; }
-        if (!wxFileExists(page8Path)) { page8Path = "../tests/test_book_page8.png"; }
-        if (!wxFileExists(page8Path)) { page8Path = "../../tests/test_book_page8.png"; }
+        if (!wxFileExists(page5Path)) {
+            page5Path = "../tests/test_book_page5.png";
+        }
+        if (!wxFileExists(page5Path)) {
+            page5Path = "../../tests/test_book_page5.png";
+        }
+        if (!wxFileExists(page8Path)) {
+            page8Path = "../tests/test_book_page8.png";
+        }
+        if (!wxFileExists(page8Path)) {
+            page8Path = "../../tests/test_book_page8.png";
+        }
 
         // 验证第 5 页 (总序)
         REQUIRE(wxFileExists(page5Path));
@@ -265,9 +286,8 @@ TEST_CASE("DocLayoutEngine - Test with User Newspaper Image", "[layout]") {
             std::cout << "\n--- Page 5 (W=" << res5.imageWidth << ", H=" << res5.imageHeight << ") detected " << res5.elements.size() << " elements:\n";
             bool foundTitle = false;
             for (const auto& elem : res5.elements) {
-                std::cout << "  [" << elem.readingOrder << "] " << elem.labelName 
-                     << " (score=" << elem.score << ") bbox=[" 
-                     << elem.x1 << ", " << elem.y1 << ", " << elem.x2 << ", " << elem.y2 << "]\n";
+                std::cout << "  [" << elem.readingOrder << "] " << elem.labelName << " (score=" << elem.score << ") bbox=[" << elem.x1 << ", " << elem.y1 << ", " << elem.x2 << ", " << elem.y2
+                          << "]\n";
                 if (elem.y1 >= 280 && elem.y2 <= 420 && elem.x1 >= 700 && elem.x2 <= 1000) {
                     foundTitle = true;
                 }
@@ -285,9 +305,8 @@ TEST_CASE("DocLayoutEngine - Test with User Newspaper Image", "[layout]") {
             std::cout << "\n--- Page 8 (W=" << res8.imageWidth << ", H=" << res8.imageHeight << ") detected " << res8.elements.size() << " elements:\n";
             bool foundContents = false;
             for (const auto& elem : res8.elements) {
-                std::cout << "  [" << elem.readingOrder << "] " << elem.labelName 
-                     << " (score=" << elem.score << ") bbox=[" 
-                     << elem.x1 << ", " << elem.y1 << ", " << elem.x2 << ", " << elem.y2 << "]\n";
+                std::cout << "  [" << elem.readingOrder << "] " << elem.labelName << " (score=" << elem.score << ") bbox=[" << elem.x1 << ", " << elem.y1 << ", " << elem.x2 << ", " << elem.y2
+                          << "]\n";
                 if (elem.y1 >= 300 && elem.y2 <= 420 && elem.x1 >= 200 && elem.x2 <= 550) {
                     foundContents = true;
                 }
@@ -298,8 +317,12 @@ TEST_CASE("DocLayoutEngine - Test with User Newspaper Image", "[layout]") {
         // 验证用户真实图书《中县干部：以成长历程为中心》第 97 页
         // 包含表格5-20 (含上标 7.5^①)、表格5-21、底部注解 ① 及页脚页码 97
         std::string zxgb97Path = "tests/test_zxgb_page97.png";
-        if (!wxFileExists(zxgb97Path)) { zxgb97Path = "../tests/test_zxgb_page97.png"; }
-        if (!wxFileExists(zxgb97Path)) { zxgb97Path = "../../tests/test_zxgb_page97.png"; }
+        if (!wxFileExists(zxgb97Path)) {
+            zxgb97Path = "../tests/test_zxgb_page97.png";
+        }
+        if (!wxFileExists(zxgb97Path)) {
+            zxgb97Path = "../../tests/test_zxgb_page97.png";
+        }
 
         REQUIRE(wxFileExists(zxgb97Path));
         {
@@ -314,9 +337,8 @@ TEST_CASE("DocLayoutEngine - Test with User Newspaper Image", "[layout]") {
             bool leakedPageNumber97 = false;
 
             for (const auto& elem : res97.elements) {
-                std::cout << "  [" << elem.readingOrder << "] " << elem.labelName 
-                     << " (score=" << elem.score << ") bbox=[" 
-                     << elem.x1 << ", " << elem.y1 << ", " << elem.x2 << ", " << elem.y2 << "]\n";
+                std::cout << "  [" << elem.readingOrder << "] " << elem.labelName << " (score=" << elem.score << ") bbox=[" << elem.x1 << ", " << elem.y1 << ", " << elem.x2 << ", " << elem.y2
+                          << "]\n";
                 // 验证表 5-20 (y 落在 1400..1700 区间) 正确被识别为表格
                 if (elem.type == LayoutElementType::Table && elem.y1 >= 1400 && elem.y2 <= 1700) {
                     foundTable520 = true;
@@ -376,11 +398,9 @@ TEST_CASE("DocLayoutEngine - Suppress Contained and Duplicate Footnote Boxes", "
     // 框 1: 单行切片框 (score=0.4316)
     // 框 2: 多行完整块 (score=0.6346)
     // 框 3: 右下落款切片框 (score=0.3509)
-    std::vector<LayoutElement> elements = {
-        LayoutElement{1, LayoutElementType::Text, "vision_footnote", 0.4316f, 810, 702, 1452, 724, 0},
-        LayoutElement{2, LayoutElementType::Text, "vision_footnote", 0.6346f, 809, 702, 1486, 750, 0},
-        LayoutElement{3, LayoutElementType::Text, "vision_footnote", 0.3509f, 1246, 729, 1487, 750, 0}
-    };
+    std::vector<LayoutElement> elements = {LayoutElement{1, LayoutElementType::Text, "vision_footnote", 0.4316f, 810, 702, 1452, 724, 0},
+                                           LayoutElement{2, LayoutElementType::Text, "vision_footnote", 0.6346f, 809, 702, 1486, 750, 0},
+                                           LayoutElement{3, LayoutElementType::Text, "vision_footnote", 0.3509f, 1246, 729, 1487, 750, 0}};
 
     DocLayoutFilterConfig cfg;
     cfg.mergeLayoutBlocks = true;
@@ -406,14 +426,12 @@ TEST_CASE("DocLayoutEngine - Suppress Contained Formula and Text Boxes in Table"
     // 框 4: 表格首行单元格公式 k=6 (score=0.4055, y 落在表格内)
     // 框 5: 单元格数字/文本碎片 (score=0.5200, 落在表格内)
     // 框 6: 表格上方的独立图表标题 (score=0.5532, y 落在表格外，必须保留)
-    std::vector<LayoutElement> elements = {
-        LayoutElement{1, LayoutElementType::Table, "table", 0.9105f, 330, 1680, 1444, 2052, 0},
-        LayoutElement{2, LayoutElementType::Formula, "inline_formula", 0.3102f, 604, 1688, 674, 1721, 0},
-        LayoutElement{3, LayoutElementType::Formula, "inline_formula", 0.3432f, 982, 1687, 1054, 1722, 0},
-        LayoutElement{4, LayoutElementType::Formula, "inline_formula", 0.4055f, 1111, 1687, 1183, 1722, 0},
-        LayoutElement{5, LayoutElementType::Text, "text", 0.5200f, 400, 1750, 500, 1790, 0},
-        LayoutElement{6, LayoutElementType::Title, "figure_title", 0.5532f, 321, 1595, 1052, 1633, 0}
-    };
+    std::vector<LayoutElement> elements = {LayoutElement{1, LayoutElementType::Table, "table", 0.9105f, 330, 1680, 1444, 2052, 0},
+                                           LayoutElement{2, LayoutElementType::Formula, "inline_formula", 0.3102f, 604, 1688, 674, 1721, 0},
+                                           LayoutElement{3, LayoutElementType::Formula, "inline_formula", 0.3432f, 982, 1687, 1054, 1722, 0},
+                                           LayoutElement{4, LayoutElementType::Formula, "inline_formula", 0.4055f, 1111, 1687, 1183, 1722, 0},
+                                           LayoutElement{5, LayoutElementType::Text, "text", 0.5200f, 400, 1750, 500, 1790, 0},
+                                           LayoutElement{6, LayoutElementType::Title, "figure_title", 0.5532f, 321, 1595, 1052, 1633, 0}};
 
     DocLayoutFilterConfig cfg;
     cfg.mergeLayoutBlocks = true;
@@ -457,15 +475,8 @@ TEST_CASE("DocumentPipeline - Never delete original input image or document file
     wxString outDir = wxFileName::CreateTempFileName("doc_out_test");
     wxRemoveFile(outDir);
 
-    pipeline->StartParseAsync(
-        tempOriginal.ToUTF8().data(),
-        outDir.ToUTF8().data(),
-        false,
-        nullptr,
-        [&finishPromise](bool success, const std::string& md, const std::string& json, const std::string& err) {
-            finishPromise.set_value(true);
-        }
-    );
+    pipeline->StartParseAsync(tempOriginal.ToUTF8().data(), outDir.ToUTF8().data(), false, nullptr,
+                              [&finishPromise](bool success, const std::string& md, const std::string& json, const std::string& err) { finishPromise.set_value(true); });
 
     finishFuture.wait_for(std::chrono::seconds(5));
 
@@ -480,10 +491,9 @@ TEST_CASE("DocumentPipeline - Never delete original input image or document file
 }
 
 TEST_CASE("DocumentPipeline - Convert PaddleOCR OTSL table to HTML table", "[table]") {
-    std::string otsl =
-        "<fcel>Strategy<fcel>Discrepancy<fcel>w/ sensitive keyword<lcel><lcel><fcel>w/o sensitive keyword<lcel><nl>"
-        "<ucel><ucel><fcel>Success<fcel>Failure 1<fcel>Failure 2<fcel>Success<fcel>Failure 1<nl>"
-        "<fcel>No Strategy<fcel>N/A<fcel>2.8%<fcel>0.4%<fcel>96.8%<fcel>98.9%<fcel>1.1%<nl>";
+    std::string otsl = "<fcel>Strategy<fcel>Discrepancy<fcel>w/ sensitive keyword<lcel><lcel><fcel>w/o sensitive keyword<lcel><nl>"
+                       "<ucel><ucel><fcel>Success<fcel>Failure 1<fcel>Failure 2<fcel>Success<fcel>Failure 1<nl>"
+                       "<fcel>No Strategy<fcel>N/A<fcel>2.8%<fcel>0.4%<fcel>96.8%<fcel>98.9%<fcel>1.1%<nl>";
 
     std::string html = DocumentPipeline::ConvertOtslToHtml(otsl);
 
@@ -500,11 +510,10 @@ TEST_CASE("DocumentPipeline - Convert PaddleOCR OTSL table to HTML table", "[tab
     REQUIRE(html.find("<td>96.8%</td>") != std::string::npos);
     REQUIRE(html.find("</table>") != std::string::npos);
 
-    // 验证用户真实文档《中县干部：以成长历程为中心》第 97 页 表5-20 
+    // 验证用户真实文档《中县干部：以成长历程为中心》第 97 页 表5-20
     // 单元格包含上标与末尾游离定界符 (7.5^{①}\()，必须正确转换为语义化 <sup> 标签且清除游离界符
-    std::string otslZxgbTable =
-        "<fcel>晋升为副科（年）<fcel>副科到正科（年）<fcel>正科到副处（年）<fcel>副处到正处（年）<nl>"
-        "<fcel>8<fcel>2.7<fcel>7.3<fcel>7.5^{①}\\(<nl>";
+    std::string otslZxgbTable = "<fcel>晋升为副科（年）<fcel>副科到正科（年）<fcel>正科到副处（年）<fcel>副处到正处（年）<nl>"
+                                "<fcel>8<fcel>2.7<fcel>7.3<fcel>7.5^{①}\\(<nl>";
 
     std::string htmlZxgb = DocumentPipeline::ConvertOtslToHtml(otslZxgbTable);
     REQUIRE_FALSE(htmlZxgb.empty());
@@ -518,10 +527,9 @@ TEST_CASE("DocumentPipeline - Convert PaddleOCR OTSL table to HTML table", "[tab
     REQUIRE(htmlZxgb.find("\\(") == std::string::npos);
 
     // 验证数字电路文档第 16 页表格项中的 \n 转换为 <br>
-    std::string otslPage16Table =
-        "<ecel><fcel>2. Decoders<ecel><nl>"
-        "<fcel>6<fcel>1. Program Control Structures (branches and loops)\\n2. Multiplexers<fcel>Chapter 8: Exercises 1, 2, 3 & 4<nl>"
-        "<fcel>7<fcel>1. Reentrant subprograms and program stack\n2. Latches and flip-flops<fcel>Chapter 9: Exercise 1<nl>";
+    std::string otslPage16Table = "<ecel><fcel>2. Decoders<ecel><nl>"
+                                  "<fcel>6<fcel>1. Program Control Structures (branches and loops)\\n2. Multiplexers<fcel>Chapter 8: Exercises 1, 2, 3 & 4<nl>"
+                                  "<fcel>7<fcel>1. Reentrant subprograms and program stack\n2. Latches and flip-flops<fcel>Chapter 9: Exercise 1<nl>";
     std::string htmlPage16 = DocumentPipeline::ConvertOtslToHtml(otslPage16Table);
     REQUIRE_FALSE(htmlPage16.empty());
     // 单元格中的字面量 \n 必须转换为 <br>
@@ -533,11 +541,10 @@ TEST_CASE("DocumentPipeline - Convert PaddleOCR OTSL table to HTML table", "[tab
 
     // 验证数字电路文档第 26 页表格中的布尔运算上单引号 (prime) 与公式
     // 单引号 ' 绝不能被转义为 &#039;，已有 &#039; 需自动还原为 '
-    std::string otslPage26Table =
-        "<fcel>Relationship<fcel>Rule No.<fcel>Relationship<fcel>Rule No.<nl>"
-        "<fcel>\\(x + x' = 1\\)<fcel>7<fcel>\\(x \\times x' = 0\\)<fcel>8<nl>"
-        "<fcel>\\(x + x&#039; = 1\\)<fcel>7<fcel>\\((x + y)' = x'y'\\)<fcel>15<nl>"
-        "<fcel>x + x&#039; = 1<fcel>7<fcel>A'B'C'<fcel>Minterm<nl>";
+    std::string otslPage26Table = "<fcel>Relationship<fcel>Rule No.<fcel>Relationship<fcel>Rule No.<nl>"
+                                  "<fcel>\\(x + x' = 1\\)<fcel>7<fcel>\\(x \\times x' = 0\\)<fcel>8<nl>"
+                                  "<fcel>\\(x + x&#039; = 1\\)<fcel>7<fcel>\\((x + y)' = x'y'\\)<fcel>15<nl>"
+                                  "<fcel>x + x&#039; = 1<fcel>7<fcel>A'B'C'<fcel>Minterm<nl>";
     std::string htmlPage26 = DocumentPipeline::ConvertOtslToHtml(otslPage26Table);
     REQUIRE_FALSE(htmlPage26.empty());
     REQUIRE(htmlPage26.find("<td>\\(x + x' = 1\\)</td>") != std::string::npos);
@@ -549,9 +556,8 @@ TEST_CASE("DocumentPipeline - Convert PaddleOCR OTSL table to HTML table", "[tab
     REQUIRE(htmlPage26.find("&#039;") == std::string::npos);
 
     // 验证公式内部的 \neq 等以 \n 开头的 LaTeX 宏命令不会被误转为 <br>
-    std::string otslFormulaWithNeq =
-        "<fcel>Condition<fcel>Action<nl>"
-        "<fcel>\\(x \\neq 0\\)\\nNext row<fcel>Execute<nl>";
+    std::string otslFormulaWithNeq = "<fcel>Condition<fcel>Action<nl>"
+                                     "<fcel>\\(x \\neq 0\\)\\nNext row<fcel>Execute<nl>";
     std::string htmlFormula = DocumentPipeline::ConvertOtslToHtml(otslFormulaWithNeq);
     REQUIRE(htmlFormula.find("\\(x \\neq 0\\)<br>Next row") != std::string::npos);
 }
@@ -869,38 +875,36 @@ TEST_CASE("DocumentPipeline - Parse and Translate What-Video-Games Page 6 Table 
     }
 
     // 3. 模拟第 6 页目录 OCR 识别得到的原文与模型翻译译文
-    std::string sourceTOC =
-        "1. Introduction: 36 Ways to Learn a Video Game 1\n"
-        "2. Semiotic Domains:\n"
-        "Is Playing Video Games a “Waste of Time”? 13\n"
-        "3. Learning and Identity:\n"
-        "What Does It Mean to Be a Half-Elf? 51\n"
-        "4. Situated Meaning and Learning:\n"
-        "What Should You Do After You Have\n"
-        "Destroyed the Global Conspiracy? 73\n"
-        "5. Telling and Doing:\n"
-        "Why Doesn’t Lara Croft Obey Professor Von Croy? 113\n"
-        "6. Cultural Models:\n"
-        "Do You Want to Be the Blue Sonic or the Dark Sonic? 139\n"
-        "7. The Social Mind:\n"
-        "How Do You Get Your Corpse Back After You’ve Died? 169\n"
-        "8. Conclusion: Duped or Not? 199\n"
-        "Appendix: The 36 Learning Principles 207\n"
-        "References 213\n"
-        "Index 221";
+    std::string sourceTOC = "1. Introduction: 36 Ways to Learn a Video Game 1\n"
+                            "2. Semiotic Domains:\n"
+                            "Is Playing Video Games a “Waste of Time”? 13\n"
+                            "3. Learning and Identity:\n"
+                            "What Does It Mean to Be a Half-Elf? 51\n"
+                            "4. Situated Meaning and Learning:\n"
+                            "What Should You Do After You Have\n"
+                            "Destroyed the Global Conspiracy? 73\n"
+                            "5. Telling and Doing:\n"
+                            "Why Doesn’t Lara Croft Obey Professor Von Croy? 113\n"
+                            "6. Cultural Models:\n"
+                            "Do You Want to Be the Blue Sonic or the Dark Sonic? 139\n"
+                            "7. The Social Mind:\n"
+                            "How Do You Get Your Corpse Back After You’ve Died? 169\n"
+                            "8. Conclusion: Duped or Not? 199\n"
+                            "Appendix: The 36 Learning Principles 207\n"
+                            "References 213\n"
+                            "Index 221";
 
-    std::string transTOC =
-        "1. 引言：学习电子游戏的36种方法 1\n"
-        "2. 符号学领域：玩电子游戏算是“浪费时间”吗？ 13\n"
-        "3. 学习与身份认同：成为半精灵意味着什么？ 51\n"
-        "4. 情境意义与学习：摧毁全球阴谋之后该做什么？ 73\n"
-        "5. 陈述与行动：为什么劳拉·克劳福特不听从冯·克罗伊教授的命令？ 113\n"
-        "6. 文化模式：你想成为蓝色索尼克还是黑暗索尼克？ 139\n"
-        "7. 社会思维：死后如何找回自己的尸体？ 169\n"
-        "8. 结论：真的被欺骗了吗？ 199\n"
-        "附录：36条学习原则 207\n"
-        "参考文献 213\n"
-        "索引 221";
+    std::string transTOC = "1. 引言：学习电子游戏的36种方法 1\n"
+                           "2. 符号学领域：玩电子游戏算是“浪费时间”吗？ 13\n"
+                           "3. 学习与身份认同：成为半精灵意味着什么？ 51\n"
+                           "4. 情境意义与学习：摧毁全球阴谋之后该做什么？ 73\n"
+                           "5. 陈述与行动：为什么劳拉·克劳福特不听从冯·克罗伊教授的命令？ 113\n"
+                           "6. 文化模式：你想成为蓝色索尼克还是黑暗索尼克？ 139\n"
+                           "7. 社会思维：死后如何找回自己的尸体？ 169\n"
+                           "8. 结论：真的被欺骗了吗？ 199\n"
+                           "附录：36条学习原则 207\n"
+                           "参考文献 213\n"
+                           "索引 221";
 
     // 4. 验证 AlignMarkdownFormat：保持译文序列与原序列 1..8 严格对应，不发生偏移
     std::string alignedTOC = DocumentPipeline::AlignMarkdownFormat(sourceTOC, transTOC);
@@ -955,7 +959,10 @@ TEST_CASE("DocumentPipeline - Parse and Translate What-Video-Games Page 6 Table 
 
 TEST_CASE("CleanAndFormatFormula: Runaway repetition truncation and delimiter/brace balancing", "[formula][pipeline]") {
     // 1. 验证数字电路第 59 页自回归失控重复与单侧 \[ 定界符截断
-    std::string repeatingFormula = "\\[\\mathrm{A p}~=~\\left(\\mathrm{A}^{\\star}\\mathrm{B}\\right)^{\\star}\\left(\\mathrm{C}^{\\star}\\mathrm{D}\\right)\\quad\\mathrm{X p}~=~\\left(\\mathrm{A}^{\\star}\\mathrm{B}\\right)^{\\star}\\left(\\mathrm{C}^{\\star}\\mathrm{D}\\right)\\quad\\mathrm{N O p}~=~\\mathrm{!}\\left(\\right.\\left(\\mathrm{!}\\left(\\mathrm{A}+\\mathrm{B}\\right)+\\mathrm{!}\\left(\\mathrm{C}+\\mathrm{D}\\right)\\right)\\mathrm{~a n d~}\\mathrm{b a s s i s i o n~t o~}";
+    std::string repeatingFormula = "\\[\\mathrm{A p}~=~\\left(\\mathrm{A}^{\\star}\\mathrm{B}\\right)^{\\star}\\left(\\mathrm{C}^{\\star}\\mathrm{D}\\right)\\quad\\mathrm{X "
+                                   "p}~=~\\left(\\mathrm{A}^{\\star}\\mathrm{B}\\right)^{\\star}\\left(\\mathrm{C}^{\\star}\\mathrm{D}\\right)\\quad\\mathrm{N O "
+                                   "p}~=~\\mathrm{!}\\left(\\right.\\left(\\mathrm{!}\\left(\\mathrm{A}+\\mathrm{B}\\right)+\\mathrm{!}\\left(\\mathrm{C}+\\mathrm{D}\\right)\\right)\\mathrm{~a n "
+                                   "d~}\\mathrm{b a s s i s i o n~t o~}";
     for (int k = 0; k < 50; ++k) {
         repeatingFormula += "}\\mathrm{C}^{\\star}\\mathrm{D}\\mathrm{A}\\mathrm{B";
     }
@@ -976,13 +983,17 @@ TEST_CASE("CleanAndFormatFormula: Runaway repetition truncation and delimiter/br
     CHECK(cleaned1.find("\n$$") != std::string::npos);
 
     // 2. 验证多行公式环境未闭合花括号自动平衡 (如第 59 页 El 4 的 \\begin{array} 缺少闭合 })
-    std::string unclosedArray = "\\begin{array}{r l r l}{\\mathrm{O p}}&{=}&{\\left(\\mathrm{A}+\\mathrm{B}\\right)+\\left(\\mathrm{C}+\\mathrm{D}\\right)}&{\\quad\\mathrm{N A p}}\\\\ &{}&{=}&{\\mathrm{!}\\left(\\right.\\left.\\left(\\mathrm{A}^{\\star}\\mathrm{B}\\right)^{\\star}\\right.\\left.\\mathrm{!}\\left(\\mathrm{C}^{\\star}\\mathrm{D}\\right)\\right.\\mathrm{)}\\end{array}";
+    std::string unclosedArray = "\\begin{array}{r l r l}{\\mathrm{O p}}&{=}&{\\left(\\mathrm{A}+\\mathrm{B}\\right)+\\left(\\mathrm{C}+\\mathrm{D}\\right)}&{\\quad\\mathrm{N A p}}\\\\ "
+                                "&{}&{=}&{\\mathrm{!}\\left(\\right.\\left.\\left(\\mathrm{A}^{\\star}\\mathrm{B}\\right)^{\\star}\\right.\\left.\\mathrm{!}\\left(\\mathrm{C}^{\\star}\\mathrm{D}"
+                                "\\right)\\right.\\mathrm{)}\\end{array}";
     std::string cleanedArray = DocumentPipeline::CleanAndFormatFormula(unclosedArray);
 
     int openBraces = 0, closeBraces = 0;
     for (size_t i = 0; i < cleanedArray.size(); ++i) {
-        if (cleanedArray[i] == '{' && (i == 0 || cleanedArray[i-1] != '\\')) openBraces++;
-        if (cleanedArray[i] == '}' && (i == 0 || cleanedArray[i-1] != '\\')) closeBraces++;
+        if (cleanedArray[i] == '{' && (i == 0 || cleanedArray[i - 1] != '\\'))
+            openBraces++;
+        if (cleanedArray[i] == '}' && (i == 0 || cleanedArray[i - 1] != '\\'))
+            closeBraces++;
     }
     CHECK(openBraces == closeBraces);
     CHECK(cleanedArray.find("\\end{array}") != std::string::npos);
@@ -999,6 +1010,36 @@ TEST_CASE("CleanAndFormatFormula: Runaway repetition truncation and delimiter/br
     CHECK(cleanedEntity.find("y + y' = 1") != std::string::npos);
     CHECK(cleanedEntity.find("z + z' = 1") != std::string::npos);
     CHECK(cleanedEntity.find("&#039;") == std::string::npos);
+
+    // 5. 验证真实谓词逻辑公式中的多余游离右花括号 ({G e o r g e W a s h i n g t o n}}) 被精确剔除，避免 KaTeX 报错
+    std::string strayBraceFormula =
+        "T({\\mathrm{E q u a l s}}({\\mathrm{P r e s i d e n t}}({\\mathrm{U S A}}),{G e o r g e W a s h i n g t o n}}),{B e g i n}({\\mathrm{A D1790}}),{E n d}({\\mathrm{A D1790}})).";
+    std::string cleanedStray = DocumentPipeline::CleanAndFormatFormula(strayBraceFormula);
+    int strayDepth = 0;
+    int minDepth = 0;
+    int openCnt = 0;
+    int closeCnt = 0;
+    for (size_t i = 0; i < cleanedStray.size(); ++i) {
+        if (cleanedStray[i] == '\\' && i + 1 < cleanedStray.size()) {
+            ++i;
+            continue;
+        }
+        if (cleanedStray[i] == '{') {
+            strayDepth++;
+            openCnt++;
+        } else if (cleanedStray[i] == '}') {
+            strayDepth--;
+            closeCnt++;
+            if (strayDepth < minDepth)
+                minDepth = strayDepth;
+        }
+    }
+    CHECK(openCnt == 13);
+    CHECK(closeCnt == 13);
+    CHECK(strayDepth == 0);
+    CHECK(minDepth >= 0);
+    CHECK(cleanedStray.find("{G e o r g e W a s h i n g t o n}}") == std::string::npos);
+    CHECK(cleanedStray.find("{G e o r g e W a s h i n g t o n}),") != std::string::npos);
 }
 
 TEST_CASE("SanitizeInlineLatex: Repair unclosed braces and LaTeX decoration commands", "[latex][pipeline]") {
@@ -1020,6 +1061,15 @@ TEST_CASE("SanitizeInlineLatex: Repair unclosed braces and LaTeX decoration comm
     // 4. 验证行内普通公式与多层嵌套正常保留
     std::string formulaInline = "公式为 $x + y = z$ 以及 $f(x) = \\sqrt{x^2 + 1}$ 无需额外修改";
     CHECK(DocumentPipeline::SanitizeInlineLatex(formulaInline) == formulaInline);
+
+    // 5. 验证裸露且含多余右花括号的 LaTeX 数学表达式自动平衡花括号并包裹 \(...\)
+    std::string nakedFormulaLine =
+        "T({\\mathrm{E q u a l s}}({\\mathrm{P r e s i d e n t}}({\\mathrm{U S A}}),{G e o r g e W a s h i n g t o n}}),{B e g i n}({\\mathrm{A D1790}}),{E n d}({\\mathrm{A D1790}})).";
+    std::string sanitizedNakedFormula = DocumentPipeline::SanitizeInlineLatex(nakedFormulaLine);
+    CHECK(sanitizedNakedFormula.rfind("\\(", 0) == 0);
+    CHECK(sanitizedNakedFormula.find("\\)") != std::string::npos);
+    CHECK(sanitizedNakedFormula.find("{G e o r g e W a s h i n g t o n}}") == std::string::npos);
+    CHECK(sanitizedNakedFormula.find("{G e o r g e W a s h i n g t o n}),") != std::string::npos);
 }
 
 TEST_CASE("TruncateRunawayRepetitions and Separator Filter: Prevent OCR runaway loops on dots/dividers", "[runaway][separator][pipeline]") {
@@ -1066,35 +1116,20 @@ TEST_CASE("TruncateRunawayRepetitions and Separator Filter: Prevent OCR runaway 
 
     // 6. 验证底部脚注分隔线判定 (IsFootnoteOrDecorativeSeparator)
     // 场景 A: 微虫世界第 14 页真实候选框 [258, 1975, 543, 2004] (W=1600, H=2352)，位于底部 84% 处，高度仅 29 像素
-    CHECK(DocumentPipeline::IsFootnoteOrDecorativeSeparator(
-        "· · · · · · · · · ·", "paragraph_title",
-        258, 1975, 543, 2004, 1600, 2352
-    ) == true);
+    CHECK(DocumentPipeline::IsFootnoteOrDecorativeSeparator("· · · · · · · · · ·", "paragraph_title", 258, 1975, 543, 2004, 1600, 2352) == true);
 
     // 场景 B: 底部原版 ..... 分隔符
-    CHECK(DocumentPipeline::IsFootnoteOrDecorativeSeparator(
-        ".....", "paragraph_title",
-        258, 1975, 543, 2004, 1600, 2352
-    ) == true);
+    CHECK(DocumentPipeline::IsFootnoteOrDecorativeSeparator(".....", "paragraph_title", 258, 1975, 543, 2004, 1600, 2352) == true);
 
     // 场景 C: 底部被版面识别模型标为 footnote 的纯点号/横线分隔符
-    CHECK(DocumentPipeline::IsFootnoteOrDecorativeSeparator(
-        "· · · · · ·", "footnote",
-        173, 1956, 454, 1980, 1600, 2352
-    ) == true);
+    CHECK(DocumentPipeline::IsFootnoteOrDecorativeSeparator("· · · · · ·", "footnote", 173, 1956, 454, 1980, 1600, 2352) == true);
 
     // 场景 D: 正常的真实底部脚注，必须保留！
-    CHECK(DocumentPipeline::IsFootnoteOrDecorativeSeparator(
-        "2 Zhang Daye, Weichong shijie [The world of a tiny insect], in Qingdai gaoben baizhong huikan...",
-        "footnote",
-        259, 2029, 1423, 2160, 1600, 2352
-    ) == false);
+    CHECK(DocumentPipeline::IsFootnoteOrDecorativeSeparator("2 Zhang Daye, Weichong shijie [The world of a tiny insect], in Qingdai gaoben baizhong huikan...", "footnote", 259, 2029, 1423, 2160, 1600,
+                                                            2352) == false);
 
     // 场景 E: 正文区域（上半部分）的分割线
-    CHECK(DocumentPipeline::IsFootnoteOrDecorativeSeparator(
-        "---", "paragraph_title",
-        200, 500, 1400, 520, 1600, 2352
-    ) == false);
+    CHECK(DocumentPipeline::IsFootnoteOrDecorativeSeparator("---", "paragraph_title", 200, 500, 1400, 520, 1600, 2352) == false);
 
     // 7. 验证 LlamaClient 实时流式自回归死循环检测 (DetectRunawayRepetition)
     CHECK(LlamaClient::DetectRunawayRepetition("· · · · · · · · · ·") == true);
@@ -1103,12 +1138,10 @@ TEST_CASE("TruncateRunawayRepetitions and Separator Filter: Prevent OCR runaway 
 
 TEST_CASE("DocLayoutEngine - Duplicate Header/Footer Suppression Protection", "[layout][filter]") {
     // 模拟真实被过滤的页眉/页脚/页码候选框
-    std::vector<LayoutElement> filteredBoxes = {
-        // 1. 顶部页眉
-        LayoutElement{1, LayoutElementType::Header, "header", 0.92f, 200, 100, 1400, 160, 1},
-        // 2. 底部页码 (小框，位于页面底部中央: [1459, 4293, 1519, 4353])
-        LayoutElement{2, LayoutElementType::Text, "number", 0.63f, 1459, 4293, 1519, 4353, 2}
-    };
+    std::vector<LayoutElement> filteredBoxes = {// 1. 顶部页眉
+                                                LayoutElement{1, LayoutElementType::Header, "header", 0.92f, 200, 100, 1400, 160, 1},
+                                                // 2. 底部页码 (小框，位于页面底部中央: [1459, 4293, 1519, 4353])
+                                                LayoutElement{2, LayoutElementType::Text, "number", 0.63f, 1459, 4293, 1519, 4353, 2}};
 
     // 场景 1: 模型在同一物理位置多类别输出的重影副标签 (例如在顶部页眉位置同时输出了 paragraph_title)
     // 物理位置高度重合 (IoU >= 0.50)，必须被抑制！
@@ -1205,4 +1238,193 @@ TEST_CASE("PdfHelper & DocLayoutEngine - Page 56 PDFium Engine Rendering & Empty
         // 验证合成文本后的页面不会被 IsImageContentEmpty 视为空白页
         CHECK(DocLayoutEngine::IsImageContentEmpty(page56Img) == false);
     }
+}
+
+TEST_CASE("PdfHelper - Fast Text Extraction Helpers (Math Font & Paragraph Line Unwrapping)", "[pdf][fast_text]") {
+    // 1. 数学/符号字体名称识别 (含 6 位大写字母+加号 子集前缀剥离)
+    CHECK(PdfHelper::IsMathOrSymbolFontName("TimesNewRomanPSMT") == false);
+    CHECK(PdfHelper::IsMathOrSymbolFontName("ABCDEF+Helvetica") == false);
+    CHECK(PdfHelper::IsMathOrSymbolFontName("SimSun") == false);
+    CHECK(PdfHelper::IsMathOrSymbolFontName("XYZABC+SourceHanSerifSC-Regular") == false);
+
+    CHECK(PdfHelper::IsMathOrSymbolFontName("CMMI10") == true);
+    CHECK(PdfHelper::IsMathOrSymbolFontName("ABCDEF+CMSY10") == true);
+    CHECK(PdfHelper::IsMathOrSymbolFontName("CMEX10") == true);
+    CHECK(PdfHelper::IsMathOrSymbolFontName("MSAM10") == true);
+    CHECK(PdfHelper::IsMathOrSymbolFontName("MSBM10") == true);
+    CHECK(PdfHelper::IsMathOrSymbolFontName("CambriaMath") == true);
+    CHECK(PdfHelper::IsMathOrSymbolFontName("LatinModernMath-Regular") == true);
+    CHECK(PdfHelper::IsMathOrSymbolFontName("STIXMath-Regular") == true);
+    CHECK(PdfHelper::IsMathOrSymbolFontName("SymbolMT") == true);
+    CHECK(PdfHelper::IsMathOrSymbolFontName("MT Extra") == true);
+
+    // 2. PDF 段落内硬换行智能拼接
+    // 英文连字符跨行断词还原
+    CHECK(PdfHelper::UnwrapPdfParagraphLines("computa-\ntional linguistics") == "computational linguistics");
+    // 英文普通跨行软拼接（补空格）
+    CHECK(PdfHelper::UnwrapPdfParagraphLines("First line of\nthe paragraph.") == "First line of the paragraph.");
+    // 中日韩 (CJK) 跨行无缝拼接（不插多余空格）
+    CHECK(PdfHelper::UnwrapPdfParagraphLines("第一行中文文本\n第二行中文文本") == "第一行中文文本第二行中文文本");
+    // 列表项换行保留
+    std::string listInput = "1. First item\n2. Second item\n- Bullet item";
+    CHECK(PdfHelper::UnwrapPdfParagraphLines(listInput) == listInput);
+}
+
+TEST_CASE("DocLayoutEngine & DocumentPipeline - Nested Formula Propagation and Fast Text Eligibility", "[layout][pipeline][fast_text]") {
+    // 1. 验证包含行内公式的段落块在抑制子公式框后保留 hasNestedFormula = true 标记
+    std::vector<LayoutElement> elements = {LayoutElement{1, LayoutElementType::Text, "text", 0.92f, 100, 200, 900, 400, 1},
+                                           LayoutElement{2, LayoutElementType::Formula, "inline_formula", 0.85f, 300, 250, 420, 290, 2},
+                                           LayoutElement{3, LayoutElementType::Text, "text", 0.95f, 100, 500, 900, 700, 3}};
+
+    DocLayoutFilterConfig cfg;
+    cfg.mergeLayoutBlocks = true;
+    cfg.containmentIosThreshold = 0.70f;
+
+    DocLayoutEngine::SuppressContainedOrDuplicateBoxes(elements, cfg);
+
+    REQUIRE(elements.size() == 2);
+    CHECK(elements[0].y1 == 200);
+    CHECK(elements[0].hasNestedFormula == true);
+    CHECK(elements[1].y1 == 500);
+    CHECK(elements[1].hasNestedFormula == false);
+
+    // 2. 验证纯文本极速模式的版面元素分流判定 (IsElementEligibleForFastText)
+    // 含有嵌套行内公式的段落必须走 OCR，不走极速纯文本提取
+    CHECK(DocumentPipeline::IsElementEligibleForFastText(elements[0]) == false);
+    // 不含公式的纯文本段落允许走极速纯文本提取
+    CHECK(DocumentPipeline::IsElementEligibleForFastText(elements[1]) == true);
+
+    // 标题块（无嵌套公式）允许走极速纯文本提取
+    LayoutElement titleElem{4, LayoutElementType::Title, "paragraph_title", 0.90f, 100, 80, 600, 140, 0};
+    CHECK(DocumentPipeline::IsElementEligibleForFastText(titleElem) == true);
+
+    // 独立公式、表格、图表、图片必须排除在纯文本提取之外（走 OCR 或图片裁剪）
+    LayoutElement formulaElem{5, LayoutElementType::Formula, "display_formula", 0.93f, 200, 750, 700, 830, 4};
+    LayoutElement tableElem{6, LayoutElementType::Table, "table", 0.96f, 100, 850, 900, 1200, 5};
+    LayoutElement chartElem{7, LayoutElementType::Chart, "chart", 0.89f, 100, 1250, 900, 1600, 6};
+    LayoutElement imageElem{8, LayoutElementType::Image, "image", 0.94f, 100, 1650, 500, 1900, 7};
+
+    CHECK(DocumentPipeline::IsElementEligibleForFastText(formulaElem) == false);
+    CHECK(DocumentPipeline::IsElementEligibleForFastText(tableElem) == false);
+    CHECK(DocumentPipeline::IsElementEligibleForFastText(chartElem) == false);
+    CHECK(DocumentPipeline::IsElementEligibleForFastText(imageElem) == false);
+}
+
+TEST_CASE("PdfHelper & DocumentPipeline - Native BBox Text Extraction and FastTextMode Config", "[pdf][pipeline][fast_text]") {
+    // 1. 验证 fast_text_mode 在 JSON 元数据中的持久化与读取
+    wxString tempDir = wxFileName::CreateTempFileName("doc_fast_text_test");
+    wxRemoveFile(tempDir);
+    wxFileName::Mkdir(tempDir, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
+
+    std::string baseName = "fast_doc";
+    wxString dummyDocPath = tempDir + "/" + baseName + ".pdf";
+    {
+        // 构造一个包含真实可提取文本流的标准单页 PDF (Page size: 600 x 800 pt)
+        // 包含两段文本：
+        // - 顶部标题 (x=72, y=700, 即距顶部约 100pt): "Fast Text Mode Heading"
+        // - 正文段落 (x=72, y=550, 即距顶部约 250pt): "Native PDF extraction bypasses heavy OCR."
+        const std::string minimalPdf = "%PDF-1.4\n"
+                                       "1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n"
+                                       "2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n"
+                                       "3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 600 800] "
+                                       "/Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n"
+                                       "4 0 obj\n<< /Length 138 >>\nstream\n"
+                                       "BT\n"
+                                       "/F1 18 Tf\n"
+                                       "72 700 Td\n"
+                                       "(Fast Text Mode Heading) Tj\n"
+                                       "/F1 12 Tf\n"
+                                       "0 -150 Td\n"
+                                       "(Native PDF extraction bypasses heavy OCR.) Tj\n"
+                                       "ET\n"
+                                       "endstream\nendobj\n"
+                                       "5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n"
+                                       "xref\n"
+                                       "0 6\n"
+                                       "0000000000 65535 f \n"
+                                       "0000000009 00000 n \n"
+                                       "0000000058 00000 n \n"
+                                       "0000000115 00000 n \n"
+                                       "0000000241 00000 n \n"
+                                       "0000000431 00000 n \n"
+                                       "trailer\n<< /Size 6 /Root 1 0 R >>\n"
+                                       "startxref\n501\n%%EOF\n";
+
+        std::ofstream f(dummyDocPath.ToStdString(), std::ios::binary);
+        f.write(minimalPdf.data(), static_cast<std::streamsize>(minimalPdf.size()));
+    }
+
+    // 2. 验证 PdfHelper::ExtractPageBoxesText 按渲染图像像素坐标框精准提取原生文本
+    {
+        // 假设渲染图像尺寸为 600 x 800 (与 PDF 点尺寸 1:1)
+        // 框 0: 顶部标题区域 [50, 70, 500, 120] (对应 PDF y: 680..730)
+        // 框 1: 正文区域 [50, 220, 550, 270] (对应 PDF y: 530..580)
+        // 框 2: 底部空白区域 [50, 600, 500, 700] (对应 PDF y: 100..200，无文字)
+        std::vector<PdfBoxRegion> boxes = {PdfBoxRegion{50, 70, 500, 120}, PdfBoxRegion{50, 220, 550, 270}, PdfBoxRegion{50, 600, 500, 700}};
+
+        std::vector<PdfBoxTextResult> results;
+        bool okExtract = PdfHelper::ExtractPageBoxesText(dummyDocPath.ToUTF8().data(), 0, 600, 800, boxes, results);
+        REQUIRE(okExtract == true);
+        REQUIRE(results.size() == 3);
+
+        CHECK(results[0].success == true);
+        CHECK(results[0].hasFormulaFont == false);
+        CHECK(results[0].hasGarbledChar == false);
+        CHECK(results[0].text.find("Fast Text Mode Heading") != std::string::npos);
+
+        CHECK(results[1].success == true);
+        CHECK(results[1].hasFormulaFont == false);
+        CHECK(results[1].hasGarbledChar == false);
+        CHECK(results[1].text.find("Native PDF extraction bypasses heavy OCR.") != std::string::npos);
+
+        CHECK(results[2].success == false);
+        CHECK(results[2].text.empty());
+
+        PdfHelper::ClearCache();
+    }
+
+    // 3. 验证 CheckResumeInfo 对 fast_text_mode 的读取
+    wxString outDir = tempDir + "/" + baseName;
+    wxFileName::Mkdir(outDir, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
+    wxString jsonPath = outDir + "/" + baseName + ".json";
+    wxString mdPath = outDir + "/" + baseName + ".md";
+    {
+        std::ofstream f(mdPath.ToStdString());
+        f << "# Fast Text Mode Heading\n\nNative PDF extraction bypasses heavy OCR.";
+    }
+    {
+        nlohmann::json j;
+        j["file_name"] = baseName;
+        j["total_pages"] = 1;
+        j["completed_pages"] = 1;
+        j["is_completed"] = true;
+        j["translate_enabled"] = true;
+        j["fast_text_mode"] = true;
+        std::ofstream f(jsonPath.ToStdString());
+        f << j.dump(2);
+    }
+
+    auto resumeTrue = DocumentPipeline::CheckResumeInfo(dummyDocPath.ToUTF8().data(), outDir.ToUTF8().data());
+    CHECK(resumeTrue.hasResumeData == true);
+    CHECK(resumeTrue.translateEnabled == true);
+    CHECK(resumeTrue.fastTextMode == true);
+
+    {
+        nlohmann::json j;
+        j["file_name"] = baseName;
+        j["total_pages"] = 1;
+        j["completed_pages"] = 1;
+        j["is_completed"] = true;
+        j["translate_enabled"] = false;
+        j["fast_text_mode"] = false;
+        std::ofstream f(jsonPath.ToStdString());
+        f << j.dump(2);
+    }
+
+    auto resumeFalse = DocumentPipeline::CheckResumeInfo(dummyDocPath.ToUTF8().data(), outDir.ToUTF8().data());
+    CHECK(resumeFalse.hasResumeData == true);
+    CHECK(resumeFalse.translateEnabled == false);
+    CHECK(resumeFalse.fastTextMode == false);
+
+    wxFileName::Rmdir(tempDir, wxPATH_RMDIR_RECURSIVE);
 }

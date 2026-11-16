@@ -41,7 +41,7 @@ private:
     wxStaticBitmap* m_titleIcon{nullptr};
     wxStaticText* m_titleText{nullptr};
     CustomChoice* m_filterChoice{nullptr};
-    wxCheckBox* m_autoScrollCheck{nullptr};
+    CustomButton* m_autoScrollCheck{nullptr};
     CustomButton* m_clearBtn{nullptr};
     CustomButton* m_copyBtn{nullptr};
     CustomButton* m_openDirBtn{nullptr};

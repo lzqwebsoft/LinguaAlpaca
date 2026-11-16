@@ -49,6 +49,29 @@ void CustomButton::SetLabel(const wxString &label) {
   Refresh();
 }
 
+bool CustomButton::SetFont(const wxFont &font) {
+  wxFont targetFont = font;
+#if defined(__APPLE__)
+  if (targetFont.IsOk() && (targetFont.GetPointSize() <= 10 || targetFont.GetFaceName().Contains("Microsoft YaHei"))) {
+    targetFont = ThemeFont::MakeFont(targetFont.GetPointSize(), targetFont.GetWeight(), targetFont.GetStyle() == wxFONTSTYLE_ITALIC);
+  }
+#endif
+  if (!wxControl::SetFont(targetFont)) {
+    return false;
+  }
+  InvalidateBestSize();
+  if (m_explicitSize.x <= 0 || m_explicitSize.y <= 0) {
+    wxSize best = DoGetBestSize();
+    SetMinSize(best);
+    SetSize(best);
+  }
+  if (GetParent()) {
+    GetParent()->Layout();
+  }
+  Refresh();
+  return true;
+}
+
 void CustomButton::SetIcon(const char *svgContent, const wxSize &iconSize,
                            const wxColour &tintColor) {
   m_svgContent = svgContent;
@@ -188,7 +211,7 @@ void CustomButton::OnPaint(wxPaintEvent &WXUNUSED(event)) {
       textColour = m_isHovered ? *wxWHITE : palette.textSecondary;
       borderColour = wxNullColour;
       break;
-    case ButtonStyle::Secondary:
+    case ButtonStyle::Secondary: {
       bool isIconOnly = m_label.IsEmpty();
       if (isIconOnly) {
         // 无文字纯图标控制按钮（如最小化/最大化），常态融入底色，悬停呈现轻柔遮罩
@@ -213,6 +236,9 @@ void CustomButton::OnPaint(wxPaintEvent &WXUNUSED(event)) {
           textColour = palette.textPrimary;
         }
       }
+      break;
+    }
+    case ButtonStyle::CheckBox:
       break;
     }
   }

@@ -191,7 +191,7 @@ private:
     CustomInputBox* m_ocrPortCtrl{nullptr};
     wxStaticText* m_ocrCtxLabel{nullptr};
     CustomInputBox* m_ocrCtxCtrl{nullptr};
-    wxCheckBox* m_ocrMmprojOffloadCheck{nullptr};
+    CustomButton* m_ocrMmprojOffloadCheck{nullptr};
 
     // OCR 本地 API 访问端点展示面板
     wxPanel* m_ocrApiPanel{nullptr};
@@ -231,11 +231,11 @@ private:
     // UI Elements - 3. 划词翻译 Group
     wxPanel* m_selectionCard{nullptr};
     wxStaticText* m_selectionTitleText{nullptr};
-    wxCheckBox* m_selectionEnableCheck{nullptr};
+    CustomButton* m_selectionEnableCheck{nullptr};
     LeftAlignedRadioBox* m_selectionModeRadio{nullptr};
     wxStaticText* m_modifierKeyLabel{nullptr};
     CustomChoice* m_modifierKeyChoice{nullptr};
-    wxCheckBox* m_preserveClipCheck{nullptr};
+    CustomButton* m_preserveClipCheck{nullptr};
     CustomButton* m_selectionSaveBtn{nullptr};
     wxStaticText* m_selectionStatusText{nullptr};
 
@@ -269,7 +269,7 @@ private:
     // UI Elements - 5. 日志与诊断设置 Group
     wxPanel* m_logCard{nullptr};
     wxStaticText* m_logTitleText{nullptr};
-    wxCheckBox* m_saveLogToFileCheck{nullptr};
+    CustomButton* m_saveLogToFileCheck{nullptr};
     wxStaticText* m_logPathInfoText{nullptr};
     CustomButton* m_openLogDirBtn{nullptr};
     CustomButton* m_logSaveBtn{nullptr};

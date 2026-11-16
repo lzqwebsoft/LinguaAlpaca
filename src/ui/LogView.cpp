@@ -86,10 +86,10 @@ void LogView::InitUI() {
     filterSizer->Add(m_filterChoice, 0, wxALIGN_CENTER_VERTICAL);
 
     // 自动滚动 Checkbox
-    m_autoScrollCheck = new wxCheckBox(m_headerPanel, wxID_ANY, L"自动滚动");
+    m_autoScrollCheck = new CustomButton(m_headerPanel, wxID_ANY, L"自动滚动", ButtonStyle::CheckBox);
     m_autoScrollCheck->SetValue(true);
     m_autoScrollCheck->SetFont(ThemeFont::GetFont(FontRole::Control));
-    PlatformThemeHelper::ApplyControlTheme(m_autoScrollCheck, palette);
+    m_autoScrollCheck->SetForegroundColour(palette.textPrimary);
 
     // 功能按钮
     m_clearBtn = new CustomButton(m_headerPanel, wxID_ANY, L"清空", ButtonStyle::Secondary, wxDefaultPosition, dip(64, 28));
@@ -317,7 +317,7 @@ void LogView::UpdateTheme() {
         m_filterChoice->UpdateTheme();
     }
     if (m_autoScrollCheck) {
-        PlatformThemeHelper::ApplyControlTheme(m_autoScrollCheck, palette);
+        m_autoScrollCheck->Refresh();
     }
 
     if (m_clearBtn)

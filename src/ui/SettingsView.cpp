@@ -964,8 +964,10 @@ void SettingsView::InitUI() {
             m_modelCtxCtrl->SetValue(wxString::Format("%d", cfg.translationCtxSize));
         if (m_modelParallelChoice) {
             int tp = cfg.transParallel;
-            if (tp < 1) tp = 1;
-            if (tp > 4) tp = 4;
+            if (tp < 1)
+                tp = 1;
+            if (tp > 4)
+                tp = 4;
             m_modelParallelChoice->SetSelection(tp - 1);
         }
         if (m_modelGpuModeChoice) {
@@ -1841,6 +1843,19 @@ void SettingsView::UpdateTheme() {
     if (m_ocrCopyApiBtn)
         m_ocrCopyApiBtn->Refresh();
 
+    if (m_layoutPathCtrl)
+        m_layoutPathCtrl->UpdateTheme();
+    if (m_layoutProviderChoice)
+        m_layoutProviderChoice->UpdateTheme();
+    if (m_layoutBrowseBtn)
+        m_layoutBrowseBtn->Refresh();
+    if (m_layoutOpenDirBtn)
+        m_layoutOpenDirBtn->Refresh();
+    if (m_layoutSaveBtn)
+        m_layoutSaveBtn->Refresh();
+    if (m_layoutTestBtn)
+        m_layoutTestBtn->Refresh();
+
     if (m_dictDirPathCtrl)
         m_dictDirPathCtrl->UpdateTheme();
 
@@ -1868,6 +1883,7 @@ void SettingsView::UpdateTheme() {
 
     UpdateTranslationStatus();
     UpdateOcrStatus();
+    UpdateLayoutStatus();
     UpdateDictListSummary();
     UpdateLayoutAndScroll();
     Refresh();

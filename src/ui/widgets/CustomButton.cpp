@@ -212,14 +212,14 @@ void CustomButton::OnPaint(wxPaintEvent &WXUNUSED(event)) {
       borderColour = wxNullColour;
       break;
     case ButtonStyle::Secondary: {
-      bool isIconOnly = m_label.IsEmpty();
-      if (isIconOnly) {
+      bool isBorderlessIconOnly = (m_label.IsEmpty() && !m_forceBorder);
+      if (isBorderlessIconOnly) {
         // 无文字纯图标控制按钮（如最小化/最大化），常态融入底色，悬停呈现轻柔遮罩
         bool isLight = (palette.sidebarBg.Red() > 128);
         bgColour = m_isHovered
                        ? (isLight ? wxColour(0, 0, 0, m_isPressed ? 35 : 18)
                                   : wxColour(255, 255, 255, m_isPressed ? 45 : 24))
-                       : palette.sidebarBg;
+                       : (GetParent() ? GetParent()->GetBackgroundColour() : palette.sidebarBg);
         textColour = m_isHovered ? palette.textPrimary : palette.textSecondary;
         borderColour = wxNullColour;
       } else {
@@ -268,11 +268,11 @@ void CustomButton::OnPaint(wxPaintEvent &WXUNUSED(event)) {
   double iconW = 0, iconH = 0;
   wxBitmap bmp;
   if (m_svgContent) {
-    wxSize reqSize = (size.y <= 30_dip) ? dip(13, 13) : m_iconReqSize;
+    wxSize reqSize = (size.y <= 30_dip && !m_forceBorder) ? dip(13, 13) : m_iconReqSize;
     wxColour effectiveIconColor = m_tintColor;
     if (m_buttonStyle == ButtonStyle::Close) {
       effectiveIconColor = m_isHovered ? *wxWHITE : (m_tintColor.IsOk() ? m_tintColor : palette.textSecondary);
-    } else if (m_buttonStyle == ButtonStyle::Secondary && m_label.IsEmpty()) {
+    } else if (m_buttonStyle == ButtonStyle::Secondary && m_label.IsEmpty() && !m_forceBorder) {
       effectiveIconColor = m_isHovered ? palette.textPrimary : (m_tintColor.IsOk() ? m_tintColor : palette.textSecondary);
     } else if (!effectiveIconColor.IsOk()) {
       effectiveIconColor = textColour;

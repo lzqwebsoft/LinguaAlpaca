@@ -1,5 +1,6 @@
 #pragma once
 #include <wx/wx.h>
+#include "CustomButton.hpp"
 #include "CustomChoice.hpp"
 #include "core/Types.hpp"
 
@@ -26,7 +27,7 @@ private:
 
     CustomChoice* m_sourceChoice{nullptr};
     CustomChoice* m_targetChoice{nullptr};
-    wxButton* m_swapBtn{nullptr};
+    CustomButton* m_swapBtn{nullptr};
 
     wxStaticText* m_srcLabel{nullptr};
     wxStaticText* m_targetLabel{nullptr};

@@ -23,6 +23,7 @@ public:
     void SetLabel(const wxString& label) override;
     bool SetFont(const wxFont& font) override;
     void SetButtonStyle(ButtonStyle style) { m_buttonStyle = style; Refresh(); }
+    void SetForceBorder(bool force = true) { m_forceBorder = force; Refresh(); }
     void SetIcon(const char* svgContent, const wxSize& iconSize = wxSize(16, 16), const wxColour& tintColor = wxNullColour);
     void SetIconBundle(const wxBitmapBundle& bundle) { m_iconBundle = bundle; Refresh(); }
 
@@ -56,6 +57,7 @@ private:
     bool m_isHovered{false};
     bool m_isPressed{false};
     bool m_isChecked{false};
+    bool m_forceBorder{false};
 };
 
 } // namespace LinguaAlpaca::UI

@@ -2195,10 +2195,7 @@ void SettingsView::UpdateDictListSummary() {
             cols = 2;
         }
 
-        wxFlexGridSizer* gridSizer = new wxFlexGridSizer(0, cols, 8_dip, 8_dip);
-        for (int c = 0; c < cols; ++c) {
-            gridSizer->AddGrowableCol(c, 1);
-        }
+        wxGridSizer* gridSizer = new wxGridSizer(0, cols, 8_dip, 8_dip);
 
         bool isDark = (palette.windowBg.Red() < 100);
 
@@ -2222,6 +2219,7 @@ void SettingsView::UpdateDictListSummary() {
             }
             wxString titleStr = wxString::Format(L"#%zu  %s", i + 1, bookTitle);
             wxStaticText* nameText = new wxStaticText(itemCard, wxID_ANY, titleStr, wxDefaultPosition, wxDefaultSize, wxST_ELLIPSIZE_END);
+            nameText->SetMinSize(wxSize(1, -1));
             nameText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
             nameText->SetForegroundColour(palette.textPrimary);
             nameText->SetBackgroundColour(palette.windowBg);
@@ -2283,6 +2281,7 @@ void SettingsView::UpdateDictListSummary() {
             bottomRow->Add(folderIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4_dip);
 
             wxStaticText* pathText = new wxStaticText(itemCard, wxID_ANY, shortPath, wxDefaultPosition, wxDefaultSize, wxST_ELLIPSIZE_MIDDLE);
+            pathText->SetMinSize(wxSize(1, -1));
             pathText->SetFont(wxFont(wxFontInfo(8).Family(wxFONTFAMILY_SWISS).FaceName("Consolas, Microsoft YaHei")));
             pathText->SetForegroundColour(palette.textSecondary);
             pathText->SetBackgroundColour(palette.windowBg);

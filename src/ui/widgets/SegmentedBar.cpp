@@ -169,11 +169,11 @@ void SegmentedBar::OnPaint(wxPaintEvent& WXUNUSED(event)) {
         double startX = x + (w - totalContentW) / 2.0;
 
         if (hasIcon) {
-            wxBitmapBundle bundle = IconManager::GetIconBundle(item.svgIcon, wxSize(16, 16), itemColour);
-            wxBitmap bmp = bundle.GetBitmap(dip(16, 16));
+            wxSize drawIconSz(iconSz, iconSz);
+            wxBitmap bmp = IconManager::GetIconBitmap(this, item.svgIcon, drawIconSz, itemColour);
             if (bmp.IsOk()) {
-                double iconY = y + (h - bmp.GetHeight()) / 2.0;
-                gc->DrawBitmap(bmp, startX, iconY, bmp.GetWidth(), bmp.GetHeight());
+                double iconY = y + (h - drawIconSz.y) / 2.0;
+                gc->DrawBitmap(bmp, startX, iconY, drawIconSz.x, drawIconSz.y);
             }
             startX += iconSz + gap;
         }

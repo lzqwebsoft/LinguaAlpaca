@@ -14,6 +14,25 @@ public:
         const wxColour& tintColor = wxNullColour
     );
 
+    /**
+     * @brief 从 wxBitmapBundle 提取适配目标窗口内容缩放倍率 (Retina / High-DPI) 的物理像素位图
+     */
+    static wxBitmap GetBitmap(
+        const wxWindow* window,
+        const wxBitmapBundle& bundle,
+        const wxSize& drawSize
+    );
+
+    /**
+     * @brief 获取适配目标窗口内容缩放倍率 (Retina / High-DPI) 的 SVG 物理像素位图
+     */
+    static wxBitmap GetIconBitmap(
+        const wxWindow* window,
+        const char* svgContent,
+        const wxSize& drawSize = wxSize(16, 16),
+        const wxColour& tintColor = wxNullColour
+    );
+
     static wxImage GetAppLogoImage();
     static wxImage GetAppWindowIconImage();
     static wxBitmapBundle GetAppLogoBundle(const wxSize& targetSize = wxSize(28, 28));

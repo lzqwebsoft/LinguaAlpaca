@@ -139,8 +139,7 @@ void CustomInputBox::OnPaint(wxPaintEvent& WXUNUSED(event)) {
     // 2. 绘制前缀 SVG 图标 (仅单行模式支持)
     if (!m_isMultiline && m_prefixSvg) {
         wxColour iconColor = m_isFocused ? palette.accentPrimary : palette.textSecondary;
-        wxBitmapBundle iconBundle = IconManager::GetIconBundle(m_prefixSvg, wxSize(16, 16), iconColor);
-        wxBitmap iconBmp = iconBundle.GetBitmap(m_prefixIconSize);
+        wxBitmap iconBmp = IconManager::GetIconBitmap(this, m_prefixSvg, m_prefixIconSize, iconColor);
         if (iconBmp.IsOk()) {
             int iconX = 11_dip;
             int iconY = (size.y - m_prefixIconSize.y) / 2;

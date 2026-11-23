@@ -242,7 +242,7 @@ namespace LinguaAlpaca::UI {
 		// 2. 第一行：精致 Logo (42x42) + 主标题与英文副标组合
 		wxSize logoSize = dip(42, 42);
 		wxBitmapBundle logoBundle = IconManager::GetAppLogoBundle(wxSize(42, 42));
-		wxBitmap logoBmp = logoBundle.GetBitmap(logoSize);
+		wxBitmap logoBmp = IconManager::GetBitmap(this, logoBundle, logoSize);
 
 		wxFont titleFont = ThemeFont::GetFont(FontRole::SectionTitle);
 		wxFont subTitleFont = ThemeFont::MakeFont(11, wxFONTWEIGHT_NORMAL);

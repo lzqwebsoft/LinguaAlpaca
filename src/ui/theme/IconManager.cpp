@@ -1,4 +1,6 @@
 #include "IconManager.hpp"
+#include <algorithm>
+#include <cmath>
 #include <unordered_map>
 #include <wx/mstream.h>
 #include <wx/image.h>
@@ -104,6 +106,37 @@ wxBitmapBundle IconManager::GetIconBundle(
     wxBitmapBundle bundle = wxBitmapBundle::FromSVG(svgStr.c_str(), size);
     s_bundleCache.emplace(key, bundle);
     return bundle;
+}
+
+wxBitmap IconManager::GetBitmap(
+    const wxWindow* window,
+    const wxBitmapBundle& bundle,
+    const wxSize& drawSize) {
+
+    if (!bundle.IsOk() || drawSize.x <= 0 || drawSize.y <= 0) {
+        return wxNullBitmap;
+    }
+
+    double scale = window ? window->GetContentScaleFactor() : 1.0;
+    wxSize physSize(
+        std::max(1, static_cast<int>(std::round(drawSize.x * scale))),
+        std::max(1, static_cast<int>(std::round(drawSize.y * scale)))
+    );
+    return bundle.GetBitmap(physSize);
+}
+
+wxBitmap IconManager::GetIconBitmap(
+    const wxWindow* window,
+    const char* svgContent,
+    const wxSize& drawSize,
+    const wxColour& tintColor) {
+
+    if (!svgContent || drawSize.x <= 0 || drawSize.y <= 0) {
+        return wxNullBitmap;
+    }
+
+    wxBitmapBundle bundle = GetIconBundle(svgContent, drawSize, tintColor);
+    return GetBitmap(window, bundle, drawSize);
 }
 
 #ifdef _WIN32

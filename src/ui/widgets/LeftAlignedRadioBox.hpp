@@ -645,11 +645,11 @@ private:
             // 5. 绘制可选 SVG 语义图标 (如日间 Sun / 夜间 Moon / 系统 Settings)
             if (svgIcon != nullptr) {
                 wxColour iconCol = isSelected ? palette.accentPrimary : (isHovered ? palette.textPrimary : palette.textSecondary);
-                wxBitmapBundle bundle = IconManager::GetIconBundle(svgIcon, wxSize(16, 16), iconCol);
-                wxBitmap bmp = bundle.GetBitmap(dip(16, 16));
+                wxSize drawIconSz(iconSz, iconSz);
+                wxBitmap bmp = IconManager::GetIconBitmap(this, svgIcon, drawIconSz, iconCol);
                 if (bmp.IsOk()) {
-                    double iconY = centerY - bmp.GetHeight() / 2.0;
-                    gc->DrawBitmap(bmp, startX, iconY, bmp.GetWidth(), bmp.GetHeight());
+                    double iconY = centerY - drawIconSz.y / 2.0;
+                    gc->DrawBitmap(bmp, startX, iconY, drawIconSz.x, drawIconSz.y);
                 }
                 startX += iconSz + iconGap;
             }

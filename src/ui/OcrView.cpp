@@ -233,8 +233,7 @@ void OcrView::InitUI() {
                     gc->DrawRoundedRectangle(topBtnX, topBtnY, topBtnW, topBtnH, 6.0_dip);
 
                     wxSize topIconSz = dip(14, 14);
-                    wxBitmapBundle eyeBundle = IconManager::GetIconBundle(SVG::EYE, wxSize(14, 14), topText);
-                    wxBitmap eyeBmp = eyeBundle.GetBitmap(topIconSz);
+                    wxBitmap eyeBmp = IconManager::GetIconBitmap(m_dropzonePanel, SVG::EYE, topIconSz, topText);
 
                     wxFont topFont = ThemeFont::GetFont(FontRole::Control, true);
                     gc->SetFont(topFont, topText);
@@ -264,8 +263,7 @@ void OcrView::InitUI() {
                         gc->DrawRoundedRectangle(centerBtnX, centerBtnY, centerBtnW, centerBtnH, 10.0_dip);
 
                         wxSize centerIconSz = dip(16, 16);
-                        wxBitmapBundle cloudBundle = IconManager::GetIconBundle(SVG::CLOUD_UPLOAD, wxSize(16, 16), *wxWHITE);
-                        wxBitmap cloudBmp = cloudBundle.GetBitmap(centerIconSz);
+                        wxBitmap cloudBmp = IconManager::GetIconBitmap(m_dropzonePanel, SVG::CLOUD_UPLOAD, centerIconSz, *wxWHITE);
 
                         wxFont centerFont = ThemeFont::GetFont(FontRole::Control, true);
                         gc->SetFont(centerFont, *wxWHITE);

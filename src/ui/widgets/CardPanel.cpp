@@ -226,8 +226,7 @@ namespace LinguaAlpaca::UI {
 			double ltw = 0, lth = 0;
 			gc->GetTextExtent(rendLabel, &ltw, &lth);
 
-			wxBitmapBundle rendBundle = IconManager::GetIconBundle(SVG::LAYOUT, wxSize(13, 13), rendText);
-			wxBitmap rendBmp = rendBundle.GetBitmap(tabIconSz);
+			wxBitmap rendBmp = IconManager::GetIconBitmap(this, SVG::LAYOUT, tabIconSz, rendText);
 
 			double totalRendW = tabIconSz.x + 4_dip + ltw;
 			double rendStartX = m_renderedTabRect.x + (tabW - totalRendW) / 2.0;
@@ -251,8 +250,7 @@ namespace LinguaAlpaca::UI {
 			wxString srcLabel = L"源码";
 			gc->GetTextExtent(srcLabel, &ltw, &lth);
 
-			wxBitmapBundle srcBundle = IconManager::GetIconBundle(SVG::TEXT, wxSize(13, 13), srcText);
-			wxBitmap srcBmp = srcBundle.GetBitmap(tabIconSz);
+			wxBitmap srcBmp = IconManager::GetIconBitmap(this, SVG::TEXT, tabIconSz, srcText);
 
 			double totalSrcW = tabIconSz.x + 4_dip + ltw;
 			double srcStartX = m_sourceTabRect.x + (tabW - totalSrcW) / 2.0;
@@ -273,8 +271,7 @@ namespace LinguaAlpaca::UI {
 		for (int i = (int)m_tools.size() - 1; i >= 0; --i) {
 			toolX -= toolIconSz.x;
 			wxColour toolColor = (m_hoverToolIndex == i) ? palette.accentPrimary : palette.textSecondary;
-			wxBitmapBundle bundle = IconManager::GetIconBundle(m_tools[i].svgContent, wxSize(16, 16), toolColor);
-			wxBitmap bmp = bundle.GetBitmap(toolIconSz);
+			wxBitmap bmp = IconManager::GetIconBitmap(this, m_tools[i].svgContent, toolIconSz, toolColor);
 			if (bmp.IsOk()) {
 				gc->DrawBitmap(bmp, toolX, 12_dip, toolIconSz.x, toolIconSz.y);
 			}

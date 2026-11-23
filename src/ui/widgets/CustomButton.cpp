@@ -277,18 +277,17 @@ void CustomButton::OnPaint(wxPaintEvent &WXUNUSED(event)) {
     } else if (!effectiveIconColor.IsOk()) {
       effectiveIconColor = textColour;
     }
-    wxBitmapBundle bundle = IconManager::GetIconBundle(m_svgContent, reqSize, effectiveIconColor);
-    bmp = bundle.GetBitmap(reqSize);
+    bmp = IconManager::GetIconBitmap(this, m_svgContent, reqSize, effectiveIconColor);
     if (bmp.IsOk()) {
-      iconW = bmp.GetWidth();
-      iconH = bmp.GetHeight();
+      iconW = reqSize.x;
+      iconH = reqSize.y;
     }
   } else if (m_iconBundle.IsOk()) {
     wxSize reqIconSize = (size.y <= 30_dip) ? dip(13, 13) : dip(16, 16);
-    bmp = m_iconBundle.GetBitmap(reqIconSize);
+    bmp = IconManager::GetBitmap(this, m_iconBundle, reqIconSize);
     if (bmp.IsOk()) {
-      iconW = bmp.GetWidth();
-      iconH = bmp.GetHeight();
+      iconW = reqIconSize.x;
+      iconH = reqIconSize.y;
     }
   }
 

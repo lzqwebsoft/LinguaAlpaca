@@ -129,10 +129,10 @@ void SidebarNav::OnPaint(wxPaintEvent& WXUNUSED(event)) {
         wxColour iconTextColour = isSelected ? *wxWHITE : (isHovered ? palette.textPrimary : palette.textSecondary);
 
         // SVG Vector Icon
-        wxBitmapBundle bundle = IconManager::GetIconBundle(item.svgContent, wxSize(20, 20), iconTextColour);
-        wxBitmap bmp = bundle.GetBitmap(dip(20, 20));
+        wxSize iconSz = dip(20, 20);
+        wxBitmap bmp = IconManager::GetIconBitmap(this, item.svgContent, iconSz, iconTextColour);
         if (bmp.IsOk()) {
-            gc->DrawBitmap(bmp, (size.x - bmp.GetWidth()) / 2.0, yPos + 8_dip, bmp.GetWidth(), bmp.GetHeight());
+            gc->DrawBitmap(bmp, (size.x - iconSz.x) / 2.0, yPos + 8_dip, iconSz.x, iconSz.y);
         }
 
         // Label

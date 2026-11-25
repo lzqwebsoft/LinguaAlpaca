@@ -194,9 +194,9 @@ void SettingsView::InitUI() {
 
     modelCardSizer->Add(cardTitleSizer, 0, wxEXPAND | wxALL, 16_dip);
 
-    // 模型文件路径选择行 (统一 70_dip 标签对齐)
+    // 模型文件路径选择行 (统一 90_dip 标签对齐)
     wxBoxSizer* pathSizer = new wxBoxSizer(wxHORIZONTAL);
-    m_modelPathLabel = new wxStaticText(m_modelCard, wxID_ANY, L"模型文件", wxDefaultPosition, wxSize(70_dip, -1));
+    m_modelPathLabel = new wxStaticText(m_modelCard, wxID_ANY, L"模型文件：", wxDefaultPosition, wxSize(90_dip, -1));
     m_modelPathLabel->SetFont(wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
     m_modelPathLabel->SetForegroundColour(palette.textPrimary);
 
@@ -218,7 +218,7 @@ void SettingsView::InitUI() {
     // 运行参数设置行
     wxBoxSizer* modelParamSizer = new wxBoxSizer(wxHORIZONTAL);
 
-    m_modelGpuLabel = new wxStaticText(m_modelCard, wxID_ANY, L"计算加速：");
+    m_modelGpuLabel = new wxStaticText(m_modelCard, wxID_ANY, L"计算加速：", wxDefaultPosition, wxSize(90_dip, -1));
     m_modelGpuLabel->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
     m_modelGpuLabel->SetForegroundColour(palette.textPrimary);
 
@@ -249,7 +249,7 @@ void SettingsView::InitUI() {
 
     m_modelCtxCtrl = new CustomInputBox(m_modelCard, wxID_ANY, L"2048", L"2048", wxDefaultPosition, dip(80, 34));
 
-    m_modelParallelLabel = new wxStaticText(m_modelCard, wxID_ANY, L"翻译并发：");
+    m_modelParallelLabel = new wxStaticText(m_modelCard, wxID_ANY, L"翻译并发：", wxDefaultPosition, wxSize(90_dip, -1));
     m_modelParallelLabel->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
     m_modelParallelLabel->SetForegroundColour(palette.textPrimary);
 
@@ -384,7 +384,7 @@ void SettingsView::InitUI() {
 
     // Row 1: 主模型文件路径选择
     wxBoxSizer* ocrMainRow = new wxBoxSizer(wxHORIZONTAL);
-    m_ocrMainLabel = new wxStaticText(m_ocrCard, wxID_ANY, L"主模型", wxDefaultPosition, wxSize(70_dip, -1));
+    m_ocrMainLabel = new wxStaticText(m_ocrCard, wxID_ANY, L"主模型：", wxDefaultPosition, wxSize(90_dip, -1));
     m_ocrMainLabel->SetFont(wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
     m_ocrMainLabel->SetForegroundColour(palette.textPrimary);
 
@@ -402,7 +402,7 @@ void SettingsView::InitUI() {
 
     // Row 2: mmproj 视觉投影器文件路径选择
     wxBoxSizer* ocrMmprojRow = new wxBoxSizer(wxHORIZONTAL);
-    m_ocrMmprojLabel = new wxStaticText(m_ocrCard, wxID_ANY, L"mmproj", wxDefaultPosition, wxSize(70_dip, -1));
+    m_ocrMmprojLabel = new wxStaticText(m_ocrCard, wxID_ANY, L"mmproj：", wxDefaultPosition, wxSize(90_dip, -1));
     m_ocrMmprojLabel->SetFont(wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
     m_ocrMmprojLabel->SetForegroundColour(palette.textPrimary);
 
@@ -421,7 +421,7 @@ void SettingsView::InitUI() {
     // OCR 运行参数设置行
     wxBoxSizer* ocrParamSizer = new wxBoxSizer(wxHORIZONTAL);
 
-    m_ocrGpuLabel = new wxStaticText(m_ocrCard, wxID_ANY, L"计算加速：");
+    m_ocrGpuLabel = new wxStaticText(m_ocrCard, wxID_ANY, L"计算加速：", wxDefaultPosition, wxSize(90_dip, -1));
     m_ocrGpuLabel->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
     m_ocrGpuLabel->SetForegroundColour(palette.textPrimary);
 
@@ -576,9 +576,9 @@ void SettingsView::InitUI() {
 
     layoutCardSizer->Add(layoutTitleSizer, 0, wxEXPAND | wxALL, 16_dip);
 
-    // 模型文件路径选择行 (统一 70_dip 标签对齐)
+    // 模型文件路径选择行 (统一 90_dip 标签对齐)
     wxBoxSizer* layoutPathSizer = new wxBoxSizer(wxHORIZONTAL);
-    m_layoutPathLabel = new wxStaticText(m_layoutCard, wxID_ANY, L"ONNX 模型", wxDefaultPosition, wxSize(70_dip, -1));
+    m_layoutPathLabel = new wxStaticText(m_layoutCard, wxID_ANY, L"ONNX 模型：", wxDefaultPosition, wxSize(90_dip, -1));
     m_layoutPathLabel->SetFont(wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
     m_layoutPathLabel->SetForegroundColour(palette.textPrimary);
 
@@ -599,7 +599,7 @@ void SettingsView::InitUI() {
 
     // 运行参数设置行
     wxBoxSizer* layoutParamSizer = new wxBoxSizer(wxHORIZONTAL);
-    m_layoutProviderLabel = new wxStaticText(m_layoutCard, wxID_ANY, L"计算加速：");
+    m_layoutProviderLabel = new wxStaticText(m_layoutCard, wxID_ANY, L"计算加速：", wxDefaultPosition, wxSize(90_dip, -1));
     m_layoutProviderLabel->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
     m_layoutProviderLabel->SetForegroundColour(palette.textPrimary);
 
@@ -765,7 +765,7 @@ void SettingsView::InitUI() {
 
     // 目录选择行
     wxBoxSizer* dictDirRow = new wxBoxSizer(wxHORIZONTAL);
-    m_dictDirLabel = new wxStaticText(m_dictCard, wxID_ANY, L"词典目录", wxDefaultPosition, wxSize(70_dip, -1));
+    m_dictDirLabel = new wxStaticText(m_dictCard, wxID_ANY, L"词典目录：", wxDefaultPosition, wxSize(90_dip, -1));
     m_dictDirLabel->SetFont(wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
     m_dictDirLabel->SetForegroundColour(palette.textPrimary);
 

@@ -27,7 +27,7 @@ struct AppConfig {
     int layoutExecutionProvider{0}; // 0: CPU 模式, 1: 硬件加速 (DirectML / CoreML)
     int translationPort{0}; // 翻译服务端口 (0 为自动分配)
     int ocrPort{0}; // OCR 服务端口 (0 为自动分配)
-    int translationCtxSize{2048}; // 翻译上下文大小
+    int translationCtxSize{4096}; // 翻译上下文大小
     int ocrCtxSize{4096}; // OCR 视觉上下文大小
     int translationThreads{0}; // 翻译计算线程数 (0 为默认)
     int ocrThreads{0}; // OCR 计算线程数 (0 为默认)
@@ -73,7 +73,7 @@ public:
     void UpdateConfig(const AppConfig& newConfig);
 
     void SaveModelPath(const std::string& path);
-    void SaveModelConfig(const std::string& path, int gpuLayers, int port = 0, int ctxSize = 2048, int threads = 0, int parallel = 1);
+    void SaveModelConfig(const std::string& path, int gpuLayers, int port = 0, int ctxSize = 4096, int threads = 0, int parallel = 1);
     void SaveOcrConfig(const std::string& ocrModelPath, const std::string& ocrMmprojPath, int ocrGpuLayers = 0, int port = 0, int ctxSize = 4096, int threads = 0, bool ocrMmprojOffload = false, int parallel = 2);
     void SaveLayoutConfig(const std::string& layoutModelPath, int executionProvider = 0, int threads = 0);
     void SaveThemeMode(const std::string& themeMode);

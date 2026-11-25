@@ -19,7 +19,7 @@
   <img src="https://img.shields.io/badge/License-MIT-2E7D32?style=flat-square" alt="License" />
 </p>
 
-**LinguaAlpaca (译灵驼)** 是一款基于 **C++17** 与 **wxWidgets** 打造的现代化、高颜值、高性能桌面离线 AI 翻译助手。项目深度内嵌 **llama.cpp** 原生后端引擎（推荐搭载腾讯 **Hy-MT2-1.8B-GGUF** 高质量离线翻译大模型与 **PaddleOCR-VL** 多模态视觉模型）与 **ONNX Runtime C++** 版面分析推理引擎（搭载 **PP-DocLayoutV3**），集**端侧大模型流式打字翻译**、**智能文档版面分析与 PDF 转 Markdown**、**多模态 OCR 视觉解析**（支持截图实时粘贴与识别后一键翻译）、**StarDict 本地百万词典秒查**与**系统级全局划词悬浮气泡**于一体。
+**LinguaAlpaca (译灵驼)** 是一款基于 **C++17** 与 **wxWidgets** 打造的现代化、高颜值、高性能桌面离线 AI 翻译助手。项目深度内嵌 **llama.cpp** 原生后端引擎（推荐搭载腾讯 **Hy-MT3-1.8B-GGUF** 高质量离线翻译大模型，支持 102 种语言互译，与 **PaddleOCR-VL** 多模态视觉模型）与 **ONNX Runtime C++** 版面分析推理引擎（搭载 **PP-DocLayoutV3**），集**端侧大模型流式打字翻译**、**智能文档版面分析与 PDF 转 Markdown**、**多模态 OCR 视觉解析**（支持截图实时粘贴与识别后一键翻译）、**StarDict 本地百万词典秒查**与**系统级全局划词悬浮气泡**于一体。
 
 具备启动秒开、按需模型热切换、离线 TTS 语音朗读与深浅调色板热更新。全流程坚持 **100% 本地离线计算**，彻底杜绝隐私与敏感数据外泄风险。
 
@@ -191,7 +191,7 @@ LinguaAlpaca 深度结合 **ONNX Runtime C++ 原生引擎** 与 **PP-DocLayoutV3
 │   【阶段 4: 多模态切片并行识别与排版重构】                                             │
 │     - 文本 / 标题 / 表格 / 公式 ──► 调用 PaddleOCR-VL (VLM) 局部子图高保真转写         │
 │     - 图片 / 图表 ───────────────► 独立裁剪保存至 imgs/，注入自适应百分比居中 HTML 标签│
-│     - 纯英文段落 ────────────────► (可选) 自动调度 Hy-MT2-1.8B 进行母语级离线流式翻译  │
+│     - 纯英文段落 ────────────────► (可选) 自动调度 Hy-MT3-1.8B 进行母语级离线流式翻译  │
 │           │                                                                            │
 │           ▼                                                                            │
 │   输出标准 Markdown (.md) + 资产切片 (imgs/) + 结构化元数据 (.json)                    │
@@ -213,7 +213,7 @@ LinguaAlpaca 深度结合 **ONNX Runtime C++ 原生引擎** 与 **PP-DocLayoutV3
 5. **对齐 PaddleX 规范的高保真 Markdown 产出**：
    - **图片自适应排版**：插图与图表自动归档至 `imgs/`，采用居中与百分比宽度自适应 HTML 标签（`<div style="text-align: center;"><img ... width="XX%" /></div>`），包含微型图标保底（$\ge 25\%$）与通栏吸顶（$\ge 80\% \rightarrow 100\%$）保护；
    - **富文本结构化**：表格转标准 Markdown/HTML，公式转标准 LaTeX（`$$...$$`），标题自动按深度分级（`#` / `##`）；
-   - **一键中英对照翻译**：支持在转换 Markdown 过程中，联动内置 Hy-MT2 离线翻译大模型，直接将英文 PDF 转换为高质量中文 Markdown。
+   - **一键中英对照翻译**：支持在转换 Markdown 过程中，联动内置 Hy-MT3 离线翻译大模型，直接将英文 PDF 转换为高质量中文 Markdown。
 
 ---
 
@@ -329,7 +329,7 @@ cmake --build build --config Release --target package_mac
 - **[wxWidgets 3.3.4](https://www.wxwidgets.org/)**：现代化跨平台 GUI 原生组件框架、Direct2D/GDI+ 渲染与 High-DPI 缩放支持。
 - **[llama.cpp](https://github.com/ggerganov/llama.cpp)**：提供超高吞吐量的嵌入式 `llama_server`、CPU/Vulkan GPU 后端推理引擎与多模态 mtmd 视觉架构。
 - **[ONNX Runtime](https://github.com/microsoft/onnxruntime)**：微软开源的高性能跨平台机器学习推理运行时，驱动 PP-DocLayoutV3 端到端版面分析与阅读顺序预测。
-- **[Tencent Hy-MT2](https://huggingface.co/tencent/Hy-MT2-1.8B-GGUF)**：腾讯开源的 1.8B 高性能通用机器翻译大模型。
+- **[Tencent Hy-MT3](https://huggingface.co/tencent/Hy-MT3-1.8B-GGUF)**：腾讯混元开源的第三代 1.8B 高性能多语言翻译大模型，支持 102 种语言互译。
 - **[PaddleOCR-VL](https://huggingface.co/PaddlePaddle/PaddleOCR-VL-1.6-GGUF)**：百度开源的高精度端到端多模态视觉文档解析大模型。
 - **[PP-DocLayoutV3](https://github.com/PaddlePaddle/PaddleOCR)**：百度飞桨 ECCV 2026 最新开源的 25 类端到端文档版面分析、实例分割与阅读顺序预测模型。
 - **[StarDict 词典生态](https://stardict.uber.space/)**：提供庞大丰富的离线双语字典生态与高速索引数据。

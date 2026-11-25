@@ -167,7 +167,7 @@ void LlamaClient::TranslateStreamAsync(const TranslationTask& task, StreamTokenC
                      {"temperature", 0.7},
                      {"top_p", 0.6},
                      {"top_k", 20},
-                     {"repetition_penalty", 1.05},
+                     {"repeat_penalty", 1.05},
                      {"max_tokens", 4096}};
 
         std::string reqBody = body.dump(-1, ' ', false, json::error_handler_t::replace);
@@ -521,7 +521,7 @@ void LlamaClient::RecognizeStream(const std::string& imagePath, const std::strin
 
         json body = {
             {"model", "default"},        {"messages", json::array({{{"role", "user"}, {"content", messageContent}}})}, {"stream", true}, {"temperature", 0.1}, {"top_p", 0.9}, {"max_tokens", 4096},
-            {"repetition_penalty", 1.05}};
+            {"repeat_penalty", 1.05}};
 
         std::string reqBody = body.dump(-1, ' ', false, json::error_handler_t::replace);
         std::string accumulatedText;

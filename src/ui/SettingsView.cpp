@@ -341,7 +341,7 @@ void SettingsView::InitUI() {
     modelFooterLabel->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
     modelFooterLabel->SetForegroundColour(palette.textSecondary);
 
-    m_transModelLink = new wxHyperlinkCtrl(m_modelCard, wxID_ANY, L"Tencent Hy-MT2-1.8B-GGUF (HuggingFace)", "https://huggingface.co/tencent/Hy-MT2-1.8B-GGUF");
+    m_transModelLink = new wxHyperlinkCtrl(m_modelCard, wxID_ANY, L"Tencent Hy-MT3-1.8B-GGUF (HuggingFace)", "https://huggingface.co/tencent/Hy-MT3-1.8B-GGUF");
     m_transModelLink->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
     m_transModelLink->SetNormalColour(palette.accentPrimary);
     m_transModelLink->SetHoverColour(palette.accentHover);
@@ -1332,7 +1332,7 @@ void SettingsView::OnSaveConfig(wxCommandEvent& WXUNUSED(event)) {
     long port = 0;
     if (m_modelPortCtrl)
         m_modelPortCtrl->GetValue().ToLong(&port);
-    long ctxSize = 2048;
+    long ctxSize = 4096;
     if (m_modelCtxCtrl)
         m_modelCtxCtrl->GetValue().ToLong(&ctxSize);
     long transParallel = 1;

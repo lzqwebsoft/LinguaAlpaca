@@ -195,7 +195,7 @@ namespace LinguaAlpaca {
         m_config.targetLang = fileConfig.Read("/Language/TargetLang", "zh").ToUTF8().data();
         m_config.gpuLayers = fileConfig.ReadLong("/Model/GpuLayers", 99);       // 99 表示全部是GPU
         m_config.translationPort = fileConfig.ReadLong("/Model/Port", 0);
-        m_config.translationCtxSize = fileConfig.ReadLong("/Model/CtxSize", 2048);
+        m_config.translationCtxSize = fileConfig.ReadLong("/Model/CtxSize", 4096);
         m_config.translationThreads = fileConfig.ReadLong("/Model/Threads", 0);
         m_config.ocrGpuLayers = fileConfig.ReadLong("/OCRModel/GpuLayers", 0);  // 默认 0 (CPU 模式)，避免多模态 Vulkan 显存/TDR 崩溃
         m_config.ocrMmprojOffload = fileConfig.ReadBool("/OCRModel/MmprojOffload", false); // 默认 false (CPU 编码)

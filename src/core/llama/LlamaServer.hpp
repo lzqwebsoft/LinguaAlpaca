@@ -28,7 +28,7 @@ struct ServerConfig {
     std::string mmprojPath;
     bool mmprojOffload = false; // 是否对 mmproj 视觉投影器启用 GPU 硬件加速
     int ngl = 99;
-    int ctxSize = 2048;
+    int ctxSize = 4096;
     int threads = 0;
     int parallel = 1; // 并发槽位数 (llama-server --parallel / -np)
 };

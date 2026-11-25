@@ -64,7 +64,7 @@ void DictView::InitUI() {
 
     m_dictCountBadge = new StatusBadge(m_headerPanel);
 
-    headerTopSizer->Add(titleIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10_dip);
+    headerTopSizer->Add(titleIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, Layout::TitleIconGap());
     headerTopSizer->Add(m_titleText, 0, wxALIGN_CENTER_VERTICAL);
     headerTopSizer->AddStretchSpacer(1);
     headerTopSizer->Add(m_dictCountBadge, 0, wxALIGN_CENTER_VERTICAL);
@@ -102,7 +102,7 @@ void DictView::InitUI() {
     headerPanelSizer->Add(searchRowSizer, 0, wxEXPAND);
     m_headerPanel->SetSizer(headerPanelSizer);
 
-    m_mainSizer->Add(m_headerPanel, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, 20_dip);
+    m_mainSizer->Add(m_headerPanel, 0, wxEXPAND | wxALL, Layout::PagePadding());
 
     // ==========================================
     // 2. 主内容区 (分栏容器)
@@ -270,13 +270,13 @@ void DictView::InitUI() {
     emptySizer->AddStretchSpacer(1);
     m_emptyStateCard->SetSizer(emptySizer);
 
-    contentRowSizer->Add(m_leftSuggestCard, 30, wxEXPAND | wxRIGHT, 12_dip);
+    contentRowSizer->Add(m_leftSuggestCard, 30, wxEXPAND | wxRIGHT, Layout::CardGap());
     contentRowSizer->Add(m_rightResultCard, 70, wxEXPAND);
     contentRowSizer->Add(m_emptyStateCard, 100, wxEXPAND);
     m_emptyStateCard->Hide();
 
     m_mainContentPanel->SetSizer(contentRowSizer);
-    m_mainSizer->Add(m_mainContentPanel, 1, wxEXPAND | wxALL, 20_dip);
+    m_mainSizer->Add(m_mainContentPanel, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, Layout::ContentPadding());
 
     SetSizer(m_mainSizer);
     Layout();

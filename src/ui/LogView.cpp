@@ -62,7 +62,7 @@ void LogView::InitUI() {
     m_titleText->SetFont(ThemeFont::GetFont(FontRole::SectionTitle));
     m_titleText->SetForegroundColour(palette.textPrimary);
 
-    headerSizer->Add(m_titleIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8_dip);
+    headerSizer->Add(m_titleIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, Layout::TitleIconGap());
     headerSizer->Add(m_titleText, 0, wxALIGN_CENTER_VERTICAL);
     headerSizer->AddStretchSpacer(1);
 
@@ -103,7 +103,7 @@ void LogView::InitUI() {
     headerSizer->Add(m_openDirBtn, 0, wxALIGN_CENTER_VERTICAL);
 
     m_headerPanel->SetSizer(headerSizer);
-    mainSizer->Add(m_headerPanel, 0, wxEXPAND | wxALL, 16_dip);
+    mainSizer->Add(m_headerPanel, 0, wxEXPAND | wxALL, Layout::PagePadding());
 
     // 2. 日志内容卡片 Panel (参考 CardPanel 绘制圆角与边框)
     m_cardContainer = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE | wxFULL_REPAINT_ON_RESIZE);
@@ -152,7 +152,7 @@ void LogView::InitUI() {
     cardSizer->Add(textHBox, 1, wxEXPAND | wxTOP | wxBOTTOM, 8_dip);
     m_cardContainer->SetSizer(cardSizer);
 
-    mainSizer->Add(m_cardContainer, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 16_dip);
+    mainSizer->Add(m_cardContainer, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, Layout::ContentPadding());
     SetSizer(mainSizer);
     Layout();
 

@@ -142,14 +142,14 @@ void SettingsView::InitUI() {
     titleTextSizer->Add(m_titleText, 0, wxBOTTOM, 2_dip);
     titleTextSizer->Add(m_subTitleText, 0);
 
-    titleRowSizer->Add(m_headerTitleIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10_dip);
+    titleRowSizer->Add(m_headerTitleIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, Layout::TitleIconGap());
     titleRowSizer->Add(titleTextSizer, 1, wxALIGN_CENTER_VERTICAL);
-    topStickySizer->Add(titleRowSizer, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, 16_dip);
+    topStickySizer->Add(titleRowSizer, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, Layout::PagePadding());
 
     // 吸顶 Segmented Bar 分段胶囊选项卡
     std::vector<SegmentItem> segmentItems = {{0, L"模型服务", SVG::MODEL_LOAD}, {1, L"划词翻译", SVG::TRANSLATE}, {2, L"本地词典", SVG::DICTIONARY}, {3, L"常规偏好", SVG::SETTINGS}};
     m_segmentedBar = new SegmentedBar(m_topStickyPanel, segmentItems, [this](int index) { OnSegmentChanged(index); });
-    topStickySizer->Add(m_segmentedBar, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP | wxBOTTOM, 12_dip);
+    topStickySizer->Add(m_segmentedBar, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP | wxBOTTOM, Layout::ContentPadding());
     m_topStickyPanel->SetSizer(topStickySizer);
 
     // 主布局：顶部固定 Header + 底部 (视口 + 滚动条)
@@ -164,7 +164,10 @@ void SettingsView::InitUI() {
     SetSizer(rootSizer);
 
     m_mainSizer = new wxBoxSizer(wxVERTICAL);
-    m_mainSizer->AddSpacer(16_dip);
+    m_mainSizer->AddSpacer(Layout::ContentPadding());
+    auto addCard = [this](wxPanel* card) {
+        m_mainSizer->Add(card, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, Layout::ContentPadding());
+    };
 
     // ====================================================================
     // Group 1: 翻译大模型 (Translation Model Settings Card)
@@ -352,7 +355,7 @@ void SettingsView::InitUI() {
     modelCardSizer->Add(modelFooterSizer, 0, wxLEFT | wxRIGHT | wxBOTTOM, 16_dip);
 
     m_modelCard->SetSizer(modelCardSizer);
-    m_mainSizer->Add(m_modelCard, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 16_dip);
+    addCard(m_modelCard);
 
     // ====================================================================
     // Group 2: OCR 视觉识别模型 (OCR Model Settings Card)
@@ -547,7 +550,7 @@ void SettingsView::InitUI() {
     ocrCardSizer->Add(m_ocrFooterPanel, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 16_dip);
 
     m_ocrCard->SetSizer(ocrCardSizer);
-    m_mainSizer->Add(m_ocrCard, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 16_dip);
+    addCard(m_ocrCard);
 
     // ====================================================================
     // Group 2.5: 文档版面分析模型 (Document Layout Analysis Model Settings Card)
@@ -661,7 +664,7 @@ void SettingsView::InitUI() {
     layoutCardSizer->Add(m_layoutFooterPanel, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 16_dip);
 
     m_layoutCard->SetSizer(layoutCardSizer);
-    m_mainSizer->Add(m_layoutCard, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 16_dip);
+    addCard(m_layoutCard);
 
     // ====================================================================
     // Group 3: 划词翻译设置卡片
@@ -736,7 +739,7 @@ void SettingsView::InitUI() {
     selSizer->Add(btnSizer, 0, wxLEFT | wxRIGHT | wxBOTTOM, 16_dip);
 
     m_selectionCard->SetSizer(selSizer);
-    m_mainSizer->Add(m_selectionCard, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 16_dip);
+    addCard(m_selectionCard);
 
     // ====================================================================
     // Group 4: StarDict 词典设置卡片
@@ -833,7 +836,7 @@ void SettingsView::InitUI() {
     dictSizer->Add(dictFooterSizer, 0, wxLEFT | wxRIGHT | wxBOTTOM, 16_dip);
 
     m_dictCard->SetSizer(dictSizer);
-    m_mainSizer->Add(m_dictCard, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 16_dip);
+    addCard(m_dictCard);
 
     // ====================================================================
     // Group 5: 日志与诊断设置卡片
@@ -885,7 +888,7 @@ void SettingsView::InitUI() {
     logSizer->Add(logBtnSizer, 0, wxLEFT | wxRIGHT | wxBOTTOM, 16_dip);
 
     m_logCard->SetSizer(logSizer);
-    m_mainSizer->Add(m_logCard, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 16_dip);
+    addCard(m_logCard);
 
     // ====================================================================
     // Group 6: 偏好设置与关于卡片
@@ -932,7 +935,7 @@ void SettingsView::InitUI() {
     prefSizer->Add(aboutRowSizer, 0, wxLEFT | wxRIGHT | wxBOTTOM, 16_dip);
 
     m_prefCard->SetSizer(prefSizer);
-    m_mainSizer->Add(m_prefCard, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 20_dip);
+    addCard(m_prefCard);
 
     m_contentPanel->SetSizer(m_mainSizer);
     Layout();

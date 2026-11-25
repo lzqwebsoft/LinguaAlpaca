@@ -90,7 +90,7 @@ void TextView::InitUI() {
 
     m_statusBadge = new StatusBadge(this);
 
-    headerSizer->Add(titleIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10_dip);
+    headerSizer->Add(titleIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, Layout::TitleIconGap());
     headerSizer->Add(m_titleText, 0, wxALIGN_CENTER_VERTICAL);
     headerSizer->AddStretchSpacer(1);
     headerSizer->Add(m_permBadge, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8_dip);
@@ -98,7 +98,7 @@ void TextView::InitUI() {
     headerSizer->Add(m_permRestartBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8_dip);
     headerSizer->Add(m_statusBadge, 0, wxALIGN_CENTER_VERTICAL);
 
-    mainSizer->Add(headerSizer, 0, wxEXPAND | wxALL, 20_dip);
+    mainSizer->Add(headerSizer, 0, wxEXPAND | wxALL, Layout::PagePadding());
 
     // 2. 语言选择条
     m_langPanel = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxSize(-1, 52_dip), wxBORDER_NONE);
@@ -123,10 +123,10 @@ void TextView::InitUI() {
         }
     });
 
-    langSizer->Add(m_langSelector, 1, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, 12_dip);
+    langSizer->Add(m_langSelector, 1, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, Layout::ContentPadding());
     m_langPanel->SetSizer(langSizer);
 
-    mainSizer->Add(m_langPanel, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 20_dip);
+    mainSizer->Add(m_langPanel, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, Layout::ContentPadding());
 
     // 3. 原文与译文卡片区
     wxBoxSizer* cardsSizer = new wxBoxSizer(wxHORIZONTAL);
@@ -175,10 +175,10 @@ void TextView::InitUI() {
     m_targetCard->GetTextCtrl()->SetValue(L"你好，欢迎使用译灵驼！");
     m_targetCard->SetCharacterCount(11);
 
-    cardsSizer->Add(m_sourceCard, 1, wxEXPAND | wxRIGHT, 12_dip);
-    cardsSizer->Add(m_targetCard, 1, wxEXPAND | wxLEFT, 12_dip);
+    cardsSizer->Add(m_sourceCard, 1, wxEXPAND | wxRIGHT, Layout::CardGap());
+    cardsSizer->Add(m_targetCard, 1, wxEXPAND);
 
-    mainSizer->Add(cardsSizer, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 20_dip);
+    mainSizer->Add(cardsSizer, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, Layout::ContentPadding());
 
     // 4. 底部操作按钮栏
     wxBoxSizer* bottomSizer = new wxBoxSizer(wxHORIZONTAL);
@@ -207,7 +207,7 @@ void TextView::InitUI() {
     bottomSizer->Add(m_swapBtn, 0, wxRIGHT, 12_dip);
     bottomSizer->Add(m_copyBtn, 0);
 
-    mainSizer->Add(bottomSizer, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 20_dip);
+    mainSizer->Add(bottomSizer, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, Layout::PagePadding());
 
     SetSizer(mainSizer);
     Layout();

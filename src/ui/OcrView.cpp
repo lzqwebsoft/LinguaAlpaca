@@ -83,12 +83,12 @@ void OcrView::InitUI() {
 
     m_statusBadge = new StatusBadge(this);
 
-    headerSizer->Add(titleIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10_dip);
+    headerSizer->Add(titleIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, Layout::TitleIconGap());
     headerSizer->Add(m_titleText, 0, wxALIGN_CENTER_VERTICAL);
     headerSizer->AddStretchSpacer(1);
     headerSizer->Add(m_statusBadge, 0, wxALIGN_CENTER_VERTICAL);
 
-    mainSizer->Add(headerSizer, 0, wxEXPAND | wxALL, 20_dip);
+    mainSizer->Add(headerSizer, 0, wxEXPAND | wxALL, Layout::PagePadding());
 
     // 2. Middle Content Area (Left: Dropzone Card ~45%, Right: Recognized Text Card ~55%)
     wxBoxSizer* contentSizer = new wxBoxSizer(wxHORIZONTAL);
@@ -357,7 +357,7 @@ void OcrView::InitUI() {
         }
     });
 
-    contentSizer->Add(m_dropzonePanel, 45, wxEXPAND | wxRIGHT, 12_dip);
+    contentSizer->Add(m_dropzonePanel, 45, wxEXPAND | wxRIGHT, Layout::CardGap());
 
     // Right Column: Recognized Text Card (Ratio 55%)
     m_resultCard = new CardPanel(this, L"识别文本与 Markdown", true, true);
@@ -480,11 +480,11 @@ void OcrView::InitUI() {
 
     contentSizer->Add(m_resultCard, 55, wxEXPAND);
 
-    mainSizer->Add(contentSizer, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 12_dip);
+    mainSizer->Add(contentSizer, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, Layout::ContentPadding());
 
     // 独立的现代化文档解析进度与状态组件
     m_progressPanel = new OcrProgressPanel(this);
-    mainSizer->Add(m_progressPanel, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 12_dip);
+    mainSizer->Add(m_progressPanel, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, Layout::ContentPadding());
 
     // 3. Bottom Action Bar: Recognize / Stop / OpenFolder / Translate Buttons
     wxBoxSizer* bottomSizer = new wxBoxSizer(wxHORIZONTAL);
@@ -526,7 +526,7 @@ void OcrView::InitUI() {
     bottomSizer->AddStretchSpacer(1);
     bottomSizer->Add(m_openFolderBtn, 0, wxALIGN_CENTER_VERTICAL);
 
-    mainSizer->Add(bottomSizer, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 20_dip);
+    mainSizer->Add(bottomSizer, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, Layout::PagePadding());
 
     SetSizer(mainSizer);
 

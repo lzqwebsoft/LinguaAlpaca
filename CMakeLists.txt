@@ -146,6 +146,7 @@ set(ENGINE_SOURCES
 
 set(UI_SOURCES
     src/ui/theme/Theme.hpp
+    src/ui/theme/Layout.hpp
     src/ui/theme/AppIcons.hpp
     src/ui/theme/IconManager.hpp
     src/ui/theme/IconManager.cpp

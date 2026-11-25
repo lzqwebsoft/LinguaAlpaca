@@ -72,8 +72,9 @@ void DictView::InitUI() {
     // 搜索输入行
     wxBoxSizer* searchRowSizer = new wxBoxSizer(wxHORIZONTAL);
 
-    // 词典切换下拉框
-    m_dictChoice = new CustomChoice(m_headerPanel, wxID_ANY, wxDefaultPosition, dip(180, 38));
+    // 词典切换下拉框 (30% 弹性权重，与下方 m_leftSuggestCard 同宽对齐)
+    m_dictChoice = new CustomChoice(m_headerPanel, wxID_ANY, wxDefaultPosition, dip(120, 38));
+    m_dictChoice->SetMinSize(dip(120, 38));
     m_dictChoice->Append(L"全部已加载词典");
     m_dictChoice->SetSelection(0);
     m_dictChoice->Bind(wxEVT_CHOICE, &DictView::OnDictChoiceSelected, this);
@@ -93,16 +94,26 @@ void DictView::InitUI() {
     m_searchBtn->SetIcon(SVG::BROWSE, dip(16, 16), *wxWHITE);
     m_searchBtn->Bind(wxEVT_BUTTON, &DictView::OnSearchClicked, this);
 
-    searchRowSizer->Add(m_dictChoice, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10_dip);
-    searchRowSizer->Add(m_searchBox, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10_dip);
-    searchRowSizer->Add(m_searchBtn, 0, wxALIGN_CENTER_VERTICAL);
+    // 右侧搜索框与查询按钮编组 (70% 弹性权重，与下方 m_rightResultCard 对齐)
+    wxBoxSizer* rightSearchSizer = new wxBoxSizer(wxHORIZONTAL);
+    rightSearchSizer->Add(m_searchBox, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10_dip);
+    rightSearchSizer->Add(m_searchBtn, 0, wxALIGN_CENTER_VERTICAL);
 
+    searchRowSizer->Add(m_dictChoice, 30, wxEXPAND | wxRIGHT, Layout::CardGap());
+    searchRowSizer->Add(rightSearchSizer, 70, wxEXPAND);
+
+    // 标题行保持 PagePadding 水平内边距，搜索行与下方主内容区保持 ContentPadding 水平对齐
     wxBoxSizer* headerPanelSizer = new wxBoxSizer(wxVERTICAL);
-    headerPanelSizer->Add(headerTopSizer, 0, wxEXPAND | wxBOTTOM, 14_dip);
-    headerPanelSizer->Add(searchRowSizer, 0, wxEXPAND);
+    int titleInset = Layout::PagePadding() - Layout::ContentPadding();
+    wxBoxSizer* headerTopWrapper = new wxBoxSizer(wxHORIZONTAL);
+    headerTopWrapper->Add(headerTopSizer, 1, wxEXPAND | wxLEFT | wxRIGHT, titleInset);
+
+    headerPanelSizer->AddSpacer(Layout::PagePadding());
+    headerPanelSizer->Add(headerTopWrapper, 0, wxEXPAND | wxBOTTOM, 14_dip);
+    headerPanelSizer->Add(searchRowSizer, 0, wxEXPAND | wxBOTTOM, Layout::PagePadding());
     m_headerPanel->SetSizer(headerPanelSizer);
 
-    m_mainSizer->Add(m_headerPanel, 0, wxEXPAND | wxALL, Layout::PagePadding());
+    m_mainSizer->Add(m_headerPanel, 0, wxEXPAND | wxLEFT | wxRIGHT, Layout::ContentPadding());
 
     // ==========================================
     // 2. 主内容区 (分栏容器)

@@ -74,7 +74,7 @@ void LogView::InitUI() {
     levels.Add(L"WARN");
     levels.Add(L"ERROR");
 
-    wxStaticText* filterLabel = new wxStaticText(m_headerPanel, wxID_ANY, L"过滤：");
+    wxStaticText* filterLabel = new wxStaticText(m_headerPanel, wxID_ANY, L"过滤");
     filterLabel->SetFont(ThemeFont::GetFont(FontRole::Control));
     filterLabel->SetForegroundColour(palette.textSecondary);
 

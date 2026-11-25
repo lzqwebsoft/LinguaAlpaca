@@ -9,14 +9,14 @@ namespace LinguaAlpaca::UI {
 
 enum class FontRole {
     DisplayTitle, // 界面主标题 (Win 18pt Bold / Mac 21pt Bold)
-    SectionTitle, // 分组/对话框主标题 (Win 14pt Bold / Mac 17pt Bold)
-    CardTitle,    // 卡片小标题 (Win 11pt Bold / Mac 15pt Bold)
-    WindowTitle,  // 悬浮窗/窗口工具栏标题 (Win 10pt Bold / Mac 14pt Bold)
-    Body,         // 默认正文/编辑区域 (Win 10pt Normal / Mac 14pt Normal)
-    Control,      // 标准控件/按钮/下拉选项/表格 (Win 9pt / Mac 13pt)
+    SectionTitle, // 分组/对话框主标题 (Win 15pt Bold / Mac 18pt Bold)
+    CardTitle,    // 卡片小标题 (Win 12pt Bold / Mac 15pt Bold)
+    WindowTitle,  // 悬浮窗/窗口工具栏标题 (Win 11pt Bold / Mac 15pt Bold)
+    Body,         // 默认正文/编辑区域 (Win 11pt Normal / Mac 15pt Normal)
+    Control,      // 标准控件/按钮/下拉选项/表格 (Win 10pt / Mac 14pt)
     Badge,        // 状态药丸/胶囊标签 (Win 9pt Bold / Mac 13pt Bold)
-    Caption,      // 辅助提示/折叠预览/底部状态 (Win 8pt / Mac 11pt)
-    Code,         // 等宽代码/控制台日志 (Win 9pt / Mac 12pt Mono)
+    Caption,      // 辅助提示/折叠预览/底部状态 (Win 9pt / Mac 13pt)
+    Code,         // 等宽代码/控制台日志 (Win 10pt / Mac 14pt Mono)
 };
 
 class ThemeFont {
@@ -92,29 +92,29 @@ public:
         case FontRole::DisplayTitle:
             return MakeFont(18, wxFONTWEIGHT_BOLD);
         case FontRole::SectionTitle:
-            return MakeFont(14, wxFONTWEIGHT_BOLD);
+            return MakeFont(15, wxFONTWEIGHT_BOLD);
         case FontRole::CardTitle:
-            return MakeFont(11, wxFONTWEIGHT_BOLD);
+            return MakeFont(12, wxFONTWEIGHT_BOLD);
         case FontRole::WindowTitle:
-            return MakeFont(10, wxFONTWEIGHT_BOLD);
+            return MakeFont(11, wxFONTWEIGHT_BOLD);
         case FontRole::Body:
-            return MakeFont(10, bold ? wxFONTWEIGHT_BOLD : wxFONTWEIGHT_NORMAL);
+            return MakeFont(11, bold ? wxFONTWEIGHT_BOLD : wxFONTWEIGHT_NORMAL);
         case FontRole::Control:
-            return MakeFont(9, bold ? wxFONTWEIGHT_BOLD : wxFONTWEIGHT_NORMAL);
+            return MakeFont(10, bold ? wxFONTWEIGHT_BOLD : wxFONTWEIGHT_NORMAL);
         case FontRole::Badge:
             return MakeFont(9, wxFONTWEIGHT_BOLD);
         case FontRole::Caption:
-            return MakeFont(8, bold ? wxFONTWEIGHT_BOLD : wxFONTWEIGHT_NORMAL);
+            return MakeFont(9, bold ? wxFONTWEIGHT_BOLD : wxFONTWEIGHT_NORMAL);
         case FontRole::Code:
-            return MakeFont(9, bold ? wxFONTWEIGHT_BOLD : wxFONTWEIGHT_NORMAL, false, GetDefaultMonoFamily());
+            return MakeFont(10, bold ? wxFONTWEIGHT_BOLD : wxFONTWEIGHT_NORMAL, false, GetDefaultMonoFamily());
         default:
-            return MakeFont(10, bold ? wxFONTWEIGHT_BOLD : wxFONTWEIGHT_NORMAL);
+            return MakeFont(11, bold ? wxFONTWEIGHT_BOLD : wxFONTWEIGHT_NORMAL);
         }
     }
 
     // 获取等宽字体（代码/终端/日志等，支持根据角色微调尺寸）
     static wxFont GetMonoFont(FontRole role = FontRole::Code, bool bold = false) {
-        int winBaseline = (role == FontRole::Caption) ? 8 : ((role == FontRole::Control) ? 9 : 10);
+        int winBaseline = (role == FontRole::Caption) ? 9 : ((role == FontRole::Control) ? 10 : 10);
         return MakeFont(winBaseline, bold ? wxFONTWEIGHT_BOLD : wxFONTWEIGHT_NORMAL, false, GetDefaultMonoFamily());
     }
 };

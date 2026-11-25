@@ -132,11 +132,11 @@ void SettingsView::InitUI() {
 
     wxBoxSizer* titleTextSizer = new wxBoxSizer(wxVERTICAL);
     m_titleText = new wxStaticText(m_topStickyPanel, wxID_ANY, L"系统偏好设置");
-    m_titleText->SetFont(wxFont(15, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
+    m_titleText->SetFont(ThemeFont::GetFont(FontRole::SectionTitle));
     m_titleText->SetForegroundColour(palette.textPrimary);
 
     m_subTitleText = new wxStaticText(m_topStickyPanel, wxID_ANY, L"管理离线模型、划词交互、词典与系统偏好");
-    m_subTitleText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+    m_subTitleText->SetFont(ThemeFont::GetFont(FontRole::Control));
     m_subTitleText->SetForegroundColour(palette.textSecondary);
 
     titleTextSizer->Add(m_titleText, 0, wxBOTTOM, 2_dip);
@@ -182,7 +182,7 @@ void SettingsView::InitUI() {
     m_modelCardIcon = new wxStaticBitmap(m_modelCard, wxID_ANY, cardTitleBundle);
 
     m_modelCardTitle = new wxStaticText(m_modelCard, wxID_ANY, L"翻译模型 (Text Translation Model)");
-    m_modelCardTitle->SetFont(wxFont(12, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
+    m_modelCardTitle->SetFont(ThemeFont::GetFont(FontRole::CardTitle));
     m_modelCardTitle->SetForegroundColour(palette.textPrimary);
 
     m_statusBadge = new StatusBadge(m_modelCard);
@@ -196,8 +196,8 @@ void SettingsView::InitUI() {
 
     // 模型文件路径选择行 (统一 90_dip 标签对齐)
     wxBoxSizer* pathSizer = new wxBoxSizer(wxHORIZONTAL);
-    m_modelPathLabel = new wxStaticText(m_modelCard, wxID_ANY, L"模型文件：", wxDefaultPosition, wxSize(90_dip, -1));
-    m_modelPathLabel->SetFont(wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+    m_modelPathLabel = new wxStaticText(m_modelCard, wxID_ANY, L"模型文件", wxDefaultPosition, dip(90, -1));
+    m_modelPathLabel->SetFont(ThemeFont::GetFont(FontRole::Control));
     m_modelPathLabel->SetForegroundColour(palette.textPrimary);
 
     m_modelPathCtrl = new CustomInputBox(m_modelCard, wxID_ANY, L"", L"选择 GGUF 模型文件路径", wxDefaultPosition, wxSize(-1, 38_dip));
@@ -218,8 +218,8 @@ void SettingsView::InitUI() {
     // 运行参数设置行
     wxBoxSizer* modelParamSizer = new wxBoxSizer(wxHORIZONTAL);
 
-    m_modelGpuLabel = new wxStaticText(m_modelCard, wxID_ANY, L"计算加速：", wxDefaultPosition, wxSize(90_dip, -1));
-    m_modelGpuLabel->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+    m_modelGpuLabel = new wxStaticText(m_modelCard, wxID_ANY, L"计算加速", wxDefaultPosition, dip(90, -1));
+    m_modelGpuLabel->SetFont(ThemeFont::GetFont(FontRole::Control));
     m_modelGpuLabel->SetForegroundColour(palette.textPrimary);
 
     wxArrayString gpuModes;
@@ -229,28 +229,28 @@ void SettingsView::InitUI() {
     m_modelGpuModeChoice = new CustomChoice(m_modelCard, wxID_ANY, wxDefaultPosition, dip(180, 34), gpuModes);
     m_modelGpuModeChoice->SetSelection(0);
 
-    m_modelNglLabel = new wxStaticText(m_modelCard, wxID_ANY, L"-ngl 层数：");
-    m_modelNglLabel->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+    m_modelNglLabel = new wxStaticText(m_modelCard, wxID_ANY, L"-ngl 层数");
+    m_modelNglLabel->SetFont(ThemeFont::GetFont(FontRole::Control));
     m_modelNglLabel->SetForegroundColour(palette.textPrimary);
     m_modelNglLabel->Show(false);
 
     m_modelNglCtrl = new CustomInputBox(m_modelCard, wxID_ANY, L"99", L"99", wxDefaultPosition, dip(70, 34));
     m_modelNglCtrl->Show(false);
 
-    m_modelPortLabel = new wxStaticText(m_modelCard, wxID_ANY, L"端口：");
-    m_modelPortLabel->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+    m_modelPortLabel = new wxStaticText(m_modelCard, wxID_ANY, L"端口");
+    m_modelPortLabel->SetFont(ThemeFont::GetFont(FontRole::Control));
     m_modelPortLabel->SetForegroundColour(palette.textPrimary);
 
     m_modelPortCtrl = new CustomInputBox(m_modelCard, wxID_ANY, L"0", L"0(自动)", wxDefaultPosition, dip(80, 34));
 
-    m_modelCtxLabel = new wxStaticText(m_modelCard, wxID_ANY, L"上下文：");
-    m_modelCtxLabel->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+    m_modelCtxLabel = new wxStaticText(m_modelCard, wxID_ANY, L"上下文");
+    m_modelCtxLabel->SetFont(ThemeFont::GetFont(FontRole::Control));
     m_modelCtxLabel->SetForegroundColour(palette.textPrimary);
 
     m_modelCtxCtrl = new CustomInputBox(m_modelCard, wxID_ANY, L"2048", L"2048", wxDefaultPosition, dip(80, 34));
 
-    m_modelParallelLabel = new wxStaticText(m_modelCard, wxID_ANY, L"翻译并发：", wxDefaultPosition, wxSize(90_dip, -1));
-    m_modelParallelLabel->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+    m_modelParallelLabel = new wxStaticText(m_modelCard, wxID_ANY, L"翻译并发", wxDefaultPosition, dip(90, -1));
+    m_modelParallelLabel->SetFont(ThemeFont::GetFont(FontRole::Control));
     m_modelParallelLabel->SetForegroundColour(palette.textPrimary);
 
     wxArrayString transParallelModes;
@@ -263,7 +263,7 @@ void SettingsView::InitUI() {
     m_modelParallelChoice->SetToolTip(L"文档双语翻译时并发提交的元素数量：数值越大速度越快，但每槽可用上下文越小。\n建议与翻译服务并发槽位数保持一致（默认 1 为串行）。");
 
     m_modelParallelHint = new wxStaticText(m_modelCard, wxID_ANY, L"（文档翻译并行度，越大越快；修改后需重启翻译服务生效）");
-    m_modelParallelHint->SetFont(wxFont(8, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+    m_modelParallelHint->SetFont(ThemeFont::GetFont(FontRole::Caption));
     m_modelParallelHint->SetForegroundColour(palette.textSecondary);
 
     modelParamSizer->Add(m_modelGpuLabel, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 16_dip);
@@ -293,11 +293,11 @@ void SettingsView::InitUI() {
     wxBoxSizer* apiTextSizer = new wxBoxSizer(wxVERTICAL);
 
     m_modelApiStatusText = new wxStaticText(m_modelApiPanel, wxID_ANY, L"● 服务状态: 离线 (未启动)");
-    m_modelApiStatusText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
+    m_modelApiStatusText->SetFont(ThemeFont::GetFont(FontRole::Control, true));
     m_modelApiStatusText->SetForegroundColour(palette.textSecondary);
 
     m_modelApiUrlText = new wxStaticText(m_modelApiPanel, wxID_ANY, L"OpenAI 兼容 API 接口: 待启动后分配");
-    m_modelApiUrlText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Consolas, Microsoft YaHei"));
+    m_modelApiUrlText->SetFont(ThemeFont::GetMonoFont(FontRole::Control));
     m_modelApiUrlText->SetForegroundColour(palette.textSecondary);
 
     apiTextSizer->Add(m_modelApiStatusText, 0, wxBOTTOM, 3_dip);
@@ -338,11 +338,11 @@ void SettingsView::InitUI() {
     m_modelInfoIcon = new wxStaticBitmap(m_modelCard, wxID_ANY, modelInfoBundle);
 
     wxStaticText* modelFooterLabel = new wxStaticText(m_modelCard, wxID_ANY, L"模型下载：");
-    modelFooterLabel->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+    modelFooterLabel->SetFont(ThemeFont::GetFont(FontRole::Control));
     modelFooterLabel->SetForegroundColour(palette.textSecondary);
 
     m_transModelLink = new wxHyperlinkCtrl(m_modelCard, wxID_ANY, L"Tencent Hy-MT3-1.8B-GGUF (HuggingFace)", "https://huggingface.co/tencent/Hy-MT3-1.8B-GGUF");
-    m_transModelLink->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+    m_transModelLink->SetFont(ThemeFont::GetFont(FontRole::Control));
     m_transModelLink->SetNormalColour(palette.accentPrimary);
     m_transModelLink->SetHoverColour(palette.accentHover);
 
@@ -370,7 +370,7 @@ void SettingsView::InitUI() {
     m_ocrTitleIcon = new wxStaticBitmap(m_ocrCard, wxID_ANY, ocrTitleBundle);
 
     m_ocrTitleText = new wxStaticText(m_ocrCard, wxID_ANY, L"OCR 视觉识别模型 (Vision OCR Model)");
-    m_ocrTitleText->SetFont(wxFont(12, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
+    m_ocrTitleText->SetFont(ThemeFont::GetFont(FontRole::CardTitle));
     m_ocrTitleText->SetForegroundColour(palette.textPrimary);
 
     m_ocrStatusBadge = new StatusBadge(m_ocrCard);
@@ -384,8 +384,8 @@ void SettingsView::InitUI() {
 
     // Row 1: 主模型文件路径选择
     wxBoxSizer* ocrMainRow = new wxBoxSizer(wxHORIZONTAL);
-    m_ocrMainLabel = new wxStaticText(m_ocrCard, wxID_ANY, L"主模型：", wxDefaultPosition, wxSize(90_dip, -1));
-    m_ocrMainLabel->SetFont(wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+    m_ocrMainLabel = new wxStaticText(m_ocrCard, wxID_ANY, L"主模型", wxDefaultPosition, dip(90, -1));
+    m_ocrMainLabel->SetFont(ThemeFont::GetFont(FontRole::Control));
     m_ocrMainLabel->SetForegroundColour(palette.textPrimary);
 
     m_ocrModelPathCtrl = new CustomInputBox(m_ocrCard, wxID_ANY, L"", L"选择 OCR 主模型文件路径", wxDefaultPosition, wxSize(-1, 38_dip));
@@ -402,8 +402,8 @@ void SettingsView::InitUI() {
 
     // Row 2: mmproj 视觉投影器文件路径选择
     wxBoxSizer* ocrMmprojRow = new wxBoxSizer(wxHORIZONTAL);
-    m_ocrMmprojLabel = new wxStaticText(m_ocrCard, wxID_ANY, L"mmproj：", wxDefaultPosition, wxSize(90_dip, -1));
-    m_ocrMmprojLabel->SetFont(wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+    m_ocrMmprojLabel = new wxStaticText(m_ocrCard, wxID_ANY, L"mmproj", wxDefaultPosition, dip(90, -1));
+    m_ocrMmprojLabel->SetFont(ThemeFont::GetFont(FontRole::Control));
     m_ocrMmprojLabel->SetForegroundColour(palette.textPrimary);
 
     m_ocrMmprojPathCtrl = new CustomInputBox(m_ocrCard, wxID_ANY, L"", L"选择 mmproj 视觉投影器文件路径", wxDefaultPosition, wxSize(-1, 38_dip));
@@ -421,8 +421,8 @@ void SettingsView::InitUI() {
     // OCR 运行参数设置行
     wxBoxSizer* ocrParamSizer = new wxBoxSizer(wxHORIZONTAL);
 
-    m_ocrGpuLabel = new wxStaticText(m_ocrCard, wxID_ANY, L"计算加速：", wxDefaultPosition, wxSize(90_dip, -1));
-    m_ocrGpuLabel->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+    m_ocrGpuLabel = new wxStaticText(m_ocrCard, wxID_ANY, L"计算加速", wxDefaultPosition, dip(90, -1));
+    m_ocrGpuLabel->SetFont(ThemeFont::GetFont(FontRole::Control));
     m_ocrGpuLabel->SetForegroundColour(palette.textPrimary);
 
     wxArrayString ocrGpuModes;
@@ -432,22 +432,22 @@ void SettingsView::InitUI() {
     m_ocrGpuModeChoice = new CustomChoice(m_ocrCard, wxID_ANY, wxDefaultPosition, dip(210, 34), ocrGpuModes);
     m_ocrGpuModeChoice->SetSelection(0);
 
-    m_ocrNglLabel = new wxStaticText(m_ocrCard, wxID_ANY, L"-ngl 层数：");
-    m_ocrNglLabel->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+    m_ocrNglLabel = new wxStaticText(m_ocrCard, wxID_ANY, L"-ngl 层数");
+    m_ocrNglLabel->SetFont(ThemeFont::GetFont(FontRole::Control));
     m_ocrNglLabel->SetForegroundColour(palette.textPrimary);
     m_ocrNglLabel->Show(false);
 
     m_ocrNglCtrl = new CustomInputBox(m_ocrCard, wxID_ANY, L"0", L"0", wxDefaultPosition, dip(70, 34));
     m_ocrNglCtrl->Show(false);
 
-    m_ocrPortLabel = new wxStaticText(m_ocrCard, wxID_ANY, L"端口：");
-    m_ocrPortLabel->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+    m_ocrPortLabel = new wxStaticText(m_ocrCard, wxID_ANY, L"端口");
+    m_ocrPortLabel->SetFont(ThemeFont::GetFont(FontRole::Control));
     m_ocrPortLabel->SetForegroundColour(palette.textPrimary);
 
     m_ocrPortCtrl = new CustomInputBox(m_ocrCard, wxID_ANY, L"0", L"0(自动)", wxDefaultPosition, dip(80, 34));
 
-    m_ocrCtxLabel = new wxStaticText(m_ocrCard, wxID_ANY, L"上下文：");
-    m_ocrCtxLabel->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+    m_ocrCtxLabel = new wxStaticText(m_ocrCard, wxID_ANY, L"上下文");
+    m_ocrCtxLabel->SetFont(ThemeFont::GetFont(FontRole::Control));
     m_ocrCtxLabel->SetForegroundColour(palette.textPrimary);
 
     m_ocrCtxCtrl = new CustomInputBox(m_ocrCard, wxID_ANY, L"4096", L"4096", wxDefaultPosition, dip(80, 34));
@@ -478,11 +478,11 @@ void SettingsView::InitUI() {
     wxBoxSizer* ocrApiTextSizer = new wxBoxSizer(wxVERTICAL);
 
     m_ocrApiStatusText = new wxStaticText(m_ocrApiPanel, wxID_ANY, L"● 服务状态: 离线 (未启动)");
-    m_ocrApiStatusText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
+    m_ocrApiStatusText->SetFont(ThemeFont::GetFont(FontRole::Control, true));
     m_ocrApiStatusText->SetForegroundColour(palette.textSecondary);
 
     m_ocrApiUrlText = new wxStaticText(m_ocrApiPanel, wxID_ANY, L"OpenAI 兼容 API 接口: 待启动后分配");
-    m_ocrApiUrlText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Consolas, Microsoft YaHei"));
+    m_ocrApiUrlText->SetFont(ThemeFont::GetMonoFont(FontRole::Control));
     m_ocrApiUrlText->SetForegroundColour(palette.textSecondary);
 
     ocrApiTextSizer->Add(m_ocrApiStatusText, 0, wxBOTTOM, 3_dip);
@@ -526,15 +526,15 @@ void SettingsView::InitUI() {
     m_ocrInfoIcon = new wxStaticBitmap(m_ocrFooterPanel, wxID_ANY, infoBundle);
 
     m_ocrFooterText = new wxStaticText(m_ocrFooterPanel, wxID_ANY, L"提示: 视觉模型需配合 mmproj 使用 (<= 8GB 显存建议 CPU 模式)。");
-    m_ocrFooterText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+    m_ocrFooterText->SetFont(ThemeFont::GetFont(FontRole::Control));
     m_ocrFooterText->SetForegroundColour(palette.textSecondary);
 
     wxStaticText* ocrLinkSep = new wxStaticText(m_ocrFooterPanel, wxID_ANY, L"  |  模型下载：");
-    ocrLinkSep->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+    ocrLinkSep->SetFont(ThemeFont::GetFont(FontRole::Control));
     ocrLinkSep->SetForegroundColour(palette.textSecondary);
 
     m_ocrModelLink = new wxHyperlinkCtrl(m_ocrFooterPanel, wxID_ANY, L"PaddleOCR-VL-1.6-GGUF (HuggingFace)", "https://huggingface.co/PaddlePaddle/PaddleOCR-VL-1.6-GGUF");
-    m_ocrModelLink->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+    m_ocrModelLink->SetFont(ThemeFont::GetFont(FontRole::Control));
     m_ocrModelLink->SetNormalColour(palette.accentPrimary);
     m_ocrModelLink->SetHoverColour(palette.accentHover);
 
@@ -564,7 +564,7 @@ void SettingsView::InitUI() {
     m_layoutTitleIcon = new wxStaticBitmap(m_layoutCard, wxID_ANY, layoutTitleBundle);
 
     m_layoutTitleText = new wxStaticText(m_layoutCard, wxID_ANY, L"文档版面分析模型 (Document Layout Analysis Model)");
-    m_layoutTitleText->SetFont(wxFont(12, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
+    m_layoutTitleText->SetFont(ThemeFont::GetFont(FontRole::CardTitle));
     m_layoutTitleText->SetForegroundColour(palette.textPrimary);
 
     m_layoutStatusBadge = new StatusBadge(m_layoutCard);
@@ -578,11 +578,11 @@ void SettingsView::InitUI() {
 
     // 模型文件路径选择行 (统一 90_dip 标签对齐)
     wxBoxSizer* layoutPathSizer = new wxBoxSizer(wxHORIZONTAL);
-    m_layoutPathLabel = new wxStaticText(m_layoutCard, wxID_ANY, L"ONNX 模型：", wxDefaultPosition, wxSize(90_dip, -1));
-    m_layoutPathLabel->SetFont(wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+    m_layoutPathLabel = new wxStaticText(m_layoutCard, wxID_ANY, L"ONNX 模型", wxDefaultPosition, dip(90, -1));
+    m_layoutPathLabel->SetFont(ThemeFont::GetFont(FontRole::Control));
     m_layoutPathLabel->SetForegroundColour(palette.textPrimary);
 
-    m_layoutPathCtrl = new CustomInputBox(m_layoutCard, wxID_ANY, L"", L"选择 PP-DocLayoutV2 .onnx 模型文件路径", wxDefaultPosition, wxSize(-1, 38_dip));
+    m_layoutPathCtrl = new CustomInputBox(m_layoutCard, wxID_ANY, L"", L"选择 PP-DocLayoutV2 .onnx 模型文件路径", wxDefaultPosition, dip(-1, 38));
     m_layoutPathCtrl->SetPrefixIcon(SVG::LAYOUT, dip(16, 16));
 
     m_layoutBrowseBtn = new CustomButton(m_layoutCard, wxID_ANY, L"浏览", ButtonStyle::Secondary, wxDefaultPosition, dip(90, 38));
@@ -599,8 +599,8 @@ void SettingsView::InitUI() {
 
     // 运行参数设置行
     wxBoxSizer* layoutParamSizer = new wxBoxSizer(wxHORIZONTAL);
-    m_layoutProviderLabel = new wxStaticText(m_layoutCard, wxID_ANY, L"计算加速：", wxDefaultPosition, wxSize(90_dip, -1));
-    m_layoutProviderLabel->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+    m_layoutProviderLabel = new wxStaticText(m_layoutCard, wxID_ANY, L"计算加速", wxDefaultPosition, dip(90, -1));
+    m_layoutProviderLabel->SetFont(ThemeFont::GetFont(FontRole::Control));
     m_layoutProviderLabel->SetForegroundColour(palette.textPrimary);
 
     wxArrayString providerModes;
@@ -640,15 +640,15 @@ void SettingsView::InitUI() {
     m_layoutInfoIcon = new wxStaticBitmap(m_layoutFooterPanel, wxID_ANY, layoutInfoBundle);
 
     m_layoutFooterText = new wxStaticText(m_layoutFooterPanel, wxID_ANY, L"说明: 由 ONNX Runtime 原生驱动，负责解析文档元素 (文本/表格/公式) 及拓扑阅读顺序。");
-    m_layoutFooterText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+    m_layoutFooterText->SetFont(ThemeFont::GetFont(FontRole::Control));
     m_layoutFooterText->SetForegroundColour(palette.textSecondary);
 
     wxStaticText* layoutLinkSep = new wxStaticText(m_layoutFooterPanel, wxID_ANY, L"  |  模型下载：");
-    layoutLinkSep->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+    layoutLinkSep->SetFont(ThemeFont::GetFont(FontRole::Control));
     layoutLinkSep->SetForegroundColour(palette.textSecondary);
 
     m_layoutModelLink = new wxHyperlinkCtrl(m_layoutFooterPanel, wxID_ANY, L"PP-DocLayoutV3.onnx (HuggingFace)", "https://huggingface.co/PaddlePaddle/PP-DocLayoutV3_onnx");
-    m_layoutModelLink->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+    m_layoutModelLink->SetFont(ThemeFont::GetFont(FontRole::Control));
     m_layoutModelLink->SetNormalColour(palette.accentPrimary);
     m_layoutModelLink->SetHoverColour(palette.accentHover);
 
@@ -677,7 +677,7 @@ void SettingsView::InitUI() {
     m_selectionTitleIcon = new wxStaticBitmap(m_selectionCard, wxID_ANY, selBundle);
 
     m_selectionTitleText = new wxStaticText(m_selectionCard, wxID_ANY, L"全局划词翻译设置");
-    m_selectionTitleText->SetFont(wxFont(12, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
+    m_selectionTitleText->SetFont(ThemeFont::GetFont(FontRole::CardTitle));
     m_selectionTitleText->SetForegroundColour(palette.textPrimary);
 
     selTitleSizer->Add(m_selectionTitleIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8_dip);
@@ -702,8 +702,8 @@ void SettingsView::InitUI() {
 
     // 3. 辅助按键选择
     wxBoxSizer* modKeySizer = new wxBoxSizer(wxHORIZONTAL);
-    m_modifierKeyLabel = new wxStaticText(m_selectionCard, wxID_ANY, L"辅助触发按键：");
-    m_modifierKeyLabel->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+    m_modifierKeyLabel = new wxStaticText(m_selectionCard, wxID_ANY, L"辅助触发按键");
+    m_modifierKeyLabel->SetFont(ThemeFont::GetFont(FontRole::Control));
     m_modifierKeyLabel->SetForegroundColour(palette.textPrimary);
 
     wxArrayString keys;
@@ -728,7 +728,7 @@ void SettingsView::InitUI() {
     m_selectionSaveBtn = new CustomButton(m_selectionCard, wxID_ANY, L"保存划词设置", ButtonStyle::Primary, wxDefaultPosition, dip(145, 38));
     m_selectionSaveBtn->SetIcon(SVG::SAVE, dip(15, 15), *wxWHITE);
     m_selectionStatusText = new wxStaticText(m_selectionCard, wxID_ANY, "");
-    m_selectionStatusText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+    m_selectionStatusText->SetFont(ThemeFont::GetFont(FontRole::Control));
     m_selectionStatusText->SetForegroundColour(palette.accentGreen);
 
     btnSizer->Add(m_selectionSaveBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 12_dip);
@@ -752,7 +752,7 @@ void SettingsView::InitUI() {
     m_dictTitleIcon = new wxStaticBitmap(m_dictCard, wxID_ANY, dictBundle);
 
     m_dictTitleText = new wxStaticText(m_dictCard, wxID_ANY, L"本地 StarDict 词典设置");
-    m_dictTitleText->SetFont(wxFont(12, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
+    m_dictTitleText->SetFont(ThemeFont::GetFont(FontRole::CardTitle));
     m_dictTitleText->SetForegroundColour(palette.textPrimary);
 
     m_dictStatusBadge = new StatusBadge(m_dictCard);
@@ -765,8 +765,8 @@ void SettingsView::InitUI() {
 
     // 目录选择行
     wxBoxSizer* dictDirRow = new wxBoxSizer(wxHORIZONTAL);
-    m_dictDirLabel = new wxStaticText(m_dictCard, wxID_ANY, L"词典目录：", wxDefaultPosition, wxSize(90_dip, -1));
-    m_dictDirLabel->SetFont(wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+    m_dictDirLabel = new wxStaticText(m_dictCard, wxID_ANY, L"词典目录", wxDefaultPosition, dip(90, -1));
+    m_dictDirLabel->SetFont(ThemeFont::GetFont(FontRole::Control));
     m_dictDirLabel->SetForegroundColour(palette.textPrimary);
 
     m_dictDirPathCtrl = new CustomInputBox(m_dictCard, wxID_ANY, L"", L"指定包含 StarDict 词典 (.ifo / .idx / .dict) 的文件夹路径", wxDefaultPosition, wxSize(-1, 38_dip));
@@ -793,7 +793,7 @@ void SettingsView::InitUI() {
     m_dictReloadBtn->SetIcon(SVG::REPLACE, dip(15, 15));
 
     m_dictStatusText = new wxStaticText(m_dictCard, wxID_ANY, "");
-    m_dictStatusText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+    m_dictStatusText->SetFont(ThemeFont::GetFont(FontRole::Control));
     m_dictStatusText->SetForegroundColour(palette.accentGreen);
 
     dictActionRow->Add(m_dictSaveBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10_dip);
@@ -803,7 +803,7 @@ void SettingsView::InitUI() {
 
     // 已识别词典摘要展示
     m_dictListTitleText = new wxStaticText(m_dictCard, wxID_ANY, L"当前已识别加载的词典：");
-    m_dictListTitleText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
+    m_dictListTitleText->SetFont(ThemeFont::GetFont(FontRole::Control, true));
     m_dictListTitleText->SetForegroundColour(palette.textSecondary);
     dictSizer->Add(m_dictListTitleText, 0, wxLEFT | wxRIGHT | wxBOTTOM, 6_dip);
 
@@ -819,11 +819,11 @@ void SettingsView::InitUI() {
     m_dictInfoIcon = new wxStaticBitmap(m_dictCard, wxID_ANY, dictInfoBundle);
 
     wxStaticText* dictFooterLabel = new wxStaticText(m_dictCard, wxID_ANY, L"免费词典库下载：");
-    dictFooterLabel->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+    dictFooterLabel->SetFont(ThemeFont::GetFont(FontRole::Control));
     dictFooterLabel->SetForegroundColour(palette.textSecondary);
 
     m_dictDownloadLink = new wxHyperlinkCtrl(m_dictCard, wxID_ANY, L"StarDict 免费离线词典库 (stardict.uber.space)", "https://stardict.uber.space/");
-    m_dictDownloadLink->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+    m_dictDownloadLink->SetFont(ThemeFont::GetFont(FontRole::Control));
     m_dictDownloadLink->SetNormalColour(palette.accentPrimary);
     m_dictDownloadLink->SetHoverColour(palette.accentHover);
 
@@ -849,7 +849,7 @@ void SettingsView::InitUI() {
     m_logTitleIcon = new wxStaticBitmap(m_logCard, wxID_ANY, logBundle);
 
     m_logTitleText = new wxStaticText(m_logCard, wxID_ANY, L"运行日志与诊断设置");
-    m_logTitleText->SetFont(wxFont(12, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
+    m_logTitleText->SetFont(ThemeFont::GetFont(FontRole::CardTitle));
     m_logTitleText->SetForegroundColour(palette.textPrimary);
 
     logTitleSizer->Add(m_logTitleIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8_dip);
@@ -865,7 +865,7 @@ void SettingsView::InitUI() {
     // 2. 日志文件保存路径说明
     wxString logPathStr = wxString::FromUTF8(ConfigManager::GetDefaultLogFilePath());
     m_logPathInfoText = new wxStaticText(m_logCard, wxID_ANY, L"日志文件保存位置：" + logPathStr);
-    m_logPathInfoText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+    m_logPathInfoText->SetFont(ThemeFont::GetFont(FontRole::Control));
     m_logPathInfoText->SetForegroundColour(palette.textSecondary);
     logSizer->Add(m_logPathInfoText, 0, wxLEFT | wxRIGHT | wxBOTTOM, 16_dip);
 
@@ -876,7 +876,7 @@ void SettingsView::InitUI() {
     m_openLogDirBtn = new CustomButton(m_logCard, wxID_ANY, L"打开日志目录", ButtonStyle::Secondary, wxDefaultPosition, dip(145, 38));
     m_openLogDirBtn->SetIcon(SVG::FOLDER_OPEN, dip(15, 15));
     m_logStatusText = new wxStaticText(m_logCard, wxID_ANY, "");
-    m_logStatusText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+    m_logStatusText->SetFont(ThemeFont::GetFont(FontRole::Control));
     m_logStatusText->SetForegroundColour(palette.accentGreen);
 
     logBtnSizer->Add(m_logSaveBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8_dip);
@@ -901,7 +901,7 @@ void SettingsView::InitUI() {
     m_prefTitleIcon = new wxStaticBitmap(m_prefCard, wxID_ANY, moonBundle);
 
     m_prefTitle = new wxStaticText(m_prefCard, wxID_ANY, L"界面外观与关于");
-    m_prefTitle->SetFont(wxFont(12, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
+    m_prefTitle->SetFont(ThemeFont::GetFont(FontRole::CardTitle));
     m_prefTitle->SetForegroundColour(palette.textPrimary);
 
     prefTitleSizer->Add(m_prefTitleIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8_dip);
@@ -924,7 +924,7 @@ void SettingsView::InitUI() {
     m_aboutBtn->SetIcon(SVG::INFO, dip(15, 15));
 
     m_aboutDescText = new wxStaticText(m_prefCard, wxID_ANY, L"查看应用版本、项目初衷、开源协议与主页链接");
-    m_aboutDescText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+    m_aboutDescText->SetFont(ThemeFont::GetFont(FontRole::Control));
     m_aboutDescText->SetForegroundColour(palette.textSecondary);
 
     aboutRowSizer->Add(m_aboutBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 14_dip);
@@ -2188,11 +2188,11 @@ void SettingsView::UpdateDictListSummary() {
 
         wxBoxSizer* emptyTextSizer = new wxBoxSizer(wxVERTICAL);
         wxStaticText* emptyTitle = new wxStaticText(emptyBox, wxID_ANY, L"暂无已识别加载的词典");
-        emptyTitle->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
+        emptyTitle->SetFont(ThemeFont::GetFont(FontRole::Control, true));
         emptyTitle->SetForegroundColour(palette.textSecondary);
 
         wxStaticText* emptyDesc = new wxStaticText(emptyBox, wxID_ANY, L"请将包含 StarDict 词典（.ifo / .idx / .dict）的文件夹放入词典目录中，并点击上方「重新扫描词典」");
-        emptyDesc->SetFont(wxFont(8, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Microsoft YaHei"));
+        emptyDesc->SetFont(ThemeFont::GetFont(FontRole::Caption));
         emptyDesc->SetForegroundColour(palette.textSecondary);
 
         emptyTextSizer->Add(emptyTitle, 0, wxBOTTOM, 2_dip);
@@ -2236,7 +2236,7 @@ void SettingsView::UpdateDictListSummary() {
             wxString titleStr = wxString::Format(L"#%zu  %s", i + 1, bookTitle);
             wxStaticText* nameText = new wxStaticText(itemCard, wxID_ANY, titleStr, wxDefaultPosition, wxDefaultSize, wxST_ELLIPSIZE_END);
             nameText->SetMinSize(wxSize(1, -1));
-            nameText->SetFont(wxFont(9, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
+            nameText->SetFont(ThemeFont::GetFont(FontRole::Control, true));
             nameText->SetForegroundColour(palette.textPrimary);
             nameText->SetBackgroundColour(palette.windowBg);
             topRow->Add(nameText, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6_dip);
@@ -2269,7 +2269,7 @@ void SettingsView::UpdateDictListSummary() {
             countPill->SetBackgroundColour(pillBg);
             wxBoxSizer* countPillSizer = new wxBoxSizer(wxHORIZONTAL);
             wxStaticText* countLabelText = new wxStaticText(countPill, wxID_ANY, countLabel);
-            countLabelText->SetFont(wxFont(8, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Microsoft YaHei"));
+            countLabelText->SetFont(ThemeFont::GetFont(FontRole::Caption, true));
             countLabelText->SetForegroundColour(palette.accentPrimary);
             countLabelText->SetBackgroundColour(pillBg);
             countPillSizer->Add(countLabelText, 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, 5_dip);
@@ -2298,7 +2298,7 @@ void SettingsView::UpdateDictListSummary() {
 
             wxStaticText* pathText = new wxStaticText(itemCard, wxID_ANY, shortPath, wxDefaultPosition, wxDefaultSize, wxST_ELLIPSIZE_MIDDLE);
             pathText->SetMinSize(wxSize(1, -1));
-            pathText->SetFont(wxFont(wxFontInfo(8).Family(wxFONTFAMILY_SWISS).FaceName("Consolas, Microsoft YaHei")));
+            pathText->SetFont(ThemeFont::GetMonoFont(FontRole::Caption));
             pathText->SetForegroundColour(palette.textSecondary);
             pathText->SetBackgroundColour(palette.windowBg);
             bottomRow->Add(pathText, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6_dip);
@@ -2314,7 +2314,7 @@ void SettingsView::UpdateDictListSummary() {
             wxStaticText* verLabel = nullptr;
             if (!d.version.empty()) {
                 verLabel = new wxStaticText(itemCard, wxID_ANY, "v" + wxString::FromUTF8(d.version));
-                verLabel->SetFont(wxFont(wxFontInfo(8).Family(wxFONTFAMILY_SWISS).FaceName("Consolas, Microsoft YaHei")));
+                verLabel->SetFont(ThemeFont::GetMonoFont(FontRole::Caption));
                 verLabel->SetForegroundColour(palette.textSecondary);
                 verLabel->SetBackgroundColour(palette.windowBg);
                 bottomRow->Add(verLabel, 0, wxALIGN_CENTER_VERTICAL);

@@ -528,6 +528,11 @@ void OcrView::InitUI() {
 
     mainSizer->Add(bottomSizer, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, Layout::PagePadding());
 
+    m_theme.BindText(TextRole::Primary, m_titleText, m_dropTextPrimary);
+    m_theme.BindText(TextRole::Secondary, m_dropTextSecondary);
+    m_theme.BindBg(BgRole::Card, true, m_dropzonePanel);
+    m_theme.BindIcon(m_uploadIconBmp, SVG::CLOUD_UPLOAD, wxSize(44, 44));
+
     SetSizer(mainSizer);
 
     UpdateStatusBadge();
@@ -622,38 +627,8 @@ void OcrView::UpdateTheme() {
     auto palette = ThemeColors::GetCurrentPalette();
     SetBackgroundColour(palette.windowBg);
 
-    if (m_titleText)
-        m_titleText->SetForegroundColour(palette.textPrimary);
+    m_theme.Apply(this, palette);
 
-    if (m_progressPanel)
-        m_progressPanel->UpdateTheme();
-    if (m_dropTextPrimary)
-        m_dropTextPrimary->SetForegroundColour(palette.textPrimary);
-    if (m_dropTextSecondary)
-        m_dropTextSecondary->SetForegroundColour(palette.textSecondary);
-    if (m_resultCard)
-        m_resultCard->UpdateTheme();
-
-    if (m_uploadIconBmp) {
-        wxBitmapBundle uploadBundle = IconManager::GetIconBundle(SVG::CLOUD_UPLOAD, wxSize(44, 44), palette.accentPrimary);
-        m_uploadIconBmp->SetBitmap(uploadBundle);
-    }
-
-    if (m_recognizeBtn)
-        m_recognizeBtn->Refresh();
-    if (m_stopBtn)
-        m_stopBtn->Refresh();
-    if (m_enableTranslateCheck) {
-        m_enableTranslateCheck->Refresh();
-    }
-    if (m_fastTextModeCheck) {
-        m_fastTextModeCheck->Refresh();
-    }
-
-    if (m_dropzonePanel) {
-        m_dropzonePanel->SetBackgroundColour(palette.cardBg);
-        m_dropzonePanel->Refresh();
-    }
     UpdateStatusBadge();
     Refresh();
 }

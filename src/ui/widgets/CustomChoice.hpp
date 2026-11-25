@@ -21,13 +21,13 @@ class CustomChoice;
 /**
  * @brief 自定义现代化下拉浮层 (ChoicePopup)
  */
-class CustomChoicePopup : public wxPopupTransientWindow {
+class CustomChoicePopup : public wxPopupTransientWindow, public IThemeable {
 public:
     explicit CustomChoicePopup(CustomChoice* owner);
     ~CustomChoicePopup() override = default;
 
     void SetItems(const std::vector<ChoiceItem>& items, int selection);
-    void UpdateTheme();
+    void UpdateTheme() override;
     void ShowPopup(const wxPoint& pos, const wxSize& size);
     void Dismiss() override;
 
@@ -66,7 +66,7 @@ private:
  * - 基于 wxPopupTransientWindow 的全自绘平滑滚动弹出菜单
  * - 派发标准 wxEVT_CHOICE 事件，做到 100% 兼容替换
  */
-class CustomChoice : public wxControl {
+class CustomChoice : public wxControl, public IThemeable {
 public:
     CustomChoice(wxWindow* parent,
                  wxWindowID id = wxID_ANY,
@@ -111,7 +111,7 @@ public:
 
     // 交互与状态
     bool Enable(bool enable = true) override;
-    void UpdateTheme();
+    void UpdateTheme() override;
     void Popup();
     void Dismiss();
     bool IsPopupShown() const { return m_isPopupOpen; }

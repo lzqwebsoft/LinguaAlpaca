@@ -30,7 +30,7 @@ namespace LinguaAlpaca::UI {
  *  7. 100% 动态主题切换与 Per-Monitor V2 DPI 纯矢自适应；
  *  8. 100% 向下兼容 wxRadioBox 原生接口与 wxEVT_RADIOBOX 事件。
  */
-class LeftAlignedRadioBox : public wxControl {
+class LeftAlignedRadioBox : public wxControl, public IThemeable {
 public:
     LeftAlignedRadioBox() = default;
 
@@ -284,7 +284,7 @@ public:
         return true;
     }
 
-    void UpdateTheme() {
+    void UpdateTheme() override {
         Refresh();
     }
 

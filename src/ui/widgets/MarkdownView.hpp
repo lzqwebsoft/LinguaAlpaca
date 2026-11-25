@@ -29,7 +29,7 @@ enum class MarkdownViewMode {
  * - 深度联动 LinguaAlpaca 主题调色板 (浅色/深色平滑切换无白闪)
  * - 继承 AsyncTrackable，保证后台异步回调与线程安全
  */
-class MarkdownView : public wxPanel, public AsyncTrackable {
+class MarkdownView : public wxPanel, public AsyncTrackable, public IThemeable {
 public:
     MarkdownView(wxWindow* parent, wxWindowID id = wxID_ANY,
                  const wxPoint& pos = wxDefaultPosition,
@@ -57,7 +57,7 @@ public:
     wxString GetRenderedHtml() const;
 
     // 主题与样式
-    void UpdateTheme();
+    void UpdateTheme() override;
 
     // 回调
     void SetOnImageClickCallback(std::function<void(const wxString&)> callback) {

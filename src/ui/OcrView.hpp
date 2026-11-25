@@ -11,6 +11,7 @@
 #include <optional>
 #include <atomic>
 #include "AsyncTrackable.hpp"
+#include "theme/ThemeBinder.hpp"
 #include "core/ModelManager.hpp"
 #include "widgets/CardPanel.hpp"
 #include "widgets/CustomButton.hpp"
@@ -34,7 +35,7 @@ enum class DropzoneHoverAction {
     PdfSlider
 };
 
-class OcrView : public wxPanel, public AsyncTrackable {
+class OcrView : public wxPanel, public AsyncTrackable, public IThemeable {
 public:
     OcrView(wxWindow* parent,
             std::shared_ptr<ModelManager> modelManager,
@@ -42,7 +43,7 @@ public:
 
     ~OcrView() override;
 
-    void UpdateTheme();
+    void UpdateTheme() override;
     void UpdateStatusBadge();
     void OnImageFileDropped(const wxString& filePath);
     void SetTranslateCallback(std::function<void(const wxString&)> callback) {
@@ -183,6 +184,7 @@ private:
     CustomButton* m_openFolderBtn{nullptr};
 
     std::function<void(const wxString&)> m_onTranslateCallback;
+    ThemeBinder m_theme;
 };
 
 class OcrFileDropTarget : public wxFileDropTarget {

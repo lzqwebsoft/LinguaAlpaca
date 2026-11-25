@@ -7,6 +7,7 @@
 #include "core/ModelManager.hpp"
 #include "core/Config.hpp"
 #include "AsyncTrackable.hpp"
+#include "theme/ThemeBinder.hpp"
 #include "widgets/CustomButton.hpp"
 #include "widgets/CustomChoice.hpp"
 #include "widgets/CustomInputBox.hpp"
@@ -18,14 +19,14 @@
 
 namespace LinguaAlpaca::UI {
 
-class SettingsView : public wxPanel, public AsyncTrackable {
+class SettingsView : public wxPanel, public AsyncTrackable, public IThemeable {
 public:
     SettingsView(wxWindow* parent,
                  std::shared_ptr<ModelManager> modelManager,
                  wxWindowID id = wxID_ANY);
     ~SettingsView();
 
-    void UpdateTheme();
+    void UpdateTheme() override;
     void SetModelPath(const wxString& path);
     void SetOcrModelPath(const wxString& mainPath, const wxString& mmprojPath);
     bool Show(bool show = true) override;
@@ -291,6 +292,7 @@ private:
     void SetThemeConfig(const AppConfig& cfg);
 
     wxString m_configuredPath;
+    ThemeBinder m_theme;
 };
 
 } // namespace LinguaAlpaca::UI

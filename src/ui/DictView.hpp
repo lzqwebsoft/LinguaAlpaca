@@ -8,6 +8,7 @@
 #include "core/ModelManager.hpp"
 #include "core/dict/DictEngine.hpp"
 #include "AsyncTrackable.hpp"
+#include "theme/ThemeBinder.hpp"
 #include "widgets/CustomButton.hpp"
 #include "widgets/CustomChoice.hpp"
 #include "widgets/TextCtrl.hpp"
@@ -17,14 +18,14 @@
 
 namespace LinguaAlpaca::UI {
 
-class DictView : public wxPanel, public AsyncTrackable {
+class DictView : public wxPanel, public AsyncTrackable, public IThemeable {
 public:
     DictView(wxWindow* parent,
              std::shared_ptr<ModelManager> modelManager,
              wxWindowID id = wxID_ANY);
     ~DictView() override;
 
-    void UpdateTheme();
+    void UpdateTheme() override;
     void RefreshDictList();
     void SearchWord(const wxString& word);
 
@@ -90,6 +91,7 @@ private:
     std::string m_currentSelectedDictId;
     std::vector<DictInfo> m_cachedDictInfos;
     std::vector<DictSearchResult> m_lastSearchResults;
+    ThemeBinder m_theme;
 };
 
 } // namespace LinguaAlpaca::UI

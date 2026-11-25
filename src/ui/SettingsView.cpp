@@ -937,6 +937,41 @@ void SettingsView::InitUI() {
     m_prefCard->SetSizer(prefSizer);
     addCard(m_prefCard);
 
+    // 声明式主题绑定 (自定义 IThemeable 组件与自绘按钮由 Apply 自动递归更新)
+    m_theme.BindBg(BgRole::Window, true, m_topStickyPanel, m_modelApiPanel, m_ocrApiPanel, m_scrollBar);
+    m_theme.BindBg(BgRole::Window, false, m_viewport, m_contentPanel);
+    m_theme.BindBg(BgRole::Card, true, m_modelCard, m_ocrCard, m_layoutCard, m_selectionCard, m_dictCard, m_logCard, m_prefCard, m_dictListContainer);
+    m_theme.BindBg(BgRole::Card, false, m_ocrFooterPanel, m_layoutFooterPanel);
+    m_theme.BindTextBg(TextRole::Primary, BgRole::Window, false, m_dictDirPathCtrl);
+
+    m_theme.BindIcon(m_headerTitleIcon, SVG::SETTINGS, wxSize(22, 22));
+    m_theme.BindIcon(m_modelCardIcon, SVG::MODEL_LOAD, wxSize(18, 18));
+    m_theme.BindIcon(m_modelInfoIcon, SVG::INFO, wxSize(15, 15));
+    m_theme.BindIcon(m_ocrTitleIcon, SVG::OCR, wxSize(18, 18));
+    m_theme.BindIcon(m_ocrInfoIcon, SVG::INFO, wxSize(15, 15));
+    m_theme.BindIcon(m_layoutTitleIcon, SVG::LAYOUT, wxSize(18, 18));
+    m_theme.BindIcon(m_layoutInfoIcon, SVG::INFO, wxSize(15, 15));
+    m_theme.BindIcon(m_selectionTitleIcon, SVG::TRANSLATE, wxSize(18, 18));
+    m_theme.BindIcon(m_dictTitleIcon, SVG::DICTIONARY, wxSize(18, 18));
+    m_theme.BindIcon(m_dictInfoIcon, SVG::INFO, wxSize(15, 15));
+    m_theme.BindIcon(m_logTitleIcon, SVG::LOG, wxSize(18, 18));
+    m_theme.BindIcon(m_prefTitleIcon, SVG::MOON, wxSize(18, 18));
+
+    m_theme.BindText(TextRole::Primary,
+                     m_titleText, m_modelCardTitle, m_modelPathLabel,
+                     m_modelGpuLabel, m_modelNglLabel, m_modelPortLabel, m_modelCtxLabel, m_modelParallelLabel,
+                     m_ocrTitleText, m_ocrMainLabel, m_ocrMmprojLabel,
+                     m_ocrGpuLabel, m_ocrNglLabel, m_ocrPortLabel, m_ocrCtxLabel,
+                     m_layoutTitleText, m_layoutPathLabel, m_layoutProviderLabel,
+                     m_selectionTitleText, m_modifierKeyLabel,
+                     m_dictTitleText, m_dictDirLabel,
+                     m_logTitleText, m_prefTitle);
+    m_theme.BindText(TextRole::Secondary,
+                     m_subTitleText, m_modelParallelHint, m_ocrFooterText, m_layoutFooterText,
+                     m_dictListTitleText, m_logPathInfoText, m_aboutDescText);
+    m_theme.BindLink(m_transModelLink, m_ocrModelLink, m_layoutModelLink, m_dictDownloadLink);
+    m_theme.BindNative(m_selectionModeRadio, m_themeRadioBox);
+
     m_contentPanel->SetSizer(m_mainSizer);
     Layout();
     UpdateLayoutAndScroll();
@@ -1583,297 +1618,7 @@ void SettingsView::UpdateTheme() {
     auto palette = ThemeColors::GetCurrentPalette();
     SetBackgroundColour(palette.windowBg);
 
-    if (m_topStickyPanel) {
-        m_topStickyPanel->SetBackgroundColour(palette.windowBg);
-        m_topStickyPanel->Refresh();
-    }
-    if (m_headerTitleIcon) {
-        m_headerTitleIcon->SetBitmap(IconManager::GetIconBundle(SVG::SETTINGS, wxSize(22, 22), palette.accentPrimary));
-    }
-    if (m_titleText)
-        m_titleText->SetForegroundColour(palette.textPrimary);
-    if (m_subTitleText)
-        m_subTitleText->SetForegroundColour(palette.textSecondary);
-    if (m_segmentedBar)
-        m_segmentedBar->UpdateTheme();
-
-    if (m_modelCard) {
-        m_modelCard->SetBackgroundColour(palette.cardBg);
-        m_modelCard->Refresh();
-    }
-    if (m_modelCardIcon) {
-        m_modelCardIcon->SetBitmap(IconManager::GetIconBundle(SVG::MODEL_LOAD, wxSize(18, 18), palette.accentPrimary));
-    }
-    if (m_modelCardTitle)
-        m_modelCardTitle->SetForegroundColour(palette.textPrimary);
-    if (m_modelPathLabel)
-        m_modelPathLabel->SetForegroundColour(palette.textPrimary);
-    if (m_modelInfoIcon) {
-        m_modelInfoIcon->SetBitmap(IconManager::GetIconBundle(SVG::INFO, wxSize(15, 15), palette.accentPrimary));
-    }
-
-    if (m_ocrCard) {
-        m_ocrCard->SetBackgroundColour(palette.cardBg);
-        m_ocrCard->Refresh();
-    }
-    if (m_ocrTitleIcon) {
-        m_ocrTitleIcon->SetBitmap(IconManager::GetIconBundle(SVG::OCR, wxSize(18, 18), palette.accentPrimary));
-    }
-    if (m_ocrTitleText)
-        m_ocrTitleText->SetForegroundColour(palette.textPrimary);
-    if (m_ocrMainLabel)
-        m_ocrMainLabel->SetForegroundColour(palette.textPrimary);
-    if (m_ocrMmprojLabel)
-        m_ocrMmprojLabel->SetForegroundColour(palette.textPrimary);
-    if (m_ocrFooterPanel)
-        m_ocrFooterPanel->SetBackgroundColour(palette.cardBg);
-    if (m_ocrFooterText)
-        m_ocrFooterText->SetForegroundColour(palette.textSecondary);
-    if (m_ocrInfoIcon) {
-        m_ocrInfoIcon->SetBitmap(IconManager::GetIconBundle(SVG::INFO, wxSize(15, 15), palette.accentPrimary));
-    }
-
-    if (m_layoutCard) {
-        m_layoutCard->SetBackgroundColour(palette.cardBg);
-        m_layoutCard->Refresh();
-    }
-    if (m_layoutTitleIcon) {
-        m_layoutTitleIcon->SetBitmap(IconManager::GetIconBundle(SVG::LAYOUT, wxSize(18, 18), palette.accentPrimary));
-    }
-    if (m_layoutTitleText)
-        m_layoutTitleText->SetForegroundColour(palette.textPrimary);
-    if (m_layoutPathLabel)
-        m_layoutPathLabel->SetForegroundColour(palette.textPrimary);
-    if (m_layoutProviderLabel)
-        m_layoutProviderLabel->SetForegroundColour(palette.textPrimary);
-    if (m_layoutFooterPanel)
-        m_layoutFooterPanel->SetBackgroundColour(palette.cardBg);
-    if (m_layoutFooterText)
-        m_layoutFooterText->SetForegroundColour(palette.textSecondary);
-    if (m_layoutInfoIcon) {
-        m_layoutInfoIcon->SetBitmap(IconManager::GetIconBundle(SVG::INFO, wxSize(15, 15), palette.accentPrimary));
-    }
-    if (m_layoutModelLink) {
-        m_layoutModelLink->SetNormalColour(palette.accentPrimary);
-        m_layoutModelLink->SetHoverColour(palette.accentHover);
-    }
-
-    if (m_prefCard) {
-        m_prefCard->SetBackgroundColour(palette.cardBg);
-        m_prefCard->Refresh();
-    }
-    if (m_prefTitleIcon) {
-        m_prefTitleIcon->SetBitmap(IconManager::GetIconBundle(SVG::MOON, wxSize(18, 18), palette.accentPrimary));
-    }
-    if (m_prefTitle)
-        m_prefTitle->SetForegroundColour(palette.textPrimary);
-    if (m_themeRadioBox)
-        m_themeRadioBox->SetForegroundColour(palette.textPrimary);
-    if (m_aboutDescText)
-        m_aboutDescText->SetForegroundColour(palette.textSecondary);
-    if (m_aboutBtn)
-        m_aboutBtn->Refresh();
-
-    if (m_modelGpuLabel)
-        m_modelGpuLabel->SetForegroundColour(palette.textPrimary);
-    if (m_modelNglLabel)
-        m_modelNglLabel->SetForegroundColour(palette.textPrimary);
-    if (m_modelPortLabel)
-        m_modelPortLabel->SetForegroundColour(palette.textPrimary);
-    if (m_modelCtxLabel)
-        m_modelCtxLabel->SetForegroundColour(palette.textPrimary);
-    if (m_modelParallelLabel)
-        m_modelParallelLabel->SetForegroundColour(palette.textPrimary);
-    if (m_modelParallelHint)
-        m_modelParallelHint->SetForegroundColour(palette.textSecondary);
-
-    if (m_ocrGpuLabel)
-        m_ocrGpuLabel->SetForegroundColour(palette.textPrimary);
-    if (m_ocrNglLabel)
-        m_ocrNglLabel->SetForegroundColour(palette.textPrimary);
-    if (m_ocrPortLabel)
-        m_ocrPortLabel->SetForegroundColour(palette.textPrimary);
-    if (m_ocrCtxLabel)
-        m_ocrCtxLabel->SetForegroundColour(palette.textPrimary);
-    if (m_ocrMmprojOffloadCheck)
-        m_ocrMmprojOffloadCheck->Refresh();
-
-    if (m_transModelLink) {
-        m_transModelLink->SetNormalColour(palette.accentPrimary);
-        m_transModelLink->SetHoverColour(palette.accentHover);
-    }
-    if (m_ocrModelLink) {
-        m_ocrModelLink->SetNormalColour(palette.accentPrimary);
-        m_ocrModelLink->SetHoverColour(palette.accentHover);
-    }
-    if (m_dictDownloadLink) {
-        m_dictDownloadLink->SetNormalColour(palette.accentPrimary);
-        m_dictDownloadLink->SetHoverColour(palette.accentHover);
-    }
-
-    if (m_modelApiPanel) {
-        m_modelApiPanel->SetBackgroundColour(palette.windowBg);
-        m_modelApiPanel->Refresh();
-    }
-    if (m_ocrApiPanel) {
-        m_ocrApiPanel->SetBackgroundColour(palette.windowBg);
-        m_ocrApiPanel->Refresh();
-    }
-
-    if (m_selectionCard) {
-        m_selectionCard->SetBackgroundColour(palette.cardBg);
-        m_selectionCard->Refresh();
-    }
-    if (m_selectionTitleIcon) {
-        m_selectionTitleIcon->SetBitmap(IconManager::GetIconBundle(SVG::TRANSLATE, wxSize(18, 18), palette.accentPrimary));
-    }
-    if (m_selectionTitleText)
-        m_selectionTitleText->SetForegroundColour(palette.textPrimary);
-    if (m_selectionEnableCheck)
-        m_selectionEnableCheck->Refresh();
-    if (m_selectionModeRadio)
-        PlatformThemeHelper::ApplyControlTheme(m_selectionModeRadio, palette);
-    if (m_modifierKeyLabel)
-        m_modifierKeyLabel->SetForegroundColour(palette.textPrimary);
-    if (m_preserveClipCheck)
-        m_preserveClipCheck->Refresh();
-    if (m_selectionSaveBtn)
-        m_selectionSaveBtn->Refresh();
-
-    if (m_dictCard) {
-        m_dictCard->SetBackgroundColour(palette.cardBg);
-        m_dictCard->Refresh();
-    }
-    if (m_dictTitleIcon) {
-        m_dictTitleIcon->SetBitmap(IconManager::GetIconBundle(SVG::DICTIONARY, wxSize(18, 18), palette.accentPrimary));
-    }
-    if (m_dictInfoIcon) {
-        m_dictInfoIcon->SetBitmap(IconManager::GetIconBundle(SVG::INFO, wxSize(15, 15), palette.accentPrimary));
-    }
-    if (m_dictTitleText)
-        m_dictTitleText->SetForegroundColour(palette.textPrimary);
-    if (m_dictDirLabel)
-        m_dictDirLabel->SetForegroundColour(palette.textPrimary);
-    if (m_dictDirPathCtrl) {
-        m_dictDirPathCtrl->SetBackgroundColour(palette.windowBg);
-        m_dictDirPathCtrl->SetForegroundColour(palette.textPrimary);
-    }
-    if (m_dictListTitleText)
-        m_dictListTitleText->SetForegroundColour(palette.textSecondary);
-    if (m_dictListContainer) {
-        m_dictListContainer->SetBackgroundColour(palette.cardBg);
-        m_dictListContainer->Refresh();
-    }
-
-    if (m_dictBrowseBtn)
-        m_dictBrowseBtn->Refresh();
-    if (m_dictOpenDirBtn)
-        m_dictOpenDirBtn->Refresh();
-    if (m_dictSaveBtn)
-        m_dictSaveBtn->Refresh();
-    if (m_dictReloadBtn)
-        m_dictReloadBtn->Refresh();
-
-    if (m_logCard) {
-        m_logCard->SetBackgroundColour(palette.cardBg);
-        m_logCard->Refresh();
-    }
-    if (m_logTitleIcon) {
-        m_logTitleIcon->SetBitmap(IconManager::GetIconBundle(SVG::LOG, wxSize(18, 18), palette.accentPrimary));
-    }
-    if (m_logTitleText)
-        m_logTitleText->SetForegroundColour(palette.textPrimary);
-    if (m_saveLogToFileCheck)
-        m_saveLogToFileCheck->Refresh();
-    if (m_themeRadioBox)
-        PlatformThemeHelper::ApplyControlTheme(m_themeRadioBox, palette);
-    if (m_logPathInfoText)
-        m_logPathInfoText->SetForegroundColour(palette.textSecondary);
-    if (m_logSaveBtn)
-        m_logSaveBtn->Refresh();
-    if (m_openLogDirBtn)
-        m_openLogDirBtn->Refresh();
-
-    if (m_viewport)
-        m_viewport->SetBackgroundColour(palette.windowBg);
-    if (m_contentPanel)
-        m_contentPanel->SetBackgroundColour(palette.windowBg);
-    if (m_scrollBar) {
-        m_scrollBar->SetBackgroundColour(palette.windowBg);
-        m_scrollBar->Refresh();
-    }
-
-    if (m_modelPathCtrl)
-        m_modelPathCtrl->UpdateTheme();
-    if (m_modelNglCtrl)
-        m_modelNglCtrl->UpdateTheme();
-    if (m_modelPortCtrl)
-        m_modelPortCtrl->UpdateTheme();
-    if (m_modelCtxCtrl)
-        m_modelCtxCtrl->UpdateTheme();
-    if (m_modelGpuModeChoice)
-        m_modelGpuModeChoice->UpdateTheme();
-    if (m_modelParallelChoice)
-        m_modelParallelChoice->UpdateTheme();
-    if (m_modelCopyApiBtn)
-        m_modelCopyApiBtn->Refresh();
-
-    if (m_browseBtn)
-        m_browseBtn->Refresh();
-    if (m_openDirBtn)
-        m_openDirBtn->Refresh();
-    if (m_saveBtn)
-        m_saveBtn->Refresh();
-    if (m_startBtn)
-        m_startBtn->Refresh();
-    if (m_stopBtn)
-        m_stopBtn->Refresh();
-    if (m_testBtn)
-        m_testBtn->Refresh();
-
-    if (m_ocrModelPathCtrl)
-        m_ocrModelPathCtrl->UpdateTheme();
-    if (m_ocrMmprojPathCtrl)
-        m_ocrMmprojPathCtrl->UpdateTheme();
-    if (m_ocrNglCtrl)
-        m_ocrNglCtrl->UpdateTheme();
-    if (m_ocrPortCtrl)
-        m_ocrPortCtrl->UpdateTheme();
-    if (m_ocrCtxCtrl)
-        m_ocrCtxCtrl->UpdateTheme();
-    if (m_ocrGpuModeChoice)
-        m_ocrGpuModeChoice->UpdateTheme();
-    if (m_ocrCopyApiBtn)
-        m_ocrCopyApiBtn->Refresh();
-
-    if (m_layoutPathCtrl)
-        m_layoutPathCtrl->UpdateTheme();
-    if (m_layoutProviderChoice)
-        m_layoutProviderChoice->UpdateTheme();
-    if (m_layoutBrowseBtn)
-        m_layoutBrowseBtn->Refresh();
-    if (m_layoutOpenDirBtn)
-        m_layoutOpenDirBtn->Refresh();
-    if (m_layoutSaveBtn)
-        m_layoutSaveBtn->Refresh();
-    if (m_layoutTestBtn)
-        m_layoutTestBtn->Refresh();
-
-    if (m_dictDirPathCtrl)
-        m_dictDirPathCtrl->UpdateTheme();
-
-    if (m_ocrBrowseBtn)
-        m_ocrBrowseBtn->Refresh();
-    if (m_ocrMmprojBrowseBtn)
-        m_ocrMmprojBrowseBtn->Refresh();
-    if (m_ocrSaveBtn)
-        m_ocrSaveBtn->Refresh();
-    if (m_ocrStartBtn)
-        m_ocrStartBtn->Refresh();
-    if (m_ocrStopBtn)
-        m_ocrStopBtn->Refresh();
-    if (m_ocrTestBtn)
-        m_ocrTestBtn->Refresh();
+    m_theme.Apply(this, palette);
 
     // 强制重置状态缓存，以便根据新主题调色板重新绘制颜色
     m_lastTransState = ServerHealthState::Unconfigured;

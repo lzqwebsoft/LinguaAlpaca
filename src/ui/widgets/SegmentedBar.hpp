@@ -12,7 +12,7 @@ struct SegmentItem {
     const char* svgIcon{nullptr};
 };
 
-class SegmentedBar : public wxPanel {
+class SegmentedBar : public wxPanel, public IThemeable {
 public:
     SegmentedBar(wxWindow* parent,
                  const std::vector<SegmentItem>& items,
@@ -21,7 +21,7 @@ public:
 
     void SetActiveIndex(int index, bool triggerCallback = false);
     int GetActiveIndex() const { return m_selectedIndex; }
-    void UpdateTheme();
+    void UpdateTheme() override;
 
     wxSize DoGetBestSize() const override;
 

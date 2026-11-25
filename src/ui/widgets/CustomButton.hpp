@@ -13,7 +13,7 @@ enum class ButtonStyle {
     CheckBox
 };
 
-class CustomButton : public wxControl {
+class CustomButton : public wxControl, public IThemeable {
 public:
     CustomButton(wxWindow* parent, wxWindowID id, const wxString& label,
                  ButtonStyle style = ButtonStyle::Primary,
@@ -26,6 +26,7 @@ public:
     void SetForceBorder(bool force = true) { m_forceBorder = force; Refresh(); }
     void SetIcon(const char* svgContent, const wxSize& iconSize = wxSize(16, 16), const wxColour& tintColor = wxNullColour);
     void SetIconBundle(const wxBitmapBundle& bundle) { m_iconBundle = bundle; Refresh(); }
+    void UpdateTheme() override { Refresh(); }
 
     // CheckBox 模式接口 (ButtonStyle::CheckBox)
     bool GetValue() const { return m_isChecked; }

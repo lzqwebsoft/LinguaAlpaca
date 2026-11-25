@@ -23,7 +23,7 @@ namespace LinguaAlpaca::UI {
  * Clear, SetEditable 等)
  * - Per-Monitor High-DPI 缩放与深浅主题自适应
  */
-class CustomInputBox : public wxPanel {
+class CustomInputBox : public wxPanel, public IThemeable {
 public:
   CustomInputBox(wxWindow *parent, wxWindowID id = wxID_ANY,
                  const wxString &value = wxEmptyString,
@@ -68,7 +68,7 @@ public:
   bool SetFont(const wxFont &font) override;
   bool SetBackgroundColour(const wxColour &colour) override;
   bool SetForegroundColour(const wxColour &colour) override;
-  void UpdateTheme();
+  void UpdateTheme() override;
 
   // 访问内部原生 wxTextCtrl 实例
   wxTextCtrl *GetInnerCtrl() const { return m_textCtrl; }

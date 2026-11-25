@@ -9,15 +9,16 @@
 #include "widgets/StatusBadge.hpp"
 
 #include "AsyncTrackable.hpp"
+#include "theme/ThemeBinder.hpp"
 
 namespace LinguaAlpaca::UI {
 
-class TextView : public wxPanel, public AsyncTrackable {
+class TextView : public wxPanel, public AsyncTrackable, public IThemeable {
 public:
     TextView(wxWindow* parent, std::shared_ptr<ModelManager> modelManager, wxWindowID id = wxID_ANY);
     ~TextView() override;
 
-    void UpdateTheme();
+    void UpdateTheme() override;
     void UpdateStatusBadge();
     void SetSourceText(const wxString& text);
     void SetSourceTextAndTranslate(const wxString& text);
@@ -54,6 +55,7 @@ private:
     CustomButton* m_clearBtn{nullptr};
     CustomButton* m_swapBtn{nullptr};
     CustomButton* m_copyBtn{nullptr};
+    ThemeBinder m_theme;
 };
 
 } // namespace LinguaAlpaca::UI

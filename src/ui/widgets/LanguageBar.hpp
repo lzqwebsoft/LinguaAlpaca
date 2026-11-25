@@ -8,7 +8,7 @@ namespace LinguaAlpaca::UI {
 
 wxDECLARE_EVENT(EVT_LANGUAGE_CHANGED, wxCommandEvent);
 
-class LanguageBar : public wxPanel {
+class LanguageBar : public wxPanel, public IThemeable {
 public:
     LanguageBar(wxWindow* parent, wxWindowID id = wxID_ANY);
 
@@ -18,7 +18,7 @@ public:
     void SetSourceLanguage(LanguageCode code);
     void SetTargetLanguage(LanguageCode code);
     void SwapLanguages();
-    void UpdateTheme();
+    void UpdateTheme() override;
 
 private:
     void InitUI();

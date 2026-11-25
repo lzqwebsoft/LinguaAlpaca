@@ -153,6 +153,13 @@ void LogView::InitUI() {
     m_cardContainer->SetSizer(cardSizer);
 
     mainSizer->Add(m_cardContainer, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, Layout::ContentPadding());
+
+    m_theme.BindBg(BgRole::Window, false, m_headerPanel);
+    m_theme.BindBg(BgRole::Window, true, m_cardContainer);
+    m_theme.BindIcon(m_titleIcon, SVG::LOG, wxSize(20, 20));
+    m_theme.BindText(TextRole::Primary, m_titleText);
+    m_theme.BindTextBg(TextRole::Primary, BgRole::Card, false, m_logTextCtrl);
+
     SetSizer(mainSizer);
     Layout();
 
@@ -299,38 +306,8 @@ void LogView::OnAutoScrollToggled(wxCommandEvent& event) {
 void LogView::UpdateTheme() {
     auto palette = ThemeColors::GetCurrentPalette();
     SetBackgroundColour(palette.windowBg);
-    if (m_headerPanel)
-        m_headerPanel->SetBackgroundColour(palette.windowBg);
-    if (m_cardContainer) {
-        m_cardContainer->Refresh();
-    }
 
-    if (m_titleIcon) {
-        wxBitmapBundle logIconBundle = IconManager::GetIconBundle(SVG::LOG, wxSize(20, 20), palette.accentPrimary);
-        m_titleIcon->SetBitmap(logIconBundle);
-    }
-
-    if (m_titleText) {
-        m_titleText->SetForegroundColour(palette.textPrimary);
-    }
-    if (m_filterChoice) {
-        m_filterChoice->UpdateTheme();
-    }
-    if (m_autoScrollCheck) {
-        m_autoScrollCheck->Refresh();
-    }
-
-    if (m_clearBtn)
-        m_clearBtn->Refresh();
-    if (m_copyBtn)
-        m_copyBtn->Refresh();
-    if (m_openDirBtn)
-        m_openDirBtn->Refresh();
-
-    if (m_logTextCtrl) {
-        m_logTextCtrl->SetBackgroundColour(palette.cardBg);
-        m_logTextCtrl->SetForegroundColour(palette.textPrimary);
-    }
+    m_theme.Apply(this, palette);
 
     if (IsShown()) {
         ReloadLogs();

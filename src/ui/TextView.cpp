@@ -209,6 +209,9 @@ void TextView::InitUI() {
 
     mainSizer->Add(bottomSizer, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, Layout::PagePadding());
 
+    m_theme.BindText(TextRole::Primary, m_titleText);
+    m_theme.BindBg(BgRole::Card, false, m_langPanel);
+
     SetSizer(mainSizer);
     Layout();
 
@@ -369,34 +372,7 @@ void TextView::UpdateTheme() {
     auto palette = ThemeColors::GetCurrentPalette();
     SetBackgroundColour(palette.windowBg);
 
-    if (m_titleText)
-        m_titleText->SetForegroundColour(palette.textPrimary);
-
-    if (m_langPanel)
-        m_langPanel->SetBackgroundColour(palette.cardBg);
-
-    if (m_langSelector)
-        m_langSelector->UpdateTheme();
-    if (m_sourceCard)
-        m_sourceCard->UpdateTheme();
-    if (m_targetCard)
-        m_targetCard->UpdateTheme();
-
-    if (m_permSettingsBtn)
-        m_permSettingsBtn->Refresh();
-    if (m_permRestartBtn)
-        m_permRestartBtn->Refresh();
-
-    if (m_translateBtn)
-        m_translateBtn->Refresh();
-    if (m_stopBtn)
-        m_stopBtn->Refresh();
-    if (m_clearBtn)
-        m_clearBtn->Refresh();
-    if (m_swapBtn)
-        m_swapBtn->Refresh();
-    if (m_copyBtn)
-        m_copyBtn->Refresh();
+    m_theme.Apply(this, palette);
 
     UpdateStatusBadge();
     Refresh();

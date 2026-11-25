@@ -2,6 +2,7 @@
 #include <memory>
 #include <vector>
 #include "AsyncTrackable.hpp"
+#include "theme/ThemeBinder.hpp"
 #include "core/Logger.hpp"
 #include "core/Config.hpp"
 #include "widgets/CustomButton.hpp"
@@ -10,14 +11,14 @@
 
 namespace LinguaAlpaca::UI {
 
-class LogView : public wxPanel, public AsyncTrackable {
+class LogView : public wxPanel, public AsyncTrackable, public IThemeable {
 public:
     LogView(wxWindow* parent,
             std::shared_ptr<ConfigManager> configManager,
             wxWindowID id = wxID_ANY);
     ~LogView() override;
 
-    void UpdateTheme();
+    void UpdateTheme() override;
     void AppendLogMessage(const LogMessage& msg, bool scrollToBottom = true);
     void ReloadLogs();
     bool Show(bool show = true) override;
@@ -35,6 +36,7 @@ private:
     int m_filterLevel{-1}; // -1: 全部, 0: Debug, 1: Info, 2: Warning, 3: Error
     bool m_autoScroll{true};
     bool m_isDirty{true};
+    ThemeBinder m_theme;
 
     // UI Elements
     wxPanel* m_headerPanel{nullptr};

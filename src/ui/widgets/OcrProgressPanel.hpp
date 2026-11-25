@@ -24,7 +24,7 @@ enum class OcrProgressStatus {
  * - 明确区分多页 PDF (如 "第 5 / 50 页 (10%)") 与单张图片的两阶段解析阶段
  * - 独立承载模型准备、阶段提示、用户取消与异常信息，彻底避免冲掉右侧已解析结果
  */
-class OcrProgressPanel : public wxPanel {
+class OcrProgressPanel : public wxPanel, public IThemeable {
 public:
     OcrProgressPanel(wxWindow* parent, wxWindowID id = wxID_ANY,
                      const wxPoint& pos = wxDefaultPosition,
@@ -39,7 +39,7 @@ public:
     void SetError(const wxString& errorMessage);
     void Reset();
 
-    void UpdateTheme();
+    void UpdateTheme() override;
 
 protected:
     wxSize DoGetBestSize() const override;

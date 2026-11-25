@@ -9,7 +9,7 @@
 
 namespace LinguaAlpaca::UI {
 
-class SuggestListBox : public wxPanel {
+class SuggestListBox : public wxPanel, public IThemeable {
 public:
     SuggestListBox(wxWindow* parent,
                    wxWindowID id = wxID_ANY,
@@ -28,7 +28,7 @@ public:
     bool IsEmpty() const { return m_items.empty(); }
 
     void ScrollToItem(int targetIndex);
-    void UpdateTheme();
+    void UpdateTheme() override;
 
 private:
     void InitUI();

@@ -4,6 +4,7 @@
 #include <wx/wx.h>
 #include <wx/settings.h>
 #include "Dpi.hpp"
+#include "IThemeable.hpp"
 #include "Layout.hpp"
 #include "ThemeFont.hpp"
 #include "core/Logger.hpp"

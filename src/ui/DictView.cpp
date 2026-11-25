@@ -278,6 +278,17 @@ void DictView::InitUI() {
     m_mainContentPanel->SetSizer(contentRowSizer);
     m_mainSizer->Add(m_mainContentPanel, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, Layout::ContentPadding());
 
+    m_theme.BindBg(BgRole::Window, false, m_headerPanel, m_mainContentPanel);
+    m_theme.BindBg(BgRole::Card, true, m_leftSuggestCard, m_suggestHeaderBar, m_rightResultCard, m_wordHeaderBar);
+    m_theme.BindBg(BgRole::Card, false, m_emptyStateCard);
+    m_theme.BindText(TextRole::Primary, m_titleText, m_emptyTitle);
+    m_theme.BindText(TextRole::Secondary, m_emptyDesc);
+    m_theme.BindTextBg(TextRole::Primary, BgRole::Card, true, m_suggestTitle, m_headwordText);
+    m_theme.BindTextBg(TextRole::Accent, BgRole::Card, true, m_phoneticText);
+    m_theme.BindTextBg(TextRole::Primary, BgRole::Card, false, m_definitionCtrl);
+    m_theme.BindIcon(m_suggestIcon, SVG::BROWSE, wxSize(16, 16));
+    m_theme.BindIcon(m_resultIcon, SVG::TEXT, wxSize(16, 16));
+
     SetSizer(m_mainSizer);
     Layout();
 }
@@ -593,76 +604,11 @@ void DictView::UpdateTheme() {
     auto palette = ThemeColors::GetCurrentPalette();
     SetBackgroundColour(palette.windowBg);
 
-    if (m_headerPanel)
-        m_headerPanel->SetBackgroundColour(palette.windowBg);
-    if (m_titleText)
-        m_titleText->SetForegroundColour(palette.textPrimary);
-    if (m_dictChoice) {
-        m_dictChoice->UpdateTheme();
-    }
-    if (m_searchBox) {
-        m_searchBox->UpdateTheme();
-    }
-    if (m_mainContentPanel)
-        m_mainContentPanel->SetBackgroundColour(palette.windowBg);
+    m_theme.Apply(this, palette);
 
-    if (m_leftSuggestCard) {
-        m_leftSuggestCard->SetBackgroundColour(palette.cardBg);
-        m_leftSuggestCard->Refresh();
+    if (m_definitionCtrl && !m_lastSearchResults.empty()) {
+        RenderRichDictionaryResults(m_lastSearchResults);
     }
-    if (m_suggestHeaderBar) {
-        m_suggestHeaderBar->SetBackgroundColour(palette.cardBg);
-        m_suggestHeaderBar->Refresh();
-    }
-    if (m_suggestIcon) {
-        wxBitmapBundle suggestIconBundle = IconManager::GetIconBundle(SVG::BROWSE, wxSize(16, 16), palette.accentPrimary);
-        m_suggestIcon->SetBitmap(suggestIconBundle);
-    }
-    if (m_suggestTitle) {
-        m_suggestTitle->SetForegroundColour(palette.textPrimary);
-        m_suggestTitle->SetBackgroundColour(palette.cardBg);
-        m_suggestTitle->Refresh();
-    }
-    if (m_suggestListBox) {
-        m_suggestListBox->UpdateTheme();
-    }
-
-    if (m_rightResultCard) {
-        m_rightResultCard->SetBackgroundColour(palette.cardBg);
-        m_rightResultCard->Refresh();
-    }
-    if (m_wordHeaderBar) {
-        m_wordHeaderBar->SetBackgroundColour(palette.cardBg);
-        m_wordHeaderBar->Refresh();
-    }
-    if (m_resultIcon) {
-        wxBitmapBundle resultIconBundle = IconManager::GetIconBundle(SVG::TEXT, wxSize(16, 16), palette.accentPrimary);
-        m_resultIcon->SetBitmap(resultIconBundle);
-    }
-    if (m_headwordText) {
-        m_headwordText->SetForegroundColour(palette.textPrimary);
-        m_headwordText->SetBackgroundColour(palette.cardBg);
-        m_headwordText->Refresh();
-    }
-    if (m_phoneticText) {
-        m_phoneticText->SetForegroundColour(palette.accentPrimary);
-        m_phoneticText->SetBackgroundColour(palette.cardBg);
-        m_phoneticText->Refresh();
-    }
-    if (m_definitionCtrl) {
-        m_definitionCtrl->SetBackgroundColour(palette.cardBg);
-        m_definitionCtrl->SetForegroundColour(palette.textPrimary);
-        if (!m_lastSearchResults.empty()) {
-            RenderRichDictionaryResults(m_lastSearchResults);
-        }
-    }
-
-    if (m_emptyStateCard)
-        m_emptyStateCard->SetBackgroundColour(palette.cardBg);
-    if (m_emptyTitle)
-        m_emptyTitle->SetForegroundColour(palette.textPrimary);
-    if (m_emptyDesc)
-        m_emptyDesc->SetForegroundColour(palette.textSecondary);
 
     Refresh();
 }

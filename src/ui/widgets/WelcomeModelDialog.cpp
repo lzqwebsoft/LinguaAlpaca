@@ -55,7 +55,7 @@ namespace LinguaAlpaca::UI {
         bannerSizer->Add(infoTitle, 0, wxALL, 12_dip);
 
         const wchar_t* guideItems[] = {
-            L"• 翻译模型推荐：Tencent Hy-MT2-1.8B-GGUF (中英日韩多语言翻译模型)",
+            L"• 翻译模型推荐：Tencent Hy-MT3-1.8B-GGUF (中英日韩多语言翻译模型)",
             L"• 视觉识别推荐：PaddleOCR-VL-1.6-GGUF (配合 mmproj 视觉投影器)",
             L"• 本地词典支持：StarDict 免费离线词典库 (.ifo / .idx / .dict 格式秒查)"
         };

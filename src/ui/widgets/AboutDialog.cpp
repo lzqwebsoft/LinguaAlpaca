@@ -118,7 +118,7 @@ namespace LinguaAlpaca::UI {
         const wchar_t* features[] = {
             L"• 100% 纯本地端侧离线计算：零数据上传云端，彻底杜绝数据与隐私泄露隐患。",
             L"• 原生双 llama-server 并发：支持大模型机器翻译与 OCR 视觉多模态独立并行调度。",
-            L"• 前沿大模型深度适配：Tencent Hy-MT2 1.8B 多语言翻译与 PaddleOCR-VL 视觉图文提取。",
+            L"• 前沿大模型深度适配：Tencent Hy-MT3 1.8B 多语言翻译与 PaddleOCR-VL 视觉图文提取。",
             L"• StarDict 本地词典秒查：内置海量本地多词典高速索引，全局鼠标划词悬浮窗即划即译。",
             L"• 现代高分屏弹性流式 UI，支持深色/浅色/跟随系统主题。"
         };

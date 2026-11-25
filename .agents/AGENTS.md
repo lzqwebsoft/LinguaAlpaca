@@ -17,9 +17,9 @@ This file records project-scoped rules, developer guidelines, and architectural 
 
 ---
 
-## 🎯 2. Model Prompt Alignment (Tencent Hy-MT2 & Vision OCR)
+## 🎯 2. Model Prompt Alignment (Tencent Hy-MT3 & Vision OCR)
 
-- **Official Native Instruction Format**: Specialized machine translation models (such as `tencent/Hy-MT2-1.8B-GGUF`) expect their fine-tuned ChatML directive template. Use Chinese instruction directives without default system prompt:
+- **Official Native Instruction Format**: Specialized machine translation models (such as `tencent/Hy-MT3-1.8B-GGUF`) expect their fine-tuned ChatML directive template. Use Chinese instruction directives without default system prompt:
   ```text
   <|im_start|>user
   将以下{src_lang}文本翻译为{target_lang}，注意只需要输出翻译后的结果，不要额外解释：

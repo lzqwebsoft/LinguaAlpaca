@@ -168,8 +168,12 @@ void DictView::InitUI() {
     m_suggestListBox = new SuggestListBox(m_leftSuggestCard, wxID_ANY);
     m_suggestListBox->Bind(wxEVT_LISTBOX, &DictView::OnSuggestSelected, this);
 
+    wxBoxSizer* leftListHBox = new wxBoxSizer(wxHORIZONTAL);
+    leftListHBox->AddSpacer(16_dip);
+    leftListHBox->Add(m_suggestListBox, 1, wxEXPAND | wxRIGHT, 4_dip);
+
     leftCardSizer->Add(m_suggestHeaderBar, 0, wxEXPAND | wxALL, 16_dip);
-    leftCardSizer->Add(m_suggestListBox, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 16_dip);
+    leftCardSizer->Add(leftListHBox, 1, wxEXPAND | wxBOTTOM, 12_dip);
     m_leftSuggestCard->SetSizer(leftCardSizer);
 
     // 2.2 右侧释义卡片 (70% 弹性权重) - 圆角边框卡片
@@ -247,8 +251,12 @@ void DictView::InitUI() {
         }
     }
 
+    wxBoxSizer* rightDefHBox = new wxBoxSizer(wxHORIZONTAL);
+    rightDefHBox->AddSpacer(16_dip);
+    rightDefHBox->Add(m_definitionCtrl, 1, wxEXPAND | wxRIGHT, 4_dip);
+
     rightCardSizer->Add(m_wordHeaderBar, 0, wxEXPAND | wxALL, 16_dip);
-    rightCardSizer->Add(m_definitionCtrl, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 16_dip);
+    rightCardSizer->Add(rightDefHBox, 1, wxEXPAND | wxBOTTOM, 12_dip);
     m_rightResultCard->SetSizer(rightCardSizer);
 
     // 2.3 空状态/引导面板

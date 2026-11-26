@@ -2,6 +2,7 @@
 #include <wx/radiobox.h>
 #include <wx/checkbox.h>
 #include <wx/radiobut.h>
+#include <memory>
 #include <unordered_set>
 
 #ifdef __APPLE__
@@ -11,6 +12,76 @@
 #endif
 
 namespace LinguaAlpaca::UI {
+
+#ifdef __APPLE__
+static id s_systemThemeObserver = nil;
+#endif
+
+bool PlatformThemeHelper::IsSystemDarkMode() {
+#ifdef __APPLE__
+    @autoreleasepool {
+        // 直接读取全局用户偏好 AppleInterfaceStyle，避免受 [NSApp setAppearance:] 锁定干扰
+        NSString* style = [[NSUserDefaults standardUserDefaults] stringForKey:@"AppleInterfaceStyle"];
+        return style && [style caseInsensitiveCompare:@"Dark"] == NSOrderedSame;
+    }
+#elif defined(_WIN32)
+    HKEY hKey;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER,
+        L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+        0, KEY_READ, &hKey) == ERROR_SUCCESS) {
+        DWORD appsUseLightTheme = 1;
+        DWORD size = sizeof(appsUseLightTheme);
+        DWORD type = REG_DWORD;
+        if (RegQueryValueExW(hKey, L"AppsUseLightTheme", nullptr, &type, (LPBYTE)&appsUseLightTheme, &size) == ERROR_SUCCESS) {
+            RegCloseKey(hKey);
+            return (appsUseLightTheme == 0);
+        }
+        RegCloseKey(hKey);
+    }
+    return wxSystemSettings::GetAppearance().IsDark();
+#else
+    return wxSystemSettings::GetAppearance().IsDark();
+#endif
+}
+
+void PlatformThemeHelper::StartSystemThemeMonitor(std::function<void()> onChanged) {
+#ifdef __APPLE__
+    StopSystemThemeMonitor();
+    if (!onChanged) {
+        return;
+    }
+    @autoreleasepool {
+        auto callback = std::make_shared<std::function<void()>>(std::move(onChanged));
+        s_systemThemeObserver = [[[NSDistributedNotificationCenter defaultCenter]
+            addObserverForName:@"AppleInterfaceThemeChangedNotification"
+                        object:nil
+                         queue:[NSOperationQueue mainQueue]
+                    usingBlock:^(NSNotification* /*notification*/) {
+                        if (wxTheApp) {
+                            wxTheApp->CallAfter([callback]() {
+                                if (callback && *callback) {
+                                    (*callback)();
+                                }
+                            });
+                        }
+                    }] retain];
+    }
+#else
+    (void)onChanged;
+#endif
+}
+
+void PlatformThemeHelper::StopSystemThemeMonitor() {
+#ifdef __APPLE__
+    @autoreleasepool {
+        if (s_systemThemeObserver) {
+            [[NSDistributedNotificationCenter defaultCenter] removeObserver:s_systemThemeObserver];
+            [s_systemThemeObserver release];
+            s_systemThemeObserver = nil;
+        }
+    }
+#endif
+}
 
 void PlatformThemeHelper::ApplyAppAppearance(ThemeMode mode) {
 #ifdef __APPLE__

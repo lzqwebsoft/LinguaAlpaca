@@ -684,6 +684,16 @@ namespace LinguaAlpaca::UI {
             return 0;
         }
 
+        // 监听 Windows 系统浅色/深色主题切换广播 (WM_SETTINGCHANGE / "ImmersiveColorSet")
+        if (nMsg == WM_SETTINGCHANGE && lParam != 0) {
+            const wchar_t* area = reinterpret_cast<const wchar_t*>(lParam);
+            if (wcscmp(area, L"ImmersiveColorSet") == 0) {
+                CallAfter([]() {
+                    ThemeManager::GetInstance().RefreshSystemTheme();
+                });
+            }
+        }
+
         WXLRESULT rc = wxFrame::MSWWindowProc(nMsg, wParam, lParam);
         if (nMsg == WM_GETMINMAXINFO) {
             MINMAXINFO* mmi = reinterpret_cast<MINMAXINFO*>(lParam);

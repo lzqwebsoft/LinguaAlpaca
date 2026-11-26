@@ -17,6 +17,7 @@
 #include "ui/widgets/FloatingIconFrame.hpp"
 #include "ui/widgets/TranslationBubbleFrame.hpp"
 #include "ui/theme/IconManager.hpp"
+#include "ui/theme/PlatformThemeHelper.hpp"
 #include "ui/MainFrame.hpp"
 
 using namespace LinguaAlpaca;
@@ -77,6 +78,14 @@ public:
         UI::IconManager::SetupApplicationIcon();
 
         LOG_INFO("App", "LinguaAlpaca application starting...");
+
+        // 注册原生系统主题探测与实时变更监听 (macOS NSDistributedNotificationCenter; Windows 由 MainFrame WM_SETTINGCHANGE 驱动)
+        UI::ThemeManager::GetInstance().SetSystemThemeDetector([]() {
+            return UI::PlatformThemeHelper::IsSystemDarkMode() ? UI::ThemeMode::Dark : UI::ThemeMode::Light;
+        });
+        UI::PlatformThemeHelper::StartSystemThemeMonitor([]() {
+            UI::ThemeManager::GetInstance().RefreshSystemTheme();
+        });
 
         // 1. 初始化配置管理器与统一模型推理调度中枢
         auto configManager = std::make_shared<ConfigManager>();
@@ -149,6 +158,7 @@ public:
             m_modelManager->StopModel();
             m_modelManager.reset();
         }
+        UI::PlatformThemeHelper::StopSystemThemeMonitor();
         UI::ThemeManager::GetInstance().ClearCallbacks();
         return wxApp::OnExit();
     }

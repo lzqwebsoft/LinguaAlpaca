@@ -1,14 +1,31 @@
 #pragma once
 #include <wx/wx.h>
+#include <functional>
 #include "Theme.hpp"
 
 namespace LinguaAlpaca::UI {
 
 /**
- * @brief 跨平台原生主题外观辅助类 (封装 macOS NSAppearance / Win32 DarkMode 主题细节)
+ * @brief 跨平台原生主题外观辅助类 (封装 macOS NSAppearance / Win32 DarkMode 主题细节与系统主题监听)
  */
 class PlatformThemeHelper {
 public:
+    /**
+     * @brief 检测操作系统真实的深浅色主题 (macOS 直接读取 AppleInterfaceStyle，不受 NSApp.appearance 锁定影响)
+     */
+    static bool IsSystemDarkMode();
+
+    /**
+     * @brief 启动操作系统主题变更监听 (macOS 监听 AppleInterfaceThemeChangedNotification)
+     *        必须与 StopSystemThemeMonitor() 成对调用以保证 RAII 生命周期安全
+     */
+    static void StartSystemThemeMonitor(std::function<void()> onChanged);
+
+    /**
+     * @brief 停止操作系统主题变更监听并释放原生观察者
+     */
+    static void StopSystemThemeMonitor();
+
     /**
      * @brief 设置应用级原生系统外观 (在 macOS 上切换 NSAppearanceNameDarkAqua / NSAppearanceNameAqua)
      */

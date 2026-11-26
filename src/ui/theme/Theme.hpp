@@ -97,6 +97,17 @@ public:
         return wxSystemSettings::GetAppearance().IsDark() ? ThemeMode::Dark : ThemeMode::Light;
     }
 
+    void SetSystemThemeDetector(std::function<ThemeMode()> detector) {
+        m_systemThemeDetector = std::move(detector);
+    }
+
+    ThemeMode ResolveSystemTheme() const {
+        if (m_systemThemeDetector) {
+            return m_systemThemeDetector();
+        }
+        return DetectSystemTheme();
+    }
+
     void SetTheme(ThemeMode theme) {
         if (m_currentTheme != theme) {
             m_currentTheme = theme;
@@ -112,9 +123,18 @@ public:
         } else if (pref == ThemePreference::Dark) {
             targetMode = ThemeMode::Dark;
         } else {
-            targetMode = DetectSystemTheme();
+            targetMode = ResolveSystemTheme();
         }
         SetTheme(targetMode);
+    }
+
+    /**
+     * @brief 响应操作系统主题变更通知：仅在当前偏好为 System 时重新检测并同步主题
+     */
+    void RefreshSystemTheme() {
+        if (m_preference == ThemePreference::System) {
+            SetTheme(ResolveSystemTheme());
+        }
     }
 
     void SetPreferenceByString(const std::string& prefStr) {
@@ -219,6 +239,7 @@ private:
 
     ThemeMode m_currentTheme{ThemeMode::Light};
     ThemePreference m_preference{ThemePreference::Light};
+    std::function<ThemeMode()> m_systemThemeDetector;
     std::vector<ThemeChangedCallback> m_callbacks;
 };
 

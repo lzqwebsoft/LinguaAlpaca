@@ -91,6 +91,10 @@ public:
         auto configManager = std::make_shared<ConfigManager>();
         m_modelManager = std::make_shared<ModelManager>(configManager);
 
+        // 启动画面创建前即应用主题偏好 (确保 SplashScreen 启动即匹配 Light / Dark / System)
+        UI::ThemeManager::GetInstance().SetPreferenceByString(configManager->GetConfig().themeMode);
+        UI::PlatformThemeHelper::ApplyAppAppearance(UI::ThemeManager::GetInstance().GetCurrentTheme());
+
         // 2. 创建并居中显示现代无边框启动画面
         m_splashScreen = new UI::SplashScreen(nullptr);
         SetTopWindow(m_splashScreen);
@@ -102,10 +106,6 @@ public:
             LOG_INFO("App", "Initialization completed. Displaying MainFrame...");
 
             auto configManager = m_modelManager ? m_modelManager->GetConfigManager() : nullptr;
-            if (configManager) {
-                auto cfg = configManager->GetConfig();
-                UI::ThemeManager::GetInstance().SetPreferenceByString(cfg.themeMode);
-            }
 
             // 4. 初始化全局划词翻译悬浮组件与全局常驻划词服务
             m_floatingIcon = new UI::FloatingIconFrame(nullptr);

@@ -8,7 +8,9 @@
 #include "Layout.hpp"
 #include "ThemeFont.hpp"
 #include "core/Logger.hpp"
+#include <algorithm>
 #include <functional>
+#include <utility>
 #include <vector>
 #include <string>
 
@@ -166,8 +168,18 @@ public:
         }
     }
 
-    void RegisterCallback(ThemeChangedCallback cb) {
-        m_callbacks.push_back(cb);
+    size_t RegisterCallback(ThemeChangedCallback cb) {
+        size_t id = m_nextCallbackId++;
+        m_callbacks.emplace_back(id, std::move(cb));
+        return id;
+    }
+
+    void UnregisterCallback(size_t id) {
+        if (id == 0) return;
+        m_callbacks.erase(
+            std::remove_if(m_callbacks.begin(), m_callbacks.end(),
+                           [id](const auto& entry) { return entry.first == id; }),
+            m_callbacks.end());
     }
 
     void ClearCallbacks() {
@@ -232,15 +244,17 @@ private:
     ThemeManager() : m_currentTheme(ThemeMode::Light) {}
     
     void NotifyCallbacks() {
-        for (const auto& cb : m_callbacks) {
-            if (cb) cb(m_currentTheme);
+        auto callbacks = m_callbacks;
+        for (const auto& entry : callbacks) {
+            if (entry.second) entry.second(m_currentTheme);
         }
     }
 
     ThemeMode m_currentTheme{ThemeMode::Light};
     ThemePreference m_preference{ThemePreference::Light};
     std::function<ThemeMode()> m_systemThemeDetector;
-    std::vector<ThemeChangedCallback> m_callbacks;
+    size_t m_nextCallbackId{1};
+    std::vector<std::pair<size_t, ThemeChangedCallback>> m_callbacks;
 };
 
 using ThemeColors = ThemeManager;

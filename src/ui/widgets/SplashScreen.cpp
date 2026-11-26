@@ -2,6 +2,7 @@
 #include "SplashScreen.hpp"
 #include "../theme/IconManager.hpp"
 #include "../theme/AppIcons.hpp"
+#include "../theme/PlatformThemeHelper.hpp"
 
 #include <wx/dcbuffer.h>
 #include <wx/graphics.h>
@@ -35,6 +36,8 @@ namespace LinguaAlpaca::UI {
 	}
 
 	SplashScreen::~SplashScreen() {
+		ThemeManager::GetInstance().UnregisterCallback(m_themeCallbackId);
+		m_themeCallbackId = 0;
 		if (m_animTimer.IsRunning()) {
 			m_animTimer.Stop();
 		}
@@ -46,6 +49,13 @@ namespace LinguaAlpaca::UI {
 	void SplashScreen::InitUI() {
 		SetBackgroundStyle(wxBG_STYLE_PAINT);
 
+		PlatformThemeHelper::ApplyWindowAppearance(this, ThemeManager::GetInstance().GetCurrentTheme());
+		m_themeCallbackId = ThemeManager::GetInstance().RegisterCallback([this](ThemeMode mode) {
+			PlatformThemeHelper::ApplyAppAppearance(mode);
+			PlatformThemeHelper::ApplyWindowAppearance(this, mode);
+			Refresh();
+		});
+
 		Bind(wxEVT_PAINT, &SplashScreen::OnPaint, this);
 
 		// 绑定平滑插值动画定时器 (约 60fps, 16ms 间隔)
@@ -55,6 +65,20 @@ namespace LinguaAlpaca::UI {
 
 		m_animTimer.Start(16);
 	}
+
+#ifdef __WXMSW__
+	WXLRESULT SplashScreen::MSWWindowProc(WXUINT nMsg, WXWPARAM wParam, WXLPARAM lParam) {
+		if (nMsg == WM_SETTINGCHANGE && lParam != 0) {
+			const wchar_t* area = reinterpret_cast<const wchar_t*>(lParam);
+			if (wcscmp(area, L"ImmersiveColorSet") == 0) {
+				CallAfter([]() {
+					ThemeManager::GetInstance().RefreshSystemTheme();
+				});
+			}
+		}
+		return wxFrame::MSWWindowProc(nMsg, wParam, lParam);
+	}
+#endif
 
 	void SplashScreen::SetProgress(float targetProgress, const wxString& statusText) {
 		m_targetProgress = std::clamp(targetProgress, 0.0f, 100.0f);

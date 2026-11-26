@@ -2,6 +2,7 @@
 #include "CustomButton.hpp"
 #include "../theme/IconManager.hpp"
 #include "../theme/AppIcons.hpp"
+#include "../theme/PlatformThemeHelper.hpp"
 
 namespace LinguaAlpaca::UI {
 
@@ -10,6 +11,24 @@ namespace LinguaAlpaca::UI {
         InitUI();
         Fit();
         CentreOnParent();
+
+        PlatformThemeHelper::ApplyWindowAppearance(this, ThemeManager::GetInstance().GetCurrentTheme());
+        m_themeCallbackId = ThemeManager::GetInstance().RegisterCallback([this](ThemeMode) {
+            UpdateTheme();
+        });
+    }
+
+    WelcomeModelDialog::~WelcomeModelDialog() {
+        ThemeManager::GetInstance().UnregisterCallback(m_themeCallbackId);
+        m_themeCallbackId = 0;
+    }
+
+    void WelcomeModelDialog::UpdateTheme() {
+        auto palette = ThemeColors::GetCurrentPalette();
+        SetBackgroundColour(palette.windowBg);
+        PlatformThemeHelper::ApplyWindowAppearance(this, ThemeManager::GetInstance().GetCurrentTheme());
+        m_theme.Apply(this, palette);
+        Refresh();
     }
 
     void WelcomeModelDialog::InitUI() {
@@ -65,6 +84,7 @@ namespace LinguaAlpaca::UI {
             itemText->SetFont(ThemeFont::GetFont(FontRole::Control));
             itemText->SetForegroundColour(palette.textSecondary);
             bannerSizer->Add(itemText, 0, wxLEFT | wxRIGHT | wxBOTTOM, 6_dip);
+            m_theme.BindTextBg(TextRole::Secondary, BgRole::Card, true, itemText);
         }
 
         bannerPanel->SetSizer(bannerSizer);
@@ -90,6 +110,12 @@ namespace LinguaAlpaca::UI {
         footerText->SetFont(ThemeFont::GetFont(FontRole::Caption));
         footerText->SetForegroundColour(palette.textSecondary);
         mainSizer->Add(footerText, 0, wxALIGN_CENTER | wxBOTTOM, 14_dip);
+
+        m_theme.BindBg(BgRole::Card, true, bannerPanel);
+        m_theme.BindText(TextRole::Primary, titleText);
+        m_theme.BindText(TextRole::Accent, subtitleText);
+        m_theme.BindText(TextRole::Secondary, footerText);
+        m_theme.BindTextBg(TextRole::Primary, BgRole::Card, true, infoTitle);
 
         SetSizer(mainSizer);
 

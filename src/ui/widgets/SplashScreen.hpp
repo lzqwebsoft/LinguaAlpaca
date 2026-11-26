@@ -46,6 +46,9 @@ private:
     void OnAnimTimer(wxTimerEvent& event);
     void OnFinishTimer(wxTimerEvent& event);
     void RunInitPipeline();
+#ifdef __WXMSW__
+    WXLRESULT MSWWindowProc(WXUINT nMsg, WXWPARAM wParam, WXLPARAM lParam) override;
+#endif
 
     std::shared_ptr<ModelManager> m_modelManager;
     std::function<void()> m_onComplete;
@@ -58,6 +61,7 @@ private:
     wxString m_statusText;
     bool m_pipelineFinished{false};
     bool m_callbackTriggered{false};
+    size_t m_themeCallbackId{0};
 };
 
 } // namespace LinguaAlpaca::UI

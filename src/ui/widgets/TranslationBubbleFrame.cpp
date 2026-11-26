@@ -530,7 +530,7 @@ void TranslationBubbleFrame::DoExecuteTranslation(const std::string& sourceText)
                                                      m_currentFullText = fullText;
                                                      m_targetCtrl->SetMarkdown(fullText);
                                                      if (m_statusText) {
-                                                         m_statusText->SetLabel(L"翻译完成 (Hy-MT2)");
+                                                         m_statusText->SetLabel(L"翻译完成 (Hy-MT3)");
                                                      }
                                                  } else {
                                                      m_targetCtrl->SetValue(L"翻译失败: " + wxString::FromUTF8(error) + L"\n\n请点击右上角「重新翻译」按钮重试。");

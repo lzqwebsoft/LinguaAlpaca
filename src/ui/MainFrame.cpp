@@ -377,6 +377,7 @@ namespace LinguaAlpaca::UI {
             case 4: if (m_settingsView) m_settingsView->Show(true); break;
             default: if (m_textView) m_textView->Show(true); break;
             }
+            UpdateActiveViewTheme();
         }
         return res;
     }
